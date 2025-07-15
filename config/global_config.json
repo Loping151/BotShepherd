@@ -1,0 +1,49 @@
+{
+  "admin_qq_list": [],
+  "super_admin_qq": null,
+  "system_name": "BotShepherd",
+  "version": "2.0.0",
+  "timezone": "UTC",
+  "database": {
+    "type": "sqlite",
+    "host": "localhost",
+    "port": 3306,
+    "username": "",
+    "password": "",
+    "database": "botshepherd",
+    "data_path": "./data",
+    "auto_expire_days": 30
+  },
+  "webui": {
+    "host": "0.0.0.0",
+    "port": 5000,
+    "debug": false,
+    "secret_key": "botshepherd-secret-key-change-me"
+  },
+  "command": {
+    "default_prefixes": ["/", "!", "#", ".", "。"],
+    "admin_prefixes": ["sudo ", "admin "],
+    "case_sensitive": false
+  },
+  "security": {
+    "enable_rate_limit": true,
+    "rate_limit_window": 60,
+    "rate_limit_max_requests": 30,
+    "enable_ip_whitelist": false,
+    "ip_whitelist": []
+  },
+  "logging": {
+    "level": "INFO",
+    "log_to_file": true,
+    "log_file_path": "logs/botshepherd.log",
+    "max_file_size": 10485760,
+    "backup_count": 5,
+    "log_format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  },
+  "enable_message_statistics": true,
+  "enable_keyword_monitoring": true,
+  "enable_auto_reply": false,
+  "enable_forward_message": true,
+  "max_message_length": 4096,
+  "default_timeout": 30.0
+}
