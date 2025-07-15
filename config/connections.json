@@ -1,0 +1,19 @@
+{
+  "connections": {
+    "default_connection": {
+      "name": "默认超级代理连接",
+      "client_endpoint": "ws://localhost:2537/OneBotv11",
+      "target_endpoints": [
+        "ws://localhost:2536/OneBotv11",
+        "ws://localhost:2538/OneBotv11"
+      ],
+      "enabled": true,
+      "description": "一对多的超级WebSocket代理连接，支持同时连接多个Bot框架"
+    }
+  },
+  "settings": {
+    "log_to_file": true,
+    "log_file_name": "logs/ws_log.txt",
+    "auto_start": true
+  }
+}
