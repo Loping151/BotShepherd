@@ -1,0 +1,416 @@
+{% extends "base.html" %}
+
+{% block title %}账号管理 - BotShepherd{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="bi bi-person-gear"></i> 账号管理</h1>
+    <button class="btn btn-primary" onclick="showAddAccountModal()">
+        <i class="bi bi-plus-circle"></i>
+        添加账号
+    </button>
+</div>
+
+<!-- 账号状态卡片 -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h5 class="card-title">
+                    <i class="bi bi-person text-primary"></i>
+                    总账号数
+                </h5>
+                <h3 id="total-accounts">0</h3>
+                <small class="text-muted">个账号</small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h5 class="card-title">
+                    <i class="bi bi-check-circle text-success"></i>
+                    活跃账号
+                </h5>
+                <h3 id="active-accounts">0</h3>
+                <small class="text-muted">个账号</small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h5 class="card-title">
+                    <i class="bi bi-pause-circle text-warning"></i>
+                    禁用账号
+                </h5>
+                <h3 id="disabled-accounts">0</h3>
+                <small class="text-muted">个账号</small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h5 class="card-title">
+                    <i class="bi bi-clock text-info"></i>
+                    今日活跃
+                </h5>
+                <h3 id="today-active">0</h3>
+                <small class="text-muted">个账号</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 账号列表 -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="bi bi-list"></i>
+            账号列表
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover" id="accounts-table">
+                <thead>
+                    <tr>
+                        <th>账号ID</th>
+                        <th>名称</th>
+                        <th>描述</th>
+                        <th>状态</th>
+                        <th>最后接收</th>
+                        <th>最后发送</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- 动态加载 -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 添加/编辑账号模态框 -->
+<div class="modal fade" id="accountModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="accountModalTitle">添加账号</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="accountForm">
+                    <div class="mb-3">
+                        <label for="accountId" class="form-label">账号ID</label>
+                        <input type="text" class="form-control" id="accountId" 
+                               placeholder="123456789" required>
+                        <div class="form-text">QQ号码</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="accountName" class="form-label">账号名称</label>
+                        <input type="text" class="form-control" id="accountName" 
+                               placeholder="Bot_123456789" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="accountDescription" class="form-label">描述</label>
+                        <textarea class="form-control" id="accountDescription" rows="2"
+                                  placeholder="账号描述信息"></textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="accountEnabled" checked>
+                            <label class="form-check-label" for="accountEnabled">
+                                启用账号
+                            </label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="saveAccount()">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 账号详情模态框 -->
+<div class="modal fade" id="accountDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">账号详情</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="accountDetailContent">
+                    <!-- 动态加载 -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let accounts = {};
+let editingAccountId = null;
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+    loadAccounts();
+    setInterval(loadAccounts, 30000); // 每30秒刷新
+});
+
+// 加载账号列表
+async function loadAccounts() {
+    try {
+        const response = await apiRequest('/api/accounts');
+        accounts = response;
+        updateAccountStats();
+        updateAccountTable();
+    } catch (error) {
+        console.error('加载账号失败:', error);
+    }
+}
+
+// 更新账号统计
+function updateAccountStats() {
+    const total = Object.keys(accounts).length;
+    let active = 0, disabled = 0, todayActive = 0;
+    
+    const today = new Date().toISOString().split('T')[0];
+    
+    Object.values(accounts).forEach(account => {
+        if (account.enabled) {
+            active++;
+        } else {
+            disabled++;
+        }
+        
+        // 检查今日是否活跃
+        if (account.last_receive_time && account.last_receive_time.startsWith(today)) {
+            todayActive++;
+        }
+    });
+    
+    document.getElementById('total-accounts').textContent = total;
+    document.getElementById('active-accounts').textContent = active;
+    document.getElementById('disabled-accounts').textContent = disabled;
+    document.getElementById('today-active').textContent = todayActive;
+}
+
+// 更新账号表格
+function updateAccountTable() {
+    const tbody = document.querySelector('#accounts-table tbody');
+    tbody.innerHTML = '';
+    
+    Object.entries(accounts).forEach(([accountId, account]) => {
+        const row = document.createElement('tr');
+        
+        const statusBadge = account.enabled ? 
+            '<span class="badge bg-success">启用</span>' : 
+            '<span class="badge bg-secondary">禁用</span>';
+        
+        const lastReceive = account.last_receive_time ? 
+            formatDateTime(account.last_receive_time) : '从未';
+        const lastSend = account.last_send_time ? 
+            formatDateTime(account.last_send_time) : '从未';
+        
+        row.innerHTML = `
+            <td><code>${accountId}</code></td>
+            <td>${account.name}</td>
+            <td><small>${account.description || '无描述'}</small></td>
+            <td>${statusBadge}</td>
+            <td><small>${lastReceive}</small></td>
+            <td><small>${lastSend}</small></td>
+            <td>
+                <button class="btn btn-sm btn-outline-primary" onclick="showAccountDetail('${accountId}')">
+                    <i class="bi bi-eye"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-warning" onclick="editAccount('${accountId}')">
+                    <i class="bi bi-pencil"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-${account.enabled ? 'warning' : 'success'}" 
+                        onclick="toggleAccount('${accountId}')">
+                    <i class="bi bi-${account.enabled ? 'pause' : 'play'}"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteAccount('${accountId}')">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </td>
+        `;
+        
+        tbody.appendChild(row);
+    });
+}
+
+// 格式化日期时间
+function formatDateTime(dateTimeStr) {
+    if (!dateTimeStr) return '从未';
+    
+    const date = new Date(dateTimeStr);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+    
+    if (diffMins < 1) return '刚刚';
+    if (diffMins < 60) return `${diffMins}分钟前`;
+    if (diffHours < 24) return `${diffHours}小时前`;
+    if (diffDays < 7) return `${diffDays}天前`;
+    
+    return date.toLocaleDateString('zh-CN');
+}
+
+// 显示添加账号模态框
+function showAddAccountModal() {
+    editingAccountId = null;
+    document.getElementById('accountModalTitle').textContent = '添加账号';
+    document.getElementById('accountForm').reset();
+    document.getElementById('accountEnabled').checked = true;
+    
+    new bootstrap.Modal(document.getElementById('accountModal')).show();
+}
+
+// 编辑账号
+function editAccount(accountId) {
+    editingAccountId = accountId;
+    const account = accounts[accountId];
+    
+    document.getElementById('accountModalTitle').textContent = '编辑账号';
+    document.getElementById('accountId').value = accountId;
+    document.getElementById('accountId').disabled = true;
+    document.getElementById('accountName').value = account.name;
+    document.getElementById('accountDescription').value = account.description || '';
+    document.getElementById('accountEnabled').checked = account.enabled;
+    
+    new bootstrap.Modal(document.getElementById('accountModal')).show();
+}
+
+// 保存账号
+async function saveAccount() {
+    try {
+        const accountId = document.getElementById('accountId').value.trim();
+        const name = document.getElementById('accountName').value.trim();
+        const description = document.getElementById('accountDescription').value.trim();
+        const enabled = document.getElementById('accountEnabled').checked;
+        
+        if (!accountId || !name) {
+            showToast('请填写账号ID和名称', 'warning');
+            return;
+        }
+        
+        if (!/^\d+$/.test(accountId)) {
+            showToast('账号ID必须是数字', 'warning');
+            return;
+        }
+        
+        const accountData = {
+            account_id: accountId,
+            name,
+            description,
+            enabled
+        };
+        
+        await apiRequest(`/api/accounts/${accountId}`, {
+            method: 'PUT',
+            body: JSON.stringify(accountData)
+        });
+        
+        showToast(editingAccountId ? '账号更新成功' : '账号添加成功', 'success');
+        bootstrap.Modal.getInstance(document.getElementById('accountModal')).hide();
+        
+        // 重置表单状态
+        document.getElementById('accountId').disabled = false;
+        
+        loadAccounts();
+        
+    } catch (error) {
+        showToast(`保存账号失败: ${error.message}`, 'danger');
+    }
+}
+
+// 切换账号状态
+async function toggleAccount(accountId) {
+    try {
+        const account = accounts[accountId];
+        const newStatus = !account.enabled;
+        
+        const accountData = {
+            ...account,
+            enabled: newStatus
+        };
+        
+        await apiRequest(`/api/accounts/${accountId}`, {
+            method: 'PUT',
+            body: JSON.stringify(accountData)
+        });
+        
+        showToast(`账号已${newStatus ? '启用' : '禁用'}`, 'success');
+        loadAccounts();
+        
+    } catch (error) {
+        showToast(`切换账号状态失败: ${error.message}`, 'danger');
+    }
+}
+
+// 删除账号
+async function deleteAccount(accountId) {
+    if (!confirm('确定要删除这个账号吗？')) {
+        return;
+    }
+    
+    try {
+        await apiRequest(`/api/accounts/${accountId}`, {
+            method: 'DELETE'
+        });
+        
+        showToast('账号删除成功', 'success');
+        loadAccounts();
+    } catch (error) {
+        showToast(`删除账号失败: ${error.message}`, 'danger');
+    }
+}
+
+// 显示账号详情
+function showAccountDetail(accountId) {
+    const account = accounts[accountId];
+    
+    const content = `
+        <div class="row">
+            <div class="col-md-6">
+                <h6>基本信息</h6>
+                <table class="table table-sm">
+                    <tr><td>账号ID</td><td><code>${accountId}</code></td></tr>
+                    <tr><td>名称</td><td>${account.name}</td></tr>
+                    <tr><td>描述</td><td>${account.description || '无'}</td></tr>
+                    <tr><td>状态</td><td>${account.enabled ? '启用' : '禁用'}</td></tr>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <h6>活动信息</h6>
+                <table class="table table-sm">
+                    <tr><td>最后接收</td><td>${account.last_receive_time ? formatDateTime(account.last_receive_time) : '从未'}</td></tr>
+                    <tr><td>最后发送</td><td>${account.last_send_time ? formatDateTime(account.last_send_time) : '从未'}</td></tr>
+                </table>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('accountDetailContent').innerHTML = content;
+    new bootstrap.Modal(document.getElementById('accountDetailModal')).show();
+}
+</script>
+{% endblock %}

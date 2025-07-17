@@ -1,0 +1,462 @@
+{% extends "base.html" %}
+
+{% block title %}系统设置 - BotShepherd{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="bi bi-gear"></i> 系统设置</h1>
+    <button class="btn btn-success" onclick="saveAllSettings()">
+        <i class="bi bi-check"></i>
+        保存所有设置
+    </button>
+</div>
+
+<!-- 基本设置 -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="bi bi-sliders"></i>
+            基本设置
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="mb-3">
+                    <label for="commandPrefix" class="form-label">命令前缀</label>
+                    <input type="text" class="form-control" id="commandPrefix" value="bs">
+                    <div class="form-text">用于触发命令的前缀</div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="superusers" class="form-label">超级用户</label>
+                    <textarea class="form-control" id="superusers" rows="3" 
+                              placeholder="每行一个QQ号"></textarea>
+                    <div class="form-text">拥有最高权限的用户QQ号，每行一个</div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="allowPrivate">
+                        <label class="form-check-label" for="allowPrivate">
+                            允许私聊
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="privateFriendOnly">
+                        <label class="form-check-label" for="privateFriendOnly">
+                            私聊仅限好友
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 数据库设置 -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="bi bi-database"></i>
+            数据库设置
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="mb-3">
+                    <label for="dataPath" class="form-label">数据存储路径</label>
+                    <input type="text" class="form-control" id="dataPath" value="./data">
+                    <div class="form-text">数据库文件存储路径</div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="mb-3">
+                    <label for="autoExpireDays" class="form-label">自动过期天数</label>
+                    <input type="number" class="form-control" id="autoExpireDays" value="30" min="1">
+                    <div class="form-text">消息数据自动清理的天数</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 日志设置 -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="bi bi-file-text"></i>
+            日志设置
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-4">
+                <div class="mb-3">
+                    <label for="logLevel" class="form-label">日志级别</label>
+                    <select class="form-select" id="logLevel">
+                        <option value="DEBUG">DEBUG</option>
+                        <option value="INFO">INFO</option>
+                        <option value="WARNING">WARNING</option>
+                        <option value="ERROR">ERROR</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="mb-3">
+                    <label for="keepDays" class="form-label">保留天数</label>
+                    <input type="number" class="form-control" id="keepDays" value="7" min="1">
+                    <div class="form-text">日志文件保留天数</div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="mb-3">
+                    <div class="form-check mt-4">
+                        <input class="form-check-input" type="checkbox" id="fileRotation">
+                        <label class="form-check-label" for="fileRotation">
+                            启用日志轮转
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 消息规范化设置 -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="bi bi-arrow-repeat"></i>
+            消息规范化设置
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="normalizationEnabled">
+                        <label class="form-check-label" for="normalizationEnabled">
+                            启用消息规范化
+                        </label>
+                        <div class="form-text">对消息进行格式规范化处理</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="normalizeNapcatSent">
+                        <label class="form-check-label" for="normalizeNapcatSent">
+                            规范化NapCat发送消息
+                        </label>
+                        <div class="form-text">对NapCat发送的消息进行规范化</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 通知设置 -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="bi bi-bell"></i>
+            通知设置
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-3">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="friendRequests">
+                    <label class="form-check-label" for="friendRequests">
+                        好友请求通知
+                    </label>
+                </div>
+            </div>
+            
+            <div class="col-md-3">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="groupInvites">
+                    <label class="form-check-label" for="groupInvites">
+                        群邀请通知
+                    </label>
+                </div>
+            </div>
+            
+            <div class="col-md-3">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="groupKicks">
+                    <label class="form-check-label" for="groupKicks">
+                        群踢出通知
+                    </label>
+                </div>
+            </div>
+            
+            <div class="col-md-3">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="muteNotifications">
+                    <label class="form-check-label" for="muteNotifications">
+                        静音通知
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Web认证设置 -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="bi bi-shield-lock"></i>
+            Web认证设置
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="mb-3">
+                    <label for="webUsername" class="form-label">用户名</label>
+                    <input type="text" class="form-control" id="webUsername" value="admin">
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="mb-3">
+                    <label for="webPassword" class="form-label">密码</label>
+                    <input type="password" class="form-control" id="webPassword" value="admin">
+                </div>
+            </div>
+        </div>
+        <div class="alert alert-warning">
+            <i class="bi bi-exclamation-triangle"></i>
+            请及时修改默认的用户名和密码以确保安全
+        </div>
+    </div>
+</div>
+
+<!-- 全局别名设置 -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="bi bi-arrow-left-right"></i>
+            全局别名设置
+        </h5>
+    </div>
+    <div class="card-body">
+        <div id="globalAliases">
+            <!-- 动态加载 -->
+        </div>
+        <button class="btn btn-outline-primary btn-sm" onclick="addGlobalAlias()">
+            <i class="bi bi-plus"></i>
+            添加别名
+        </button>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let globalConfig = {};
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+    loadGlobalConfig();
+});
+
+// 加载全局配置
+async function loadGlobalConfig() {
+    try {
+        const response = await apiRequest('/api/global-config');
+        globalConfig = response;
+        updateSettingsForm();
+    } catch (error) {
+        console.error('加载全局配置失败:', error);
+    }
+}
+
+// 更新设置表单
+function updateSettingsForm() {
+    // 基本设置
+    document.getElementById('commandPrefix').value = globalConfig.command_prefix || 'bs';
+    document.getElementById('superusers').value = (globalConfig.superusers || []).join('\n');
+    document.getElementById('allowPrivate').checked = globalConfig.allow_private || false;
+    document.getElementById('privateFriendOnly').checked = globalConfig.private_friend_only || false;
+    
+    // 数据库设置
+    const database = globalConfig.database || {};
+    document.getElementById('dataPath').value = database.data_path || './data';
+    document.getElementById('autoExpireDays').value = database.auto_expire_days || 30;
+    
+    // 日志设置
+    const logging = globalConfig.logging || {};
+    document.getElementById('logLevel').value = logging.level || 'INFO';
+    document.getElementById('keepDays').value = logging.keep_days || 7;
+    document.getElementById('fileRotation').checked = logging.file_rotation || false;
+    
+    // 消息规范化设置
+    const normalization = globalConfig.message_normalization || {};
+    document.getElementById('normalizationEnabled').checked = normalization.enabled || false;
+    document.getElementById('normalizeNapcatSent').checked = normalization.normalize_napcat_sent || false;
+    
+    // 通知设置
+    const notifications = globalConfig.notifications || {};
+    document.getElementById('friendRequests').checked = notifications.friend_requests || false;
+    document.getElementById('groupInvites').checked = notifications.group_invites || false;
+    document.getElementById('groupKicks').checked = notifications.group_kicks || false;
+    document.getElementById('muteNotifications').checked = notifications.mute_notifications || false;
+    
+    // Web认证设置
+    const webAuth = globalConfig.web_auth || {};
+    document.getElementById('webUsername').value = webAuth.username || 'admin';
+    document.getElementById('webPassword').value = webAuth.password || 'admin';
+    
+    // 全局别名设置
+    updateGlobalAliases();
+}
+
+// 更新全局别名
+function updateGlobalAliases() {
+    const container = document.getElementById('globalAliases');
+    container.innerHTML = '';
+    
+    const aliases = globalConfig.global_aliases || {};
+    
+    Object.entries(aliases).forEach(([key, values]) => {
+        const div = document.createElement('div');
+        div.className = 'row mb-3 alias-row';
+        div.innerHTML = `
+            <div class="col-md-3">
+                <input type="text" class="form-control alias-key" value="${key}" placeholder="别名">
+            </div>
+            <div class="col-md-8">
+                <input type="text" class="form-control alias-values" value="${values.join(', ')}" 
+                       placeholder="目标命令，多个用逗号分隔">
+            </div>
+            <div class="col-md-1">
+                <button class="btn btn-outline-danger" onclick="removeGlobalAlias(this)">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+        `;
+        container.appendChild(div);
+    });
+    
+    if (Object.keys(aliases).length === 0) {
+        container.innerHTML = '<p class="text-muted">暂无全局别名</p>';
+    }
+}
+
+// 添加全局别名
+function addGlobalAlias() {
+    const container = document.getElementById('globalAliases');
+    
+    // 移除"暂无别名"提示
+    if (container.querySelector('.text-muted')) {
+        container.innerHTML = '';
+    }
+    
+    const div = document.createElement('div');
+    div.className = 'row mb-3 alias-row';
+    div.innerHTML = `
+        <div class="col-md-3">
+            <input type="text" class="form-control alias-key" placeholder="别名">
+        </div>
+        <div class="col-md-8">
+            <input type="text" class="form-control alias-values" 
+                   placeholder="目标命令，多个用逗号分隔">
+        </div>
+        <div class="col-md-1">
+            <button class="btn btn-outline-danger" onclick="removeGlobalAlias(this)">
+                <i class="bi bi-trash"></i>
+            </button>
+        </div>
+    `;
+    container.appendChild(div);
+}
+
+// 移除全局别名
+function removeGlobalAlias(button) {
+    button.closest('.alias-row').remove();
+    
+    const container = document.getElementById('globalAliases');
+    if (container.children.length === 0) {
+        container.innerHTML = '<p class="text-muted">暂无全局别名</p>';
+    }
+}
+
+// 保存所有设置
+async function saveAllSettings() {
+    try {
+        // 收集所有设置
+        const superusers = document.getElementById('superusers').value.trim();
+        
+        // 收集全局别名
+        const globalAliases = {};
+        document.querySelectorAll('.alias-row').forEach(row => {
+            const key = row.querySelector('.alias-key').value.trim();
+            const values = row.querySelector('.alias-values').value.trim();
+            if (key && values) {
+                globalAliases[key] = values.split(',').map(v => v.trim()).filter(v => v);
+            }
+        });
+        
+        const updates = {
+            command_prefix: document.getElementById('commandPrefix').value.trim(),
+            superusers: superusers ? superusers.split('\n').map(id => id.trim()).filter(id => id) : [],
+            allow_private: document.getElementById('allowPrivate').checked,
+            private_friend_only: document.getElementById('privateFriendOnly').checked,
+            global_aliases: globalAliases,
+            database: {
+                data_path: document.getElementById('dataPath').value.trim(),
+                auto_expire_days: parseInt(document.getElementById('autoExpireDays').value)
+            },
+            logging: {
+                level: document.getElementById('logLevel').value,
+                keep_days: parseInt(document.getElementById('keepDays').value),
+                file_rotation: document.getElementById('fileRotation').checked
+            },
+            message_normalization: {
+                enabled: document.getElementById('normalizationEnabled').checked,
+                normalize_napcat_sent: document.getElementById('normalizeNapcatSent').checked
+            },
+            notifications: {
+                friend_requests: document.getElementById('friendRequests').checked,
+                group_invites: document.getElementById('groupInvites').checked,
+                group_kicks: document.getElementById('groupKicks').checked,
+                mute_notifications: document.getElementById('muteNotifications').checked
+            },
+            web_auth: {
+                username: document.getElementById('webUsername').value.trim(),
+                password: document.getElementById('webPassword').value.trim()
+            }
+        };
+        
+        await apiRequest('/api/global-config', {
+            method: 'PUT',
+            body: JSON.stringify(updates)
+        });
+        
+        showToast('设置保存成功', 'success');
+        loadGlobalConfig();
+        
+    } catch (error) {
+        showToast(`保存设置失败: ${error.message}`, 'danger');
+    }
+}
+</script>
+{% endblock %}
