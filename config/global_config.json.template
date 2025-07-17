@@ -1,48 +1,67 @@
 {
+  "_comment": "BotShepherd 全局配置模板",
+  "_note": "复制此文件为 global_config.json 并修改相应配置",
+  
   "superusers": [
-    "644572093"
+    "123456789"
   ],
+  
   "command_prefix": "bs",
+  
   "global_aliases": {
-    "ww": [
-      "ww"
-    ]
+    "ww": ["ww"]
   },
+  
   "blacklist": {
     "groups": [],
-    "users": [
-      "1",
-      "6"
-    ]
+    "users": []
   },
+  
   "allow_private": true,
   "private_friend_only": true,
+  
   "global_filters": {
     "receive_filters": [],
     "send_filters": [],
     "prefix_protections": []
   },
+  
   "database": {
     "data_path": "./data",
     "auto_expire_days": 30
   },
+  
   "logging": {
-    "level": "DEBUG",
-    "keep_days": 7,
-    "file_rotation": true
+    "level": "INFO",
+    "file_rotation": true,
+    "keep_days": 7
   },
+  
   "message_normalization": {
     "enabled": false,
     "normalize_napcat_sent": true
   },
+  
   "notifications": {
     "friend_requests": false,
     "group_invites": false,
     "group_kicks": false,
     "mute_notifications": false
   },
+  
   "web_auth": {
     "username": "admin",
     "password": "admin"
+  },
+  
+  "rate_limit": {
+    "enabled": false,
+    "user_messages_per_minute": 60,
+    "group_messages_per_minute": 300
+  },
+  
+  "command_cooldown": {
+    "enabled": true,
+    "default_cooldown": 3
   }
 }

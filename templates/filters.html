@@ -1,0 +1,384 @@
+{% extends "base.html" %}
+
+{% block title %}过滤设置 - BotShepherd{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="bi bi-funnel"></i> 过滤设置</h1>
+</div>
+
+<!-- 全局过滤器 -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="bi bi-globe"></i>
+            全局过滤器
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-4">
+                <h6>接收过滤器</h6>
+                <div id="globalReceiveFilters">
+                    <!-- 动态加载 -->
+                </div>
+                <button class="btn btn-outline-primary btn-sm" onclick="addGlobalFilter('receive')">
+                    <i class="bi bi-plus"></i>
+                    添加接收过滤器
+                </button>
+            </div>
+            
+            <div class="col-md-4">
+                <h6>发送过滤器</h6>
+                <div id="globalSendFilters">
+                    <!-- 动态加载 -->
+                </div>
+                <button class="btn btn-outline-primary btn-sm" onclick="addGlobalFilter('send')">
+                    <i class="bi bi-plus"></i>
+                    添加发送过滤器
+                </button>
+            </div>
+            
+            <div class="col-md-4">
+                <h6>前缀保护</h6>
+                <div id="globalPrefixProtections">
+                    <!-- 动态加载 -->
+                </div>
+                <button class="btn btn-outline-primary btn-sm" onclick="addGlobalFilter('prefix')">
+                    <i class="bi bi-plus"></i>
+                    添加前缀保护
+                </button>
+            </div>
+        </div>
+        
+        <div class="mt-3">
+            <button class="btn btn-success" onclick="saveGlobalFilters()">
+                <i class="bi bi-check"></i>
+                保存全局过滤器
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- 黑名单管理 -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="bi bi-shield-x"></i>
+            黑名单管理
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <h6>用户黑名单</h6>
+                <div class="input-group mb-3">
+                    <input type="text" class="form-control" id="newUserBlacklist" 
+                           placeholder="输入用户QQ号">
+                    <button class="btn btn-outline-primary" onclick="addToBlacklist('users')">
+                        <i class="bi bi-plus"></i>
+                        添加
+                    </button>
+                </div>
+                <div id="userBlacklist" class="border rounded p-2" style="max-height: 200px; overflow-y: auto;">
+                    <!-- 动态加载 -->
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <h6>群组黑名单</h6>
+                <div class="input-group mb-3">
+                    <input type="text" class="form-control" id="newGroupBlacklist" 
+                           placeholder="输入群号">
+                    <button class="btn btn-outline-primary" onclick="addToBlacklist('groups')">
+                        <i class="bi bi-plus"></i>
+                        添加
+                    </button>
+                </div>
+                <div id="groupBlacklist" class="border rounded p-2" style="max-height: 200px; overflow-y: auto;">
+                    <!-- 动态加载 -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 过滤器统计 -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="bi bi-bar-chart"></i>
+            过滤器统计
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-3">
+                <div class="text-center">
+                    <h4 id="totalReceiveFilters">0</h4>
+                    <small class="text-muted">接收过滤器</small>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="text-center">
+                    <h4 id="totalSendFilters">0</h4>
+                    <small class="text-muted">发送过滤器</small>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="text-center">
+                    <h4 id="totalBlacklistUsers">0</h4>
+                    <small class="text-muted">黑名单用户</small>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="text-center">
+                    <h4 id="totalBlacklistGroups">0</h4>
+                    <small class="text-muted">黑名单群组</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let globalConfig = {};
+let blacklist = {};
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+    loadGlobalConfig();
+    loadBlacklist();
+});
+
+// 加载全局配置
+async function loadGlobalConfig() {
+    try {
+        const response = await apiRequest('/api/global-config');
+        globalConfig = response;
+        updateGlobalFilters();
+        updateFilterStats();
+    } catch (error) {
+        console.error('加载全局配置失败:', error);
+    }
+}
+
+// 加载黑名单
+async function loadBlacklist() {
+    try {
+        const response = await apiRequest('/api/blacklist');
+        blacklist = response;
+        updateBlacklist();
+        updateFilterStats();
+    } catch (error) {
+        console.error('加载黑名单失败:', error);
+    }
+}
+
+// 更新全局过滤器显示
+function updateGlobalFilters() {
+    const filters = globalConfig.global_filters || {};
+    
+    updateFilterList('globalReceiveFilters', filters.receive_filters || [], 'receive');
+    updateFilterList('globalSendFilters', filters.send_filters || [], 'send');
+    updateFilterList('globalPrefixProtections', filters.prefix_protections || [], 'prefix');
+}
+
+// 更新过滤器列表
+function updateFilterList(containerId, filters, type) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = '';
+    
+    if (filters.length === 0) {
+        container.innerHTML = '<p class="text-muted">暂无过滤器</p>';
+        return;
+    }
+    
+    filters.forEach((filter, index) => {
+        const div = document.createElement('div');
+        div.className = 'input-group mb-2';
+        div.innerHTML = `
+            <input type="text" class="form-control global-${type}-filter" value="${filter}">
+            <button class="btn btn-outline-danger btn-sm" onclick="removeGlobalFilter('${type}', ${index})">
+                <i class="bi bi-trash"></i>
+            </button>
+        `;
+        container.appendChild(div);
+    });
+}
+
+// 添加全局过滤器
+function addGlobalFilter(type) {
+    const containerId = type === 'receive' ? 'globalReceiveFilters' : 
+                       type === 'send' ? 'globalSendFilters' : 'globalPrefixProtections';
+    const container = document.getElementById(containerId);
+    
+    // 移除"暂无过滤器"提示
+    if (container.querySelector('.text-muted')) {
+        container.innerHTML = '';
+    }
+    
+    const div = document.createElement('div');
+    div.className = 'input-group mb-2';
+    div.innerHTML = `
+        <input type="text" class="form-control global-${type}-filter" 
+               placeholder="${type === 'prefix' ? '保护前缀' : '过滤关键词或正则表达式'}">
+        <button class="btn btn-outline-danger btn-sm" onclick="removeGlobalFilterElement(this)">
+            <i class="bi bi-trash"></i>
+        </button>
+    `;
+    container.appendChild(div);
+}
+
+// 移除全局过滤器元素
+function removeGlobalFilterElement(button) {
+    button.parentElement.remove();
+}
+
+// 移除全局过滤器
+function removeGlobalFilter(type, index) {
+    const filters = globalConfig.global_filters || {};
+    const filterArray = type === 'receive' ? filters.receive_filters || [] :
+                       type === 'send' ? filters.send_filters || [] :
+                       filters.prefix_protections || [];
+    
+    filterArray.splice(index, 1);
+    updateGlobalFilters();
+}
+
+// 保存全局过滤器
+async function saveGlobalFilters() {
+    try {
+        const receiveFilters = [];
+        document.querySelectorAll('.global-receive-filter').forEach(input => {
+            const value = input.value.trim();
+            if (value) receiveFilters.push(value);
+        });
+        
+        const sendFilters = [];
+        document.querySelectorAll('.global-send-filter').forEach(input => {
+            const value = input.value.trim();
+            if (value) sendFilters.push(value);
+        });
+        
+        const prefixProtections = [];
+        document.querySelectorAll('.global-prefix-filter').forEach(input => {
+            const value = input.value.trim();
+            if (value) prefixProtections.push(value);
+        });
+        
+        const updates = {
+            global_filters: {
+                receive_filters: receiveFilters,
+                send_filters: sendFilters,
+                prefix_protections: prefixProtections
+            }
+        };
+        
+        await apiRequest('/api/global-config', {
+            method: 'PUT',
+            body: JSON.stringify(updates)
+        });
+        
+        showToast('全局过滤器保存成功', 'success');
+        loadGlobalConfig();
+        
+    } catch (error) {
+        showToast(`保存全局过滤器失败: ${error.message}`, 'danger');
+    }
+}
+
+// 更新黑名单显示
+function updateBlacklist() {
+    updateBlacklistList('userBlacklist', blacklist.users || [], 'users');
+    updateBlacklistList('groupBlacklist', blacklist.groups || [], 'groups');
+}
+
+// 更新黑名单列表
+function updateBlacklistList(containerId, items, type) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = '';
+    
+    if (items.length === 0) {
+        container.innerHTML = '<p class="text-muted">暂无黑名单</p>';
+        return;
+    }
+    
+    items.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'd-flex justify-content-between align-items-center mb-1';
+        div.innerHTML = `
+            <span><code>${item}</code></span>
+            <button class="btn btn-outline-danger btn-sm" onclick="removeFromBlacklist('${type}', '${item}')">
+                <i class="bi bi-trash"></i>
+            </button>
+        `;
+        container.appendChild(div);
+    });
+}
+
+// 添加到黑名单
+async function addToBlacklist(type) {
+    const inputId = type === 'users' ? 'newUserBlacklist' : 'newGroupBlacklist';
+    const input = document.getElementById(inputId);
+    const value = input.value.trim();
+    
+    if (!value) {
+        showToast('请输入要添加的ID', 'warning');
+        return;
+    }
+    
+    try {
+        await apiRequest('/api/blacklist', {
+            method: 'POST',
+            body: JSON.stringify({
+                type: type,
+                id: value
+            })
+        });
+        
+        showToast('添加到黑名单成功', 'success');
+        input.value = '';
+        loadBlacklist();
+        
+    } catch (error) {
+        showToast(`添加到黑名单失败: ${error.message}`, 'danger');
+    }
+}
+
+// 从黑名单移除
+async function removeFromBlacklist(type, id) {
+    try {
+        await apiRequest('/api/blacklist', {
+            method: 'DELETE',
+            body: JSON.stringify({
+                type: type,
+                id: id
+            })
+        });
+        
+        showToast('从黑名单移除成功', 'success');
+        loadBlacklist();
+        
+    } catch (error) {
+        showToast(`从黑名单移除失败: ${error.message}`, 'danger');
+    }
+}
+
+// 更新过滤器统计
+function updateFilterStats() {
+    const globalFilters = globalConfig.global_filters || {};
+    const receiveCount = (globalFilters.receive_filters || []).length;
+    const sendCount = (globalFilters.send_filters || []).length;
+    const userBlacklistCount = (blacklist.users || []).length;
+    const groupBlacklistCount = (blacklist.groups || []).length;
+    
+    document.getElementById('totalReceiveFilters').textContent = receiveCount;
+    document.getElementById('totalSendFilters').textContent = sendCount;
+    document.getElementById('totalBlacklistUsers').textContent = userBlacklistCount;
+    document.getElementById('totalBlacklistGroups').textContent = groupBlacklistCount;
+}
+</script>
+{% endblock %}

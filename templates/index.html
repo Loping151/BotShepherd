@@ -1,155 +1,348 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BotShepherd - WebSocket代理管理</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
-</head>
-<body>
-    <nav class="navbar navbar-dark bg-dark">
-        <div class="container-fluid">
-            <span class="navbar-brand mb-0 h1">
-                <i class="bi bi-router"></i> BotShepherd
-            </span>
-            <div class="d-flex">
-                <span class="badge bg-success me-2" id="status-badge">运行中</span>
-                <button class="btn btn-outline-light btn-sm" onclick="refreshStatus()">
-                    <i class="bi bi-arrow-clockwise"></i> 刷新
-                </button>
+{% extends "base.html" %}
+
+{% block title %}仪表板 - BotShepherd{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="bi bi-speedometer2"></i> 系统仪表板</h1>
+    <div class="text-muted">
+        <i class="bi bi-clock"></i>
+        <span id="current-time"></span>
+    </div>
+</div>
+
+<!-- 系统状态卡片 -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <div class="d-flex align-items-center justify-content-center mb-2">
+                    <span class="status-indicator status-online"></span>
+                    <h5 class="card-title mb-0">系统状态</h5>
+                </div>
+                <h3 class="text-success">运行中</h3>
+                <small class="text-muted">正常运行</small>
             </div>
         </div>
-    </nav>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h5 class="card-title">
+                    <i class="bi bi-diagram-3 text-primary"></i>
+                    活动连接
+                </h5>
+                <h3 id="active-connections">0</h3>
+                <small class="text-muted">个连接</small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h5 class="card-title">
+                    <i class="bi bi-chat-dots text-info"></i>
+                    今日消息
+                </h5>
+                <h3 id="today-messages">0</h3>
+                <small class="text-muted">条消息</small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h5 class="card-title">
+                    <i class="bi bi-speedometer text-warning"></i>
+                    消息速率
+                </h5>
+                <h3 id="message-rate">0</h3>
+                <small class="text-muted">条/分钟</small>
+            </div>
+        </div>
+    </div>
+</div>
 
-    <div class="container-fluid mt-4">
-        <div class="row">
-            <!-- 左侧面板 - 连接列表 -->
-            <div class="col-md-4">
-                <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0">连接配置</h5>
-                        <button class="btn btn-primary btn-sm" onclick="showAddConnectionModal()">
-                            <i class="bi bi-plus"></i> 添加
-                        </button>
-                    </div>
-                    <div class="card-body">
-                        <div id="connections-list">
-                            <!-- 连接列表将在这里动态生成 -->
-                        </div>
-                    </div>
+<!-- 图表区域 -->
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-graph-up"></i>
+                    24小时消息趋势
+                </h5>
+            </div>
+            <div class="card-body">
+                <canvas id="hourlyChart" height="100"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-pie-chart"></i>
+                    消息类型分布
+                </h5>
+            </div>
+            <div class="card-body">
+                <canvas id="messageTypeChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 7天趋势 -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-calendar-week"></i>
+                    7天消息趋势
+                </h5>
+            </div>
+            <div class="card-body">
+                <canvas id="weeklyChart" height="80"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 实时日志 -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="bi bi-terminal"></i>
+                    实时系统日志
+                </h5>
+                <div>
+                    <button class="btn btn-sm btn-outline-light" onclick="clearLogs()">
+                        <i class="bi bi-trash"></i>
+                        清空
+                    </button>
+                    <button class="btn btn-sm btn-outline-light" onclick="toggleAutoScroll()">
+                        <i class="bi bi-arrow-down"></i>
+                        自动滚动
+                    </button>
                 </div>
             </div>
-
-            <!-- 右侧面板 - 详情和状态 -->
-            <div class="col-md-8">
-                <div class="card mb-3">
-                    <div class="card-header">
-                        <h5 class="mb-0">系统状态</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-4">
-                                <div class="text-center">
-                                    <h3 class="text-primary" id="active-servers-count">0</h3>
-                                    <small class="text-muted">活跃服务器</small>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="text-center">
-                                    <h3 class="text-success" id="active-connections-count">0</h3>
-                                    <small class="text-muted">活跃连接</small>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="text-center">
-                                    <h3 class="text-info" id="total-connections-count">0</h3>
-                                    <small class="text-muted">总配置数</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="mb-0">连接详情</h5>
-                    </div>
-                    <div class="card-body">
-                        <div id="connection-details">
-                            <p class="text-muted">请选择一个连接查看详情</p>
-                        </div>
-                    </div>
+            <div class="card-body p-0">
+                <div id="log-container" style="height: 300px; overflow-y: auto; background: #f8f9fa; font-family: monospace; font-size: 12px; padding: 10px;">
+                    <div class="text-muted">等待日志数据...</div>
                 </div>
             </div>
         </div>
     </div>
+</div>
+{% endblock %}
 
-    <!-- 添加/编辑连接模态框 -->
-    <div class="modal fade" id="connectionModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="connectionModalTitle">添加连接</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="connectionForm">
-                        <div class="mb-3">
-                            <label for="connectionName" class="form-label">连接名称</label>
-                            <input type="text" class="form-control" id="connectionName" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="clientEndpoint" class="form-label">客户端端点 (Yunzai连接地址)</label>
-                            <input type="text" class="form-control" id="clientEndpoint" 
-                                   placeholder="ws://localhost:2537/OneBotv11" required>
-                            <div class="form-text">Yunzai将连接到此地址</div>
-                        </div>
-                        <div class="mb-3">
-                            <label for="targetEndpoints" class="form-label">目标端点列表 (多个Bot框架地址)</label>
-                            <textarea class="form-control" id="targetEndpoints" rows="3"
-                                      placeholder="ws://localhost:2536/OneBotv11&#10;ws://localhost:2538/OneBotv11" required></textarea>
-                            <div class="form-text">每行一个地址，代理将转发到所有这些地址</div>
-                        </div>
-                        <div class="mb-3">
-                            <label for="connectionDescription" class="form-label">描述</label>
-                            <textarea class="form-control" id="connectionDescription" rows="2"></textarea>
-                        </div>
-                        <div class="mb-3 form-check">
-                            <input type="checkbox" class="form-check-input" id="connectionEnabled" checked>
-                            <label class="form-check-label" for="connectionEnabled">启用此连接</label>
-                        </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                    <button type="button" class="btn btn-primary" onclick="saveConnection()">保存</button>
-                </div>
-            </div>
-        </div>
-    </div>
+{% block extra_js %}
+<script>
+let hourlyChart, messageTypeChart, weeklyChart;
+let autoScroll = true;
 
-    <!-- 确认删除模态框 -->
-    <div class="modal fade" id="deleteModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">确认删除</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <p>确定要删除这个连接配置吗？此操作无法撤销。</p>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                    <button type="button" class="btn btn-danger" onclick="confirmDelete()">删除</button>
-                </div>
-            </div>
-        </div>
-    </div>
+// 初始化图表
+function initCharts() {
+    // 24小时趋势图
+    const hourlyCtx = document.getElementById('hourlyChart').getContext('2d');
+    hourlyChart = new Chart(hourlyCtx, {
+        type: 'line',
+        data: {
+            labels: Array.from({length: 24}, (_, i) => `${i}:00`),
+            datasets: [{
+                label: '消息数量',
+                data: Array(24).fill(0),
+                borderColor: '#6c757d',
+                backgroundColor: 'rgba(108, 117, 125, 0.1)',
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+    
+    // 消息类型分布图
+    const messageTypeCtx = document.getElementById('messageTypeChart').getContext('2d');
+    messageTypeChart = new Chart(messageTypeCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['群聊消息', '私聊消息', '系统通知', 'API调用'],
+            datasets: [{
+                data: [0, 0, 0, 0],
+                backgroundColor: [
+                    '#6c757d',
+                    '#495057',
+                    '#28a745',
+                    '#17a2b8'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false
+        }
+    });
+    
+    // 7天趋势图
+    const weeklyCtx = document.getElementById('weeklyChart').getContext('2d');
+    const weekDays = [];
+    for (let i = 6; i >= 0; i--) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        weekDays.push(date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' }));
+    }
+    
+    weeklyChart = new Chart(weeklyCtx, {
+        type: 'bar',
+        data: {
+            labels: weekDays,
+            datasets: [{
+                label: '消息数量',
+                data: Array(7).fill(0),
+                backgroundColor: 'rgba(108, 117, 125, 0.8)',
+                borderColor: '#6c757d',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+}
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
-</body>
-</html>
+// 更新时间显示
+function updateTime() {
+    const now = new Date();
+    document.getElementById('current-time').textContent = now.toLocaleString('zh-CN');
+}
+
+// 加载系统状态
+async function loadSystemStatus() {
+    try {
+        const status = await apiRequest('/api/status');
+        document.getElementById('active-connections').textContent = status.active_connections;
+    } catch (error) {
+        console.error('加载系统状态失败:', error);
+    }
+}
+
+// 加载统计数据
+async function loadStatistics() {
+    try {
+        const stats = await apiRequest('/api/statistics?date=today');
+        document.getElementById('today-messages').textContent = stats.total_messages;
+        
+        // 更新图表数据（这里是示例数据）
+        // 实际应用中需要从API获取真实数据
+        updateChartData();
+    } catch (error) {
+        console.error('加载统计数据失败:', error);
+    }
+}
+
+// 更新图表数据
+function updateChartData() {
+    // 生成示例数据
+    const hourlyData = Array.from({length: 24}, () => Math.floor(Math.random() * 100));
+    const messageTypeData = [60, 25, 10, 5];
+    const weeklyData = Array.from({length: 7}, () => Math.floor(Math.random() * 500));
+    
+    hourlyChart.data.datasets[0].data = hourlyData;
+    hourlyChart.update();
+    
+    messageTypeChart.data.datasets[0].data = messageTypeData;
+    messageTypeChart.update();
+    
+    weeklyChart.data.datasets[0].data = weeklyData;
+    weeklyChart.update();
+}
+
+// 日志相关函数
+function clearLogs() {
+    document.getElementById('log-container').innerHTML = '<div class="text-muted">日志已清空</div>';
+}
+
+function toggleAutoScroll() {
+    autoScroll = !autoScroll;
+    const button = event.target.closest('button');
+    const icon = button.querySelector('i');
+    
+    if (autoScroll) {
+        icon.className = 'bi bi-arrow-down';
+        button.title = '关闭自动滚动';
+    } else {
+        icon.className = 'bi bi-pause';
+        button.title = '开启自动滚动';
+    }
+}
+
+function addLogEntry(message, type = 'info') {
+    const container = document.getElementById('log-container');
+    const timestamp = new Date().toLocaleTimeString('zh-CN');
+    
+    const logEntry = document.createElement('div');
+    logEntry.className = `log-entry text-${type}`;
+    logEntry.innerHTML = `<span class="text-muted">[${timestamp}]</span> ${message}`;
+    
+    container.appendChild(logEntry);
+    
+    // 保持最多100条日志
+    const entries = container.querySelectorAll('.log-entry');
+    if (entries.length > 100) {
+        entries[0].remove();
+    }
+    
+    // 自动滚动到底部
+    if (autoScroll) {
+        container.scrollTop = container.scrollHeight;
+    }
+}
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+    initCharts();
+    updateTime();
+    loadSystemStatus();
+    loadStatistics();
+    
+    // 定时更新
+    setInterval(updateTime, 1000);
+    setInterval(loadSystemStatus, 5000);
+    setInterval(loadStatistics, 30000);
+    
+    // 模拟日志更新
+    setInterval(() => {
+        const messages = [
+            '收到新消息',
+            '处理指令请求',
+            '更新用户状态',
+            '执行定时任务',
+            '连接状态检查'
+        ];
+        const message = messages[Math.floor(Math.random() * messages.length)];
+        addLogEntry(message);
+    }, 3000);
+});
+</script>
+{% endblock %}

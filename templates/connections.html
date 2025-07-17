@@ -1,0 +1,429 @@
+{% extends "base.html" %}
+
+{% block title %}连接管理 - BotShepherd{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="bi bi-diagram-3"></i> 连接管理</h1>
+    <button class="btn btn-primary" onclick="showAddConnectionModal()">
+        <i class="bi bi-plus-circle"></i>
+        添加连接
+    </button>
+</div>
+
+<!-- 连接状态卡片 -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h5 class="card-title">
+                    <i class="bi bi-diagram-3 text-primary"></i>
+                    总连接数
+                </h5>
+                <h3 id="total-connections">0</h3>
+                <small class="text-muted">个连接</small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h5 class="card-title">
+                    <i class="bi bi-check-circle text-success"></i>
+                    活动连接
+                </h5>
+                <h3 id="active-connections">0</h3>
+                <small class="text-muted">个连接</small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h5 class="card-title">
+                    <i class="bi bi-x-circle text-danger"></i>
+                    离线连接
+                </h5>
+                <h3 id="offline-connections">0</h3>
+                <small class="text-muted">个连接</small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h5 class="card-title">
+                    <i class="bi bi-exclamation-triangle text-warning"></i>
+                    错误连接
+                </h5>
+                <h3 id="error-connections">0</h3>
+                <small class="text-muted">个连接</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 连接列表 -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="bi bi-list"></i>
+            连接列表
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover" id="connections-table">
+                <thead>
+                    <tr>
+                        <th>连接ID</th>
+                        <th>名称</th>
+                        <th>客户端端点</th>
+                        <th>目标端点</th>
+                        <th>状态</th>
+                        <th>消息数</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- 动态加载 -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 添加/编辑连接模态框 -->
+<div class="modal fade" id="connectionModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="connectionModalTitle">添加连接</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="connectionForm">
+                    <div class="mb-3">
+                        <label for="connectionName" class="form-label">连接名称</label>
+                        <input type="text" class="form-control" id="connectionName" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="connectionDescription" class="form-label">描述</label>
+                        <textarea class="form-control" id="connectionDescription" rows="2"></textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="clientEndpoint" class="form-label">客户端端点</label>
+                        <input type="text" class="form-control" id="clientEndpoint" 
+                               placeholder="ws://localhost:2537/OneBotv11" required>
+                        <div class="form-text">客户端连接的WebSocket地址</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="targetEndpoints" class="form-label">目标端点</label>
+                        <div id="targetEndpointsList">
+                            <div class="input-group mb-2">
+                                <input type="text" class="form-control target-endpoint" 
+                                       placeholder="ws://localhost:2536/OneBotv11">
+                                <button class="btn btn-outline-danger" type="button" onclick="removeTargetEndpoint(this)">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="addTargetEndpoint()">
+                            <i class="bi bi-plus"></i>
+                            添加目标端点
+                        </button>
+                        <div class="form-text">目标服务器的WebSocket地址</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="connectionEnabled" checked>
+                            <label class="form-check-label" for="connectionEnabled">
+                                启用连接
+                            </label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="saveConnection()">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 连接详情模态框 -->
+<div class="modal fade" id="connectionDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">连接详情</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="connectionDetailContent">
+                    <!-- 动态加载 -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let connections = {};
+let editingConnectionId = null;
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+    loadConnections();
+    setInterval(loadConnections, 10000); // 每10秒刷新
+});
+
+// 加载连接列表
+async function loadConnections() {
+    try {
+        const response = await apiRequest('/api/connections');
+        connections = response;
+        updateConnectionStats();
+        updateConnectionTable();
+    } catch (error) {
+        console.error('加载连接失败:', error);
+    }
+}
+
+// 更新连接统计
+function updateConnectionStats() {
+    const total = Object.keys(connections).length;
+    let active = 0, offline = 0, error = 0;
+    
+    Object.values(connections).forEach(conn => {
+        if (conn.enabled) {
+            active++;
+        } else {
+            offline++;
+        }
+    });
+    
+    document.getElementById('total-connections').textContent = total;
+    document.getElementById('active-connections').textContent = active;
+    document.getElementById('offline-connections').textContent = offline;
+    document.getElementById('error-connections').textContent = error;
+}
+
+// 更新连接表格
+function updateConnectionTable() {
+    const tbody = document.querySelector('#connections-table tbody');
+    tbody.innerHTML = '';
+    
+    Object.entries(connections).forEach(([connectionId, connection]) => {
+        const row = document.createElement('tr');
+        
+        const statusBadge = connection.enabled ? 
+            '<span class="badge bg-success">启用</span>' : 
+            '<span class="badge bg-secondary">禁用</span>';
+        
+        const targetEndpoints = connection.target_endpoints.join('<br>');
+        
+        row.innerHTML = `
+            <td><code>${connectionId}</code></td>
+            <td>${connection.name}</td>
+            <td><code>${connection.client_endpoint}</code></td>
+            <td><small>${targetEndpoints}</small></td>
+            <td>${statusBadge}</td>
+            <td>0</td>
+            <td>
+                <button class="btn btn-sm btn-outline-primary" onclick="showConnectionDetail('${connectionId}')">
+                    <i class="bi bi-eye"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-warning" onclick="editConnection('${connectionId}')">
+                    <i class="bi bi-pencil"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteConnection('${connectionId}')">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </td>
+        `;
+        
+        tbody.appendChild(row);
+    });
+}
+
+// 显示添加连接模态框
+function showAddConnectionModal() {
+    editingConnectionId = null;
+    document.getElementById('connectionModalTitle').textContent = '添加连接';
+    document.getElementById('connectionForm').reset();
+    
+    // 重置目标端点列表
+    const targetList = document.getElementById('targetEndpointsList');
+    targetList.innerHTML = `
+        <div class="input-group mb-2">
+            <input type="text" class="form-control target-endpoint" 
+                   placeholder="ws://localhost:2536/OneBotv11">
+            <button class="btn btn-outline-danger" type="button" onclick="removeTargetEndpoint(this)">
+                <i class="bi bi-trash"></i>
+            </button>
+        </div>
+    `;
+    
+    new bootstrap.Modal(document.getElementById('connectionModal')).show();
+}
+
+// 编辑连接
+function editConnection(connectionId) {
+    editingConnectionId = connectionId;
+    const connection = connections[connectionId];
+    
+    document.getElementById('connectionModalTitle').textContent = '编辑连接';
+    document.getElementById('connectionName').value = connection.name;
+    document.getElementById('connectionDescription').value = connection.description || '';
+    document.getElementById('clientEndpoint').value = connection.client_endpoint;
+    document.getElementById('connectionEnabled').checked = connection.enabled;
+    
+    // 填充目标端点
+    const targetList = document.getElementById('targetEndpointsList');
+    targetList.innerHTML = '';
+    
+    connection.target_endpoints.forEach(endpoint => {
+        const div = document.createElement('div');
+        div.className = 'input-group mb-2';
+        div.innerHTML = `
+            <input type="text" class="form-control target-endpoint" value="${endpoint}">
+            <button class="btn btn-outline-danger" type="button" onclick="removeTargetEndpoint(this)">
+                <i class="bi bi-trash"></i>
+            </button>
+        `;
+        targetList.appendChild(div);
+    });
+    
+    new bootstrap.Modal(document.getElementById('connectionModal')).show();
+}
+
+// 添加目标端点
+function addTargetEndpoint() {
+    const targetList = document.getElementById('targetEndpointsList');
+    const div = document.createElement('div');
+    div.className = 'input-group mb-2';
+    div.innerHTML = `
+        <input type="text" class="form-control target-endpoint" 
+               placeholder="ws://localhost:2536/OneBotv11">
+        <button class="btn btn-outline-danger" type="button" onclick="removeTargetEndpoint(this)">
+            <i class="bi bi-trash"></i>
+        </button>
+    `;
+    targetList.appendChild(div);
+}
+
+// 移除目标端点
+function removeTargetEndpoint(button) {
+    const targetList = document.getElementById('targetEndpointsList');
+    if (targetList.children.length > 1) {
+        button.parentElement.remove();
+    } else {
+        showToast('至少需要一个目标端点', 'warning');
+    }
+}
+
+// 保存连接
+async function saveConnection() {
+    try {
+        const name = document.getElementById('connectionName').value.trim();
+        const description = document.getElementById('connectionDescription').value.trim();
+        const clientEndpoint = document.getElementById('clientEndpoint').value.trim();
+        const enabled = document.getElementById('connectionEnabled').checked;
+        
+        // 收集目标端点
+        const targetEndpoints = [];
+        document.querySelectorAll('.target-endpoint').forEach(input => {
+            const value = input.value.trim();
+            if (value) {
+                targetEndpoints.push(value);
+            }
+        });
+        
+        if (!name || !clientEndpoint || targetEndpoints.length === 0) {
+            showToast('请填写所有必需字段', 'warning');
+            return;
+        }
+        
+        const connectionData = {
+            name,
+            description,
+            client_endpoint: clientEndpoint,
+            target_endpoints: targetEndpoints,
+            enabled
+        };
+        
+        const connectionId = editingConnectionId || `conn_${Date.now()}`;
+        
+        await apiRequest(`/api/connections/${connectionId}`, {
+            method: 'PUT',
+            body: JSON.stringify(connectionData)
+        });
+        
+        showToast(editingConnectionId ? '连接更新成功' : '连接添加成功', 'success');
+        bootstrap.Modal.getInstance(document.getElementById('connectionModal')).hide();
+        loadConnections();
+        
+    } catch (error) {
+        showToast(`保存连接失败: ${error.message}`, 'danger');
+    }
+}
+
+// 删除连接
+async function deleteConnection(connectionId) {
+    if (!confirm('确定要删除这个连接吗？')) {
+        return;
+    }
+    
+    try {
+        await apiRequest(`/api/connections/${connectionId}`, {
+            method: 'DELETE'
+        });
+        
+        showToast('连接删除成功', 'success');
+        loadConnections();
+    } catch (error) {
+        showToast(`删除连接失败: ${error.message}`, 'danger');
+    }
+}
+
+// 显示连接详情
+function showConnectionDetail(connectionId) {
+    const connection = connections[connectionId];
+    
+    const content = `
+        <div class="row">
+            <div class="col-md-6">
+                <h6>基本信息</h6>
+                <table class="table table-sm">
+                    <tr><td>连接ID</td><td><code>${connectionId}</code></td></tr>
+                    <tr><td>名称</td><td>${connection.name}</td></tr>
+                    <tr><td>描述</td><td>${connection.description || '无'}</td></tr>
+                    <tr><td>状态</td><td>${connection.enabled ? '启用' : '禁用'}</td></tr>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <h6>端点信息</h6>
+                <table class="table table-sm">
+                    <tr><td>客户端端点</td><td><code>${connection.client_endpoint}</code></td></tr>
+                    <tr><td>目标端点</td><td>${connection.target_endpoints.map(ep => `<code>${ep}</code>`).join('<br>')}</td></tr>
+                </table>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('connectionDetailContent').innerHTML = content;
+    new bootstrap.Modal(document.getElementById('connectionDetailModal')).show();
+}
+</script>
+{% endblock %}
