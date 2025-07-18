@@ -11,8 +11,7 @@
   "blacklist": {
     "groups": [],
     "users": [
-      "1",
-      "6"
+      "1"
     ]
   },
   "allow_private": true,

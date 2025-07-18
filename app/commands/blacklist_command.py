@@ -5,7 +5,7 @@
 
 from typing import Dict, Any, List
 from ..onebotv11.models import Event, GroupMessageEvent
-from ..websocket_proxy.permission_manager import PermissionLevel
+from .permission_manager import PermissionLevel
 from .base_command import BaseCommand, CommandResponse, CommandResult, command_registry
 
 class BlacklistCommand(BaseCommand):
@@ -110,7 +110,7 @@ class BlacklistCommand(BaseCommand):
     async def _list_blacklist(self, args, config_manager) -> CommandResponse:
         """查看黑名单"""
         try:
-            global_config = await config_manager.get_global_config()
+            global_config = config_manager.get_global_config()
             blacklist = global_config.get("blacklist", {})
             
             if args.type:

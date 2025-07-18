@@ -15,8 +15,6 @@ from ..onebotv11 import EventParser, MessageNormalizer, EventValidator
 from ..onebotv11.models import Event, PrivateMessageEvent, GroupMessageEvent
 from ..commands import CommandHandler
 from .message_processor import MessageProcessor
-from .permission_manager import PermissionManager
-from .filter_manager import FilterManager
 
 class ProxyServer:
     """WebSocket代理服务器"""
@@ -29,10 +27,6 @@ class ProxyServer:
         # 连接管理
         self.active_connections = {}  # connection_id -> ProxyConnection
         self.running = False
-
-        # 初始化组件
-        self.permission_manager = PermissionManager(config_manager, logger)
-        self.filter_manager = FilterManager(config_manager, self.permission_manager, logger)
         
     async def start(self):
         """启动代理服务器"""
@@ -194,14 +188,17 @@ class ProxyConnection:
         self.echo_cache = {}
         self.running = False
         self.client_headers = None
+        self.first_message = None
+        
+        self.reconnect_locks = []  # 每个 target_index 一个 Lock
+        for _ in self.config.get("target_endpoints", []):
+            self.reconnect_locks.append(asyncio.Lock())
 
         # 初始化消息处理器
         self.message_processor = MessageProcessor(config_manager, database_manager, logger)
-        self.permission_manager = PermissionManager(config_manager, logger)
-        self.filter_manager = FilterManager(config_manager, self.permission_manager, logger)        
         
         # 自身指令处理
-        self.command_handler = CommandHandler(config_manager, database_manager, self.permission_manager, logger)
+        self.command_handler = CommandHandler(config_manager, database_manager, logger)
         
     async def start_proxy(self):
         """启动代理"""
@@ -209,7 +206,7 @@ class ProxyConnection:
         
         try:
             # 等待客户端第一个消息以获取请求头
-            first_message = await self.client_ws.recv()
+            self.first_message = await self.client_ws.recv()
 
             # 获取客户端请求头
             try:
@@ -231,8 +228,8 @@ class ProxyConnection:
             # 连接到目标端点
             await self._connect_to_targets()
             
-            # 处理第一个消息，如lifecycle
-            await self._process_client_message(first_message)
+            # 处理第一个消息，其中yunzai需要这个lifecycle消息来注册
+            await self._process_client_message(self.first_message)
 
             self.logger.info(f"[{self.connection_id}] 已连接到 {len(self.target_connections)} 个目标端点")
 
@@ -243,9 +240,9 @@ class ProxyConnection:
             tasks.append(asyncio.create_task(self._forward_client_to_targets()))
 
             # 目标到客户端的转发任务
-            for i, target_ws in enumerate(self.target_connections):
+            for idx, target_ws in enumerate(self.target_connections):
                 tasks.append(asyncio.create_task(
-                    self._forward_target_to_client(target_ws, i + 1)
+                    self._forward_target_to_client(target_ws, idx + 1)
                 ))
 
             if tasks:
@@ -258,61 +255,72 @@ class ProxyConnection:
             self.logger.error(f"[{self.connection_id}] 代理运行错误: {e}")
         finally:
             await self.stop()
+
+
+    async def _connect_to_target(self, endpoint: str, target_index: int):
+         try:
+            # 使用客户端请求头连接目标
+            extra_headers = {}
+            if self.client_headers:
+                # 更新相关请求头，其中Nonebot必须x-self-id
+                for header_name in ["authorization", "x-self-id", "x-client-role", "user-agent"]:
+                    if header_name in self.client_headers:
+                        extra_headers[header_name] = self.client_headers[header_name]
             
+            # 尝试使用不同的参数名连接，同时配置连接参数
+            target_ws = None
+            connection_params = {
+                'max_size': None,  # 移除消息大小限制
+                'max_queue': None,  # 移除队列大小限制
+                'ping_interval': 30,  # 心跳间隔
+                'ping_timeout': 10,   # 心跳超时
+                'close_timeout': 10,   # 关闭超时
+                'compression': None
+            }
+
+            connection_attempts = [
+                # 尝试 extra_headers 参数
+                lambda: websockets.connect(endpoint, extra_headers=extra_headers, **connection_params),
+                # 尝试 additional_headers 参数
+                lambda: websockets.connect(endpoint, additional_headers=extra_headers, **connection_params),
+                # 不使用额外头部，无法连接Nonebot2
+                lambda: websockets.connect(endpoint, **connection_params)
+            ]
+
+            for attempt in connection_attempts:
+                try:
+                    target_ws = await attempt()
+                    break
+                except TypeError:
+                    # 参数不支持，尝试下一种方式
+                    continue
+                except Exception as e:
+                    # 其他错误，直接抛出
+                    raise e
+
+            if target_ws is None:
+                raise Exception(f"[{self.connection_id}] 所有连接方式都失败")
+            
+            if target_index > len(self.target_connections) + 1 or target_index == 0:
+                raise Exception(f"[{self.connection_id}] 目标ID {target_index} 超出范围!")
+            if target_index == len(self.target_connections) + 1:
+                self.target_connections.append(target_ws)
+            else:
+                self.target_connections[target_index - 1] = target_ws
+            self.logger.info(f"[{self.connection_id}] 已连接到目标: {endpoint}")
+            return target_ws
+            
+         except Exception as e:
+            self.logger.error(f"[{self.connection_id}] 连接目标失败 {endpoint}: {e}")
+            raise e
+
 
     async def _connect_to_targets(self):
         """连接到目标端点"""
         target_endpoints = self.config.get("target_endpoints", [])
         
-        for endpoint in target_endpoints:
-            try:
-                # 使用客户端请求头连接目标
-                extra_headers = {}
-                if self.client_headers:
-                    # 复制相关请求头
-                    for header_name in ["authorization", "x-self-id", "x-client-role", "user-agent"]:
-                        if header_name in self.client_headers:
-                            extra_headers[header_name] = self.client_headers[header_name]
-                
-                # 尝试使用不同的参数名连接，同时配置连接参数
-                target_ws = None
-                connection_params = {
-                    'max_size': None,  # 移除消息大小限制
-                    'max_queue': None,  # 移除队列大小限制
-                    'ping_interval': 20,  # 心跳间隔
-                    'ping_timeout': 10,   # 心跳超时
-                    'close_timeout': 10,   # 关闭超时
-                    'compression': None
-                }
-
-                connection_attempts = [
-                    # 尝试 extra_headers 参数
-                    lambda: websockets.connect(endpoint, extra_headers=extra_headers, **connection_params),
-                    # 尝试 additional_headers 参数
-                    lambda: websockets.connect(endpoint, additional_headers=extra_headers, **connection_params),
-                    # 不使用额外头部，无法连接Nonebot2
-                    lambda: websockets.connect(endpoint, **connection_params)
-                ]
-
-                for attempt in connection_attempts:
-                    try:
-                        target_ws = await attempt()
-                        break
-                    except TypeError:
-                        # 参数不支持，尝试下一种方式
-                        continue
-                    except Exception as e:
-                        # 其他错误，直接抛出
-                        raise e
-
-                if target_ws is None:
-                    raise Exception(f"[{self.connection_id}] 所有连接方式都失败")
-                
-                self.target_connections.append(target_ws)
-                self.logger.info(f"[{self.connection_id}] 已连接到目标: {endpoint}")
-                
-            except Exception as e:
-                self.logger.error(f"[{self.connection_id}] 连接目标失败 {endpoint}: {e}")
+        for idx, endpoint in enumerate(target_endpoints):
+            await self._connect_to_target(endpoint, idx + 1)
     
     async def _forward_client_to_targets(self):
         """转发客户端消息到目标"""
@@ -330,7 +338,19 @@ class ProxyConnection:
             async for message in target_ws:
                 await self._process_target_message(message, target_index)
         except websockets.exceptions.ConnectionClosed:
-            self.logger.info(f"[{self.connection_id}] 目标连接 {target_index} 已关闭")
+            self.logger.info(f"[{self.connection_id}] 目标连接 {target_index} 已关闭。将在60秒内持续尝试重新连接。")
+            lock = self.reconnect_locks[target_index - 1]
+            if not lock.locked():
+                async with lock:
+                    for _ in range(60):
+                        await asyncio.sleep(1)
+                        try:
+                            target_ws = await self._connect_to_target(self.config.get("target_endpoints", [])[target_index - 1], target_index)
+                            await self._process_client_message(self.first_message) # 比如yunzai需要使用first Message重新注册
+                            self.logger.info(f"[{self.connection_id}] 目标连接 {target_index} 恢复成功，重新开始转发。")
+                            await self._forward_target_to_client(target_ws, target_index)
+                        except Exception as e:
+                            self.logger.warning(f"[{self.connection_id}] 尝试重连目标 {target_index} 失败: {e}")
         except Exception as e:
             self.logger.error(f"[{self.connection_id}] 目标消息转发错误 {target_index}: {e}")
     
@@ -359,10 +379,13 @@ class ProxyConnection:
                 
                 if message_data.get('echo'):
                     # api请求内容
-                    target_id = self.echo_cache.pop(message_data['echo'], None)
-                    if target_id is not None:
-                        self.logger.debug(f"[{self.connection_id}] 发送API请求到目标 {target_id}: {processed_json[:200]}")
-                        await self.target_connections[target_id - 1].send(processed_json)
+                    target_index = self.echo_cache.pop(message_data['echo'], None)
+                    if target_index is not None:
+                        self.logger.debug(f"[{self.connection_id}] 发送API请求到目标 {target_index}: {processed_json[:200]}")
+                        try:
+                            await self.target_connections[target_index - 1].send(processed_json)
+                        except Exception as e:
+                            self.logger.error(f"[{self.connection_id}] 发送到目标失败: {e}")
                 else:
                     for target_ws in self.target_connections:
                         try:
@@ -413,15 +436,11 @@ class ProxyConnection:
     
     async def _preprocess_message(self, message_data: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], Optional[Event]]:
         """消息预处理"""
-        return await self.message_processor.preprocess_client_message(
-            message_data, self.connection_id
-        )
+        return await self.message_processor.preprocess_client_message(message_data)
 
     async def _postprocess_message(self, message_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """消息后处理"""
-        return await self.message_processor.postprocess_target_message(
-            message_data, self.connection_id
-        )
+        return await self.message_processor.postprocess_target_message(message_data)
     
     async def stop(self):
         """停止代理连接"""

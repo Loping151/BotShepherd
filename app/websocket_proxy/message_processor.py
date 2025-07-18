@@ -8,9 +8,11 @@ from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime
 
 from ..onebotv11 import EventParser, MessageNormalizer
-from ..onebotv11.models import Event, PrivateMessageEvent, GroupMessageEvent, MessageSegment
+from ..onebotv11.models import Event, MessageEvent, PrivateMessageEvent, GroupMessageEvent, MessageSegment
 from ..onebotv11.message_segment import MessageSegmentParser
 from ..utils.logger import log_message_flat
+from ..commands.permission_manager import PermissionManager
+from .filter_manager import FilterManager
 
 class MessageProcessor:
     """消息处理器"""
@@ -23,9 +25,10 @@ class MessageProcessor:
         # 消息解析器和标准化器
         self.event_parser = EventParser()
         self.message_normalizer = MessageNormalizer()
+        self.permission_manager = PermissionManager(config_manager, logger)
+        self.filter_manager = FilterManager(config_manager, self.permission_manager, logger)
     
-    async def preprocess_client_message(self, message_data: Dict[str, Any], 
-                                      connection_id: str) -> Tuple[Optional[Dict[str, Any]], Optional[Event]]:
+    async def preprocess_client_message(self, message_data: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], Optional[Event]]:
         """预处理客户端消息"""
         try:
             # 记录原始消息
@@ -44,13 +47,12 @@ class MessageProcessor:
                 return normalized_data, None
             
             # 更新账号活动时间
-            if hasattr(event, 'self_id'):
+            if isinstance(event, MessageEvent):
                 await self.config_manager.update_account_last_activity(
                     str(event.self_id), "receive"
                 )
             
-            # 消息事件特殊处理
-            if isinstance(event, (PrivateMessageEvent, GroupMessageEvent)):
+                # 消息事件预处理，包括决定是否拦截，应用别名等
                 processed_data = await self._preprocess_message_event(event, normalized_data)
                 if not processed_data:
                     return None, None   
@@ -58,6 +60,9 @@ class MessageProcessor:
             
             # 记录处理后的消息
             self._log_message(normalized_data, "RECV", "PROCESSED")
+            
+            # 重新解析事件，事件也受到预处理的影响，会作用到本体指令集
+            event = self.event_parser.parse_event_data(normalized_data)
             
             return normalized_data, event
             
@@ -67,8 +72,7 @@ class MessageProcessor:
             self.logger.error(f"预处理客户端消息失败: {e}")
             return None, None
     
-    async def postprocess_target_message(self, message_data: Dict[str, Any], 
-                                       connection_id: str) -> Optional[Dict[str, Any]]:
+    async def postprocess_target_message(self, message_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """后处理目标消息"""
         try:
             # 记录原始消息
@@ -77,14 +81,13 @@ class MessageProcessor:
             # 解析事件
             event = self.event_parser.parse_event_data(message_data)
             if event:
-                # 更新账号活动时间
-                if hasattr(event, 'self_id'):
+                if isinstance(event, MessageEvent):
+                    # 更新账号活动时间
                     await self.config_manager.update_account_last_activity(
                         str(event.self_id), "send"
                     )
                 
-                # 消息事件特殊处理
-                if isinstance(event, (PrivateMessageEvent, GroupMessageEvent)):
+                    # 消息事件特殊处理
                     processed_data = await self._postprocess_message_event(event, message_data)
                     if not processed_data:
                         return None
@@ -101,7 +104,7 @@ class MessageProcessor:
     
     async def _normalize_message(self, message_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """标准化消息"""
-        global_config = await self.config_manager.get_global_config()
+        global_config = self.config_manager.get_global_config()
         normalization_config = global_config.get("message_normalization", {})
         
         if normalization_config.get("enabled", False):
@@ -147,6 +150,14 @@ class MessageProcessor:
                 self.logger.info(f"私聊消息被拒绝: user={event.user_id}, sub_type={event.sub_type}")
                 return None
         
+        # 应用多级别名转换，优先级为全局->账号->群组
+        # message_data = await self.apply_global_aliases(message_data)
+        # message_data = await self.apply_account_aliases(message_data)
+        # message_data = await self.apply_group_aliases(message_data)
+
+        # 然后应用过滤词。也就是说，可以通过全局禁用原来的前缀，使用账号别名来使单个账号绕过过滤，实现启用功能的目的。
+        
+
         return message_data
     
     async def _postprocess_message_event(self, event: Event, 
@@ -160,6 +171,13 @@ class MessageProcessor:
     
     def _is_in_blacklist(self, event: Event) -> bool:
         """检查是否在黑名单中"""
+        
+        global_config = self.config_manager.get_global_config()
+        
+        # superuser和人机合一总是允许
+        if event.user_id in global_config.get("superusers", []) + [event.self_id]:
+            return False
+        
         # 检查用户黑名单
         if self.config_manager.is_in_blacklist("users", str(event.user_id)):
             return True
@@ -173,7 +191,11 @@ class MessageProcessor:
     
     async def _check_private_message_allowed(self, event: PrivateMessageEvent) -> bool:
         """检查私聊消息是否允许"""
-        global_config = await self.config_manager.get_global_config()
+        global_config = self.config_manager.get_global_config()
+        
+        # superuser和人机合一总是允许
+        if event.user_id in global_config.get("superusers", []) + [event.self_id]:
+            return True
         
         # 检查是否允许私聊
         if not global_config.get("allow_private", True):
@@ -255,10 +277,47 @@ class MessageProcessor:
         if not isinstance(event, (PrivateMessageEvent, GroupMessageEvent)):
             return None
         
-        global_config = await self.config_manager.get_global_config()
+        global_config = self.config_manager.get_global_config()
         command_prefix = global_config.get("command_prefix", "bs")
         
         return self.message_normalizer.extract_command_info(event, command_prefix)
+    
+    async def _apply_aliases(self, message_data: Dict[str, Any], aliases: Dict[str, List[str]]) -> Dict[str, Any]:
+        # 处理消息段
+        modified = False
+        for segment in message_data["message"]:
+            # 处理字典格式的消息段
+            if isinstance(segment, dict):
+                if segment.get("type") == "text":
+                    text = segment.get("data", {}).get("text", "")
+
+                    # 检查是否匹配别名
+                    for target, alias_list in aliases.items():
+                        for alias in alias_list:
+                            if text.startswith(alias):
+                                # 替换别名
+                                new_text = target + text[len(alias):]
+                                segment["data"]["text"] = new_text
+                                modified = True
+                                break
+                        if modified:
+                            break
+                break # 只替换第一个字符部分，毕竟叫做指令别名
+        
+        # 更新raw_message
+        if modified and "raw_message" in message_data:
+            # 重新生成raw_message
+            text_parts = []
+            for segment in message_data["message"]:
+                # 处理字典格式的消息段
+                if isinstance(segment, dict):
+                    if segment.get("type") == "text":
+                        text_parts.append(segment.get("data", {}).get("text", ""))
+                # 处理MessageSegment对象
+                elif hasattr(segment, 'type') and hasattr(segment, 'data'):
+                    if segment.type == "text":
+                        text_parts.append(segment.data.get("text", ""))
+            message_data["raw_message"] = "".join(text_parts)
     
     async def apply_global_aliases(self, message_data: Dict[str, Any]) -> Dict[str, Any]:
         """应用全局别名"""
@@ -266,67 +325,34 @@ class MessageProcessor:
             if "message" not in message_data or not isinstance(message_data["message"], list):
                 return message_data
             
-            global_config = await self.config_manager.get_global_config()
+            global_config = self.config_manager.get_global_config()
             aliases = global_config.get("global_aliases", {})
             
             if not aliases:
                 return message_data
             
-            # 处理消息段
-            modified = False
-            for segment in message_data["message"]:
-                # 处理字典格式的消息段
-                if isinstance(segment, dict):
-                    if segment.get("type") == "text":
-                        text = segment.get("data", {}).get("text", "")
-
-                        # 检查是否匹配别名
-                        for target, alias_list in aliases.items():
-                            for alias in alias_list:
-                                if text.startswith(alias):
-                                    # 替换别名
-                                    new_text = target + text[len(alias):]
-                                    segment["data"]["text"] = new_text
-                                    modified = True
-                                    break
-                            if modified:
-                                break
-                # 处理MessageSegment对象
-                elif hasattr(segment, 'type') and hasattr(segment, 'data'):
-                    if segment.type == "text":
-                        text = segment.data.get("text", "")
-
-                        # 检查是否匹配别名
-                        for target, alias_list in aliases.items():
-                            for alias in alias_list:
-                                if text.startswith(alias):
-                                    # 替换别名
-                                    new_text = target + text[len(alias):]
-                                    segment.data["text"] = new_text
-                                    modified = True
-                                    break
-                            if modified:
-                                break
-                if modified:
-                    break
-            
-            # 更新raw_message
-            if modified and "raw_message" in message_data:
-                # 重新生成raw_message
-                text_parts = []
-                for segment in message_data["message"]:
-                    # 处理字典格式的消息段
-                    if isinstance(segment, dict):
-                        if segment.get("type") == "text":
-                            text_parts.append(segment.get("data", {}).get("text", ""))
-                    # 处理MessageSegment对象
-                    elif hasattr(segment, 'type') and hasattr(segment, 'data'):
-                        if segment.type == "text":
-                            text_parts.append(segment.data.get("text", ""))
-                message_data["raw_message"] = "".join(text_parts)
-            
-            return message_data
+            return self._apply_aliases(message_data, aliases)
             
         except Exception as e:
             self.logger.error(f"应用全局别名失败: {e}")
             return message_data
+
+    async def apply_account_aliases(self, message_data: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            if "message" not in message_data or not isinstance(message_data["message"], list):
+                return message_data
+            
+            account_config = await self.config_manager.get_account_config(str(message_data["self_id"]))
+            aliases = account_config.get("aliases", {})
+            
+            if not aliases:
+                return message_data
+            
+            return self._apply_aliases(message_data, aliases)
+            
+        except Exception as e:
+            self.logger.error(f"应用账号别名失败: {e}")
+            return message_data
+    
+    async def apply_group_aliases(self, message_data: Dict[str, Any]) -> Dict[str, Any]:
+        pass

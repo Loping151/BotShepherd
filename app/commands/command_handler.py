@@ -10,16 +10,16 @@ from datetime import datetime
 from ..onebotv11.models import Event, PrivateMessageEvent, GroupMessageEvent
 from ..onebotv11.message_segment import MessageSegmentParser, MessageSegmentBuilder
 from ..onebotv11.api_handler import ApiHandler
-from ..websocket_proxy.permission_manager import PermissionManager
+from .permission_manager import PermissionManager
 from .base_command import BaseCommand, CommandResponse, CommandResult, command_registry
 
 class CommandHandler:
     """指令处理器"""
     
-    def __init__(self, config_manager, database_manager, permission_manager: PermissionManager, logger):
+    def __init__(self, config_manager, database_manager, logger):
         self.config_manager = config_manager
         self.database_manager = database_manager
-        self.permission_manager = permission_manager
+        self.permission_manager = PermissionManager(config_manager, logger)
         self.logger = logger
         
         # 指令执行统计
@@ -59,7 +59,7 @@ class CommandHandler:
     
     async def _extract_command_info(self, event: Event) -> Optional[Dict[str, Any]]:
         """提取指令信息"""
-        global_config = await self.config_manager.get_global_config()
+        global_config = self.config_manager.get_global_config()
         command_prefix = global_config.get("command_prefix", "bs")
         
         # 检查是否为指令
@@ -174,7 +174,7 @@ class CommandHandler:
     async def _check_command_cooldown(self, event: Event, command: BaseCommand) -> Tuple[bool, str]:
         """检查指令冷却时间"""
         # 获取冷却配置
-        global_config = await self.config_manager.get_global_config()
+        global_config = self.config_manager.get_global_config()
         cooldown_config = global_config.get("command_cooldown", {})
         
         if not cooldown_config.get("enabled", False):
