@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from ..onebotv11.models import Event, PrivateMessageEvent, GroupMessageEvent
-from ..websocket_proxy.permission_manager import PermissionLevel
+from .permission_manager import PermissionLevel
 
 class CommandResult(Enum):
     """指令执行结果"""

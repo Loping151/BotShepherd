@@ -178,7 +178,8 @@ class ConfigValidator:
             "account_id": str,
             "name": str,
             "description": str,
-            "enabled": bool
+            "enabled": bool,
+            "aliases": dict
         }
         
         for field, expected_type in required_fields.items():
@@ -192,6 +193,21 @@ class ConfigValidator:
             account_id = config["account_id"]
             if not isinstance(account_id, str) or not account_id.isdigit():
                 errors.append("account_id 必须是数字字符串")
+                
+        if "aliases" in config:
+            aliases = config["aliases"]
+            if not isinstance(aliases, dict):
+                errors.append("aliases 必须是字典")
+            else:
+                for key, value in aliases.items():
+                    if not isinstance(key, str):
+                        errors.append(f"aliases 键必须是字符串: {key}")
+                    if not isinstance(value, list):
+                        errors.append(f"aliases[{key}] 值必须是列表")
+                    else:
+                        for alias in value:
+                            if not isinstance(alias, str):
+                                errors.append(f"aliases[{key}] 中的别名必须是字符串: {alias}")
         
         # 验证时间字段
         time_fields = ["last_receive_time", "last_send_time"]
@@ -213,6 +229,7 @@ class ConfigValidator:
             "description": str,
             "enabled": bool,
             "expire_time": (str, int),
+            "aliases": dict,
             "filters": dict
         }
         
@@ -237,6 +254,25 @@ class ConfigValidator:
             expire_time = config["expire_time"]
             if expire_time != -1 and not isinstance(expire_time, str):
                 errors.append("expire_time 必须是 -1 或 ISO格式的时间字符串")
+                
+        if "aliases" in config:
+            aliases = config["aliases"]
+            if not isinstance(aliases, dict):
+                errors.append("aliases 必须是字典")
+            else:
+                for key, value in aliases.items():
+                    if not isinstance(key, str):
+                        errors.append(f"aliases 键必须是字符串: {key}")
+                    if not isinstance(value, list):
+                        errors.append(f"aliases[{key}] 值必须是列表")
+                    else:
+                        for alias in value:
+                            if not isinstance(alias, str):
+                                errors.append(f"aliases[{key}] 中的别名必须是字符串: {alias}")
+                                
+        if "last_message_time" in config and config["last_message_time"] is not None:
+            if not isinstance(config["last_message_time"], str):
+                errors.append("last_message_time 必须是ISO格式的时间字符串")
         
         # 验证过滤器
         if "filters" in config:
@@ -275,7 +311,7 @@ class ConfigTemplate:
     def get_default_global_config() -> Dict[str, Any]:
         """获取默认全局配置模板"""
         return {
-            "superusers": ["123456789"],
+            "superusers": ["644572093"], # 不是后门奥，自己改
             "command_prefix": "bs",
             "global_aliases": {
                 "ww": ["ww"]
@@ -337,6 +373,7 @@ class ConfigTemplate:
             "name": f"Bot_{account_id}",
             "description": "自动创建的账号配置",
             "enabled": True,
+            "aliases": {},
             "last_receive_time": None,
             "last_send_time": None
         }
@@ -349,6 +386,7 @@ class ConfigTemplate:
             "description": f"群组_{group_id}",
             "enabled": True,
             "expire_time": -1,
+            "aliases": {},
             "last_message_time": None,
             "filters": {
                 "superuser_filters": [],

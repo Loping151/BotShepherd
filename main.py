@@ -46,7 +46,7 @@ class BotShepherd:
             await self.config_manager.initialize()
 
             # 设置日志系统
-            self.logger = setup_logger(await self.config_manager.get_global_config())
+            self.logger = setup_logger(self.config_manager.get_global_config())
             self.logger.info("BotShepherd正在启动...")
 
             # 初始化数据库
@@ -200,7 +200,7 @@ async def run_system_tests():
         config_manager = ConfigManager()
 
         if config_manager.config_exists():
-            global_config = await config_manager.get_global_config()
+            global_config = config_manager.get_global_config()
             if global_config and "superusers" in global_config:
                 print("  ✅ 配置系统正常")
                 test_results["passed"] += 1

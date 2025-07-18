@@ -9,7 +9,7 @@ from enum import Enum
 
 from ..onebotv11.models import Event, PrivateMessageEvent, GroupMessageEvent
 from ..onebotv11.message_segment import MessageSegmentParser
-from .permission_manager import PermissionManager, PermissionLevel
+from ..commands.permission_manager import PermissionManager, PermissionLevel
 
 class FilterAction(Enum):
     """过滤动作"""
@@ -41,11 +41,6 @@ class FilterManager:
             # 超级用户消息绕过过滤
             if self.permission_manager.bypass_whitelist_check(event):
                 return True, "超级用户绕过", message_data
-            
-            # 检查黑名单
-            if self._check_blacklist(event):
-                await self._log_filter_action(event, FilterType.BLACKLIST, "用户/群组在黑名单中", FilterAction.BLOCK)
-                return False, "黑名单拦截", message_data
             
             # 检查全局接收过滤词
             if isinstance(event, (PrivateMessageEvent, GroupMessageEvent)):
@@ -88,23 +83,10 @@ class FilterManager:
             self.logger.error(f"过滤发送消息失败: {e}")
             return True, "过滤器错误，默认通过", message_data
     
-    def _check_blacklist(self, event: Event) -> bool:
-        """检查黑名单"""
-        # 检查用户黑名单
-        if self.config_manager.is_in_blacklist("users", str(event.user_id)):
-            return True
-        
-        # 检查群组黑名单
-        if isinstance(event, GroupMessageEvent):
-            if self.config_manager.is_in_blacklist("groups", str(event.group_id)):
-                return True
-        
-        return False
-    
     async def _apply_global_receive_filters(self, event: Event, 
                                           message_data: Dict[str, Any]) -> Tuple[bool, str, Dict[str, Any]]:
         """应用全局接收过滤词"""
-        global_config = await self.config_manager.get_global_config()
+        global_config = self.config_manager.get_global_config()
         receive_filters = global_config.get("global_filters", {}).get("receive_filters", [])
         
         if not receive_filters:
@@ -129,7 +111,7 @@ class FilterManager:
     async def _apply_global_send_filters(self, event: Event, 
                                        message_data: Dict[str, Any]) -> Tuple[bool, str, Dict[str, Any]]:
         """应用全局发送过滤词"""
-        global_config = await self.config_manager.get_global_config()
+        global_config = self.config_manager.get_global_config()
         send_filters = global_config.get("global_filters", {}).get("send_filters", [])
         
         if not send_filters:
@@ -154,7 +136,7 @@ class FilterManager:
     async def _apply_prefix_protection(self, event: Event, 
                                      message_data: Dict[str, Any]) -> Tuple[bool, str, Dict[str, Any]]:
         """应用前缀保护"""
-        global_config = await self.config_manager.get_global_config()
+        global_config = self.config_manager.get_global_config()
         prefix_protections = global_config.get("global_filters", {}).get("prefix_protections", [])
         
         if not prefix_protections:
@@ -287,18 +269,7 @@ class FilterManager:
                 
         except Exception as e:
             self.logger.error(f"记录过滤动作失败: {e}")
-    
-    async def get_filter_statistics(self, days: int = 7) -> Dict[str, Any]:
-        """获取过滤统计"""
-        # TODO: 从数据库获取过滤统计
-        return {
-            "total_filtered": 0,
-            "blacklist_blocks": 0,
-            "receive_filter_blocks": 0,
-            "send_filter_blocks": 0,
-            "prefix_protections": 0,
-            "group_filter_blocks": 0
-        }
+
     
     def validate_filter_word(self, word: str) -> Tuple[bool, str]:
         """验证过滤词"""

@@ -138,14 +138,14 @@ class MessageSentEvent(MessageEvent):
     font: int = Field(0, description="字体")
     sender: Sender = Field(..., description="发送者信息")
 
-class PrivateMessageSentEvent(MessageSentEvent):
+class PrivateMessageSentEvent(MessageSentEvent, PrivateMessageEvent):
     """私聊消息发送事件"""
     message_type: Literal[MessageType.PRIVATE] = MessageType.PRIVATE
     sub_type: Literal["friend", "group", "other"] = Field(..., description="私聊类型")
     temp_source: Optional[int] = Field(None, description="临时会话来源")
     message_sent_type: Literal["self", "other"] = Field(..., description="消息发送类型")
 
-class GroupMessageSentEvent(MessageSentEvent):
+class GroupMessageSentEvent(MessageSentEvent, GroupMessageEvent):
     """群消息发送事件"""
     message_type: Literal[MessageType.GROUP] = MessageType.GROUP
     sub_type: Literal["normal", "anonymous", "notice"] = Field(..., description="群消息类型")

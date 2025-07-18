@@ -5,7 +5,7 @@
 
 from typing import Dict, Any, List
 from ..onebotv11.models import Event
-from ..websocket_proxy.permission_manager import PermissionLevel
+from .permission_manager import PermissionLevel
 from .base_command import BaseCommand, CommandResponse, CommandResult, command_registry
 
 class HelpCommand(BaseCommand):
@@ -86,7 +86,7 @@ class HelpCommand(BaseCommand):
             return self.format_info("暂无可用指令")
         
         # 获取指令前缀
-        global_config = await config_manager.get_global_config()
+        global_config = config_manager.get_global_config()
         command_prefix = global_config.get("command_prefix", "bs")
         
         # 构建帮助信息
