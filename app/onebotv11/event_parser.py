@@ -49,9 +49,9 @@ class EventParser:
             return EventParser._parse_request_event(data)
         elif post_type == PostType.META_EVENT:
             return EventParser._parse_meta_event(data)
-        elif data.get('action'): 
+        elif EventParser.is_api_request(data): 
             return EventParser.parse_api_request(data)
-        elif data.get('echo'):
+        elif EventParser.is_api_response(data):
             return EventParser.parse_api_response(data)
         else:
             return None
@@ -77,7 +77,7 @@ class EventParser:
         elif message_type == MessageType.GROUP:
             return GroupMessageEvent(**data)
         else:
-            # print(f"未知的消息类型: {message_type}")
+            print(f"未知的消息类型: {message_type}")
             return None
         
     @staticmethod
@@ -101,7 +101,7 @@ class EventParser:
         elif message_type == MessageType.GROUP:
             return GroupMessageSentEvent(**data)
         else:
-            # print(f"未知的消息类型: {message_type}")
+            print(f"未知的消息类型: {message_type}")
             return None
     
     @staticmethod
@@ -143,7 +143,7 @@ class EventParser:
         elif request_type == RequestType.GROUP:
             return GroupRequestEvent(**data)
         else:
-            # print(f"未知的请求类型: {request_type}")
+            print(f"未知的请求类型: {request_type}")
             return None
     
     @staticmethod
@@ -156,7 +156,7 @@ class EventParser:
         elif meta_event_type == "heartbeat":
             return HeartbeatMetaEvent(**data)
         else:
-            # print(f"未知的元事件类型: {meta_event_type}")
+            print(f"未知的元事件类型: {meta_event_type}")
             return None
     
     @staticmethod
@@ -190,7 +190,7 @@ class EventParser:
         try:
             return ApiRequest(**data)
         except ValidationError as e:
-            # print(f"解析API请求失败: {e}")
+            print(f"解析API请求失败: {e}")
             return None
     
     @staticmethod
@@ -199,7 +199,7 @@ class EventParser:
         try:
             return ApiResponse(**data)
         except ValidationError as e:
-            # print(f"解析API响应失败: {e}")
+            print(f"解析API响应失败: {e}")
             return None
     
     @staticmethod

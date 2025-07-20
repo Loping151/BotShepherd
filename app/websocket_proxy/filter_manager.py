@@ -7,7 +7,7 @@ import re
 from typing import Dict, Any, Optional, List, Tuple
 from enum import Enum
 
-from ..onebotv11.models import Event, PrivateMessageEvent, GroupMessageEvent
+from ..onebotv11.models import Event, MessageEvent, PrivateMessageEvent, GroupMessageEvent
 from ..onebotv11.message_segment import MessageSegmentParser
 from ..commands.permission_manager import PermissionManager, PermissionLevel
 
@@ -29,38 +29,32 @@ class FilterType(Enum):
 class FilterManager:
     """过滤管理器"""
     
-    def __init__(self, config_manager, permission_manager: PermissionManager, logger):
+    def __init__(self, config_manager, logger):
         self.config_manager = config_manager
-        self.permission_manager = permission_manager
         self.logger = logger
     
     async def filter_receive_message(self, event: Event, 
                                    message_data: Dict[str, Any]) -> Tuple[bool, str, Dict[str, Any]]:
-        """过滤接收消息"""
+        """过滤接收消息 True表示被过滤"""
         try:
-            # 超级用户消息绕过过滤
-            if self.permission_manager.bypass_whitelist_check(event):
-                return True, "超级用户绕过", message_data
             
             # 检查全局接收过滤词
-            if isinstance(event, (PrivateMessageEvent, GroupMessageEvent)):
-                filtered, reason, modified_data = await self._apply_global_receive_filters(event, message_data)
-                if not filtered:
-                    return False, reason, modified_data
-                message_data = modified_data
+            if isinstance(event, MessageEvent):
+                filtered = await self._apply_global_receive_filters(event, message_data)
+                if filtered:
+                    return True
                 
                 # 检查群组过滤词
                 if isinstance(event, GroupMessageEvent):
-                    filtered, reason, modified_data = await self._apply_group_filters(event, message_data)
-                    if not filtered:
-                        return False, reason, modified_data
-                    message_data = modified_data
+                    filtered = await self._apply_group_filters(event, message_data)
+                    if filtered:
+                        return True
             
-            return True, "通过过滤", message_data
+            return False
             
         except Exception as e:
-            self.logger.error(f"过滤接收消息失败: {e}")
-            return True, "过滤器错误，默认通过", message_data
+            self.logger.error(f"过滤接收消息失败: {e}，将拦截！")
+            return True
     
     async def filter_send_message(self, event: Event, 
                                 message_data: Dict[str, Any]) -> Tuple[bool, str, Dict[str, Any]]:
@@ -84,18 +78,18 @@ class FilterManager:
             return True, "过滤器错误，默认通过", message_data
     
     async def _apply_global_receive_filters(self, event: Event, 
-                                          message_data: Dict[str, Any]) -> Tuple[bool, str, Dict[str, Any]]:
+                                          message_data: Dict[str, Any]) -> bool:
         """应用全局接收过滤词"""
         global_config = self.config_manager.get_global_config()
         receive_filters = global_config.get("global_filters", {}).get("receive_filters", [])
         
         if not receive_filters:
-            return True, "无过滤词", message_data
+            return False
         
         # 提取消息文本
         message_text = self._extract_message_text(message_data)
         if not message_text:
-            return True, "无文本内容", message_data
+            return False
         
         # 检查过滤词
         for filter_word in receive_filters:
@@ -104,9 +98,9 @@ class FilterManager:
                     event, FilterType.RECEIVE_FILTER, 
                     f"包含全局接收过滤词: {filter_word}", FilterAction.BLOCK
                 )
-                return False, f"包含过滤词: {filter_word}", message_data
+                return True
         
-        return True, "通过全局接收过滤", message_data
+        return False
     
     async def _apply_global_send_filters(self, event: Event, 
                                        message_data: Dict[str, Any]) -> Tuple[bool, str, Dict[str, Any]]:
@@ -164,24 +158,21 @@ class FilterManager:
         return True, "通过前缀保护", message_data
     
     async def _apply_group_filters(self, event: GroupMessageEvent, 
-                                 message_data: Dict[str, Any]) -> Tuple[bool, str, Dict[str, Any]]:
+                                 message_data: Dict[str, Any]) -> bool:
         """应用群组过滤词"""
         group_config = self.config_manager.get_group_config(str(event.group_id))
         if not group_config:
-            return True, "无群组配置", message_data
+            return False
         
         filters = group_config.get("filters", {})
         if not filters:
-            return True, "无群组过滤词", message_data
+            return False
         
         # 提取消息文本
         message_text = self._extract_message_text(message_data)
         if not message_text:
-            return True, "无文本内容", message_data
-        
-        # 获取用户权限等级
-        user_level = self.permission_manager.get_user_permission_level(event)
-        
+            return False
+                
         # 先检查超级用户设置的过滤词
         superuser_filters = filters.get("superuser_filters", [])
         for filter_word in superuser_filters:
@@ -190,20 +181,19 @@ class FilterManager:
                     event, FilterType.GROUP_FILTER, 
                     f"包含群组超级用户过滤词: {filter_word}", FilterAction.BLOCK
                 )
-                return False, f"包含群组过滤词: {filter_word}", message_data
+                return True
         
         # 再检查群管设置的过滤词（超级用户不受此限制）
-        if user_level != PermissionLevel.SUPERUSER:
-            admin_filters = filters.get("admin_filters", [])
-            for filter_word in admin_filters:
-                if filter_word in message_text:
-                    await self._log_filter_action(
-                        event, FilterType.GROUP_FILTER, 
-                        f"包含群组管理员过滤词: {filter_word}", FilterAction.BLOCK
-                    )
-                    return False, f"包含群组过滤词: {filter_word}", message_data
+        admin_filters = filters.get("admin_filters", [])
+        for filter_word in admin_filters:
+            if filter_word in message_text:
+                await self._log_filter_action(
+                    event, FilterType.GROUP_FILTER, 
+                    f"包含群组管理员过滤词: {filter_word}", FilterAction.BLOCK
+                )
+                return True
         
-        return True, "通过群组过滤", message_data
+        return False
     
     def _extract_message_text(self, message_data: Dict[str, Any]) -> str:
         """提取消息文本内容"""

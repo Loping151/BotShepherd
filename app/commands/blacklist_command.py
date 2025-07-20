@@ -16,6 +16,10 @@ class BlacklistCommand(BaseCommand):
         self.name = "黑名单"
         self.description = "管理用户和群组黑名单"
         self.usage = "黑名单 <add|remove|list> <user|group> [ID]"
+        self.example = """
+bl add user 123456
+bl list
+bl check 123456"""
         self.aliases = ["blacklist", "bl"]
         self.required_permission = PermissionLevel.SUPERUSER
     

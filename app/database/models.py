@@ -3,14 +3,13 @@
 使用SQLAlchemy定义数据库表结构
 """
 
-from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, Index
+from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, Index, BigInteger
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
 import json
 from datetime import datetime
 from typing import Dict, Any, Optional
 from dataclasses import dataclass
-from sqlalchemy import func
 
 Base = declarative_base()
 
@@ -29,7 +28,7 @@ class Message(Base):
     raw_message = Column(Text)
     message_content = Column(Text)
     sender_info = Column(Text)  # JSON格式的发送者信息
-    timestamp = Column(DateTime, nullable=False, index=True)
+    timestamp = Column(BigInteger, nullable=False, index=True)  # 使用BigInteger存储时间戳
     direction = Column(String(10), nullable=False)  # RECV/SEND
     connection_id = Column(String(50))
     processed = Column(Boolean, default=False)

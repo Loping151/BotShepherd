@@ -154,6 +154,10 @@ class ConfigManager:
         """获取全局配置"""
         return self._global_config.copy()
     
+    def get_superuser(self) -> List:
+        """获取超级用户列表"""
+        return self._global_config.get("superusers", [])
+    
     async def update_global_config(self, updates: Dict[str, Any]):
         """更新全局配置"""
         # 创建临时配置进行验证
@@ -389,7 +393,7 @@ class ConfigManager:
     # 超级用户管理
     async def add_superuser(self, user_id: str):
         """添加超级用户"""
-        superusers = self._global_config.get("superusers", [])
+        superusers = self.get_superuser()
         if user_id not in superusers:
             superusers.append(user_id)
             self._global_config["superusers"] = superusers
@@ -397,7 +401,7 @@ class ConfigManager:
 
     async def remove_superuser(self, user_id: str):
         """移除超级用户"""
-        superusers = self._global_config.get("superusers", [])
+        superusers = self.get_superuser()
         if user_id in superusers and len(superusers) > 1:  # 保证至少有一个超级用户
             superusers.remove(user_id)
             self._global_config["superusers"] = superusers
@@ -407,7 +411,10 @@ class ConfigManager:
 
     def is_superuser(self, user_id: str) -> bool:
         """检查是否为超级用户"""
-        superusers = self._global_config.get("superusers", [])
+        assert isinstance(user_id, (str, int))
+        if isinstance(user_id, int):
+            user_id = str(user_id)
+        superusers = self.get_superuser()
         return user_id in superusers
 
     # 过滤词管理

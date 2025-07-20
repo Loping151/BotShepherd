@@ -10,9 +10,7 @@
   },
   "blacklist": {
     "groups": [],
-    "users": [
-      "1"
-    ]
+    "users": []
   },
   "allow_private": true,
   "private_friend_only": true,

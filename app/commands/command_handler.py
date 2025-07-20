@@ -5,7 +5,7 @@
 
 import asyncio
 from typing import Dict, Any, Optional, List, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 
 from ..onebotv11.models import Event, PrivateMessageEvent, GroupMessageEvent
 from ..onebotv11.message_segment import MessageSegmentParser, MessageSegmentBuilder
@@ -22,16 +22,6 @@ class CommandHandler:
         self.permission_manager = PermissionManager(config_manager, logger)
         self.logger = logger
         
-        # 指令执行统计
-        self.command_stats = {
-            "total_executed": 0,
-            "successful_executions": 0,
-            "failed_executions": 0,
-            "permission_denials": 0
-        }
-        
-        # 指令冷却缓存
-        self.cooldown_cache = {}
     
     async def handle_message(self, event: Event) -> Optional[Dict[str, Any]]:
         """处理消息中的指令"""
@@ -112,18 +102,9 @@ class CommandHandler:
             # 检查权限
             permission_check = await self._check_command_permission(event, command)
             if not permission_check[0]:
-                self.command_stats["permission_denials"] += 1
                 return CommandResponse(
                     result=CommandResult.PERMISSION_DENIED,
                     message=permission_check[1]
-                )
-            
-            # 检查冷却时间
-            cooldown_check = await self._check_command_cooldown(event, command)
-            if not cooldown_check[0]:
-                return CommandResponse(
-                    result=CommandResult.ERROR,
-                    message=cooldown_check[1]
                 )
             
             # 准备执行上下文
@@ -132,18 +113,12 @@ class CommandHandler:
                 "database_manager": self.database_manager,
                 "permission_manager": self.permission_manager,
                 "logger": self.logger,
-                "command_info": command_info
+                "command_info": command_info,
+                "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
             }
             
             # 执行指令
-            self.command_stats["total_executed"] += 1
             response = await command.execute(event, args, context)
-            
-            # 更新统计
-            if response.result == CommandResult.SUCCESS:
-                self.command_stats["successful_executions"] += 1
-            else:
-                self.command_stats["failed_executions"] += 1
             
             # 记录指令执行日志
             await self._log_command_execution(event, command, args, response)
@@ -152,7 +127,6 @@ class CommandHandler:
             
         except Exception as e:
             self.logger.error(f"执行指令失败 {command_name}: {e}")
-            self.command_stats["failed_executions"] += 1
             
             return CommandResponse(
                 result=CommandResult.ERROR,
@@ -171,34 +145,6 @@ class CommandHandler:
         
         return True, "权限检查通过"
     
-    async def _check_command_cooldown(self, event: Event, command: BaseCommand) -> Tuple[bool, str]:
-        """检查指令冷却时间"""
-        # 获取冷却配置
-        global_config = self.config_manager.get_global_config()
-        cooldown_config = global_config.get("command_cooldown", {})
-        
-        if not cooldown_config.get("enabled", False):
-            return True, "无冷却限制"
-        
-        # 构建缓存键
-        cache_key = f"{event.user_id}_{command.name}"
-        current_time = datetime.now()
-        
-        # 检查冷却时间
-        if cache_key in self.cooldown_cache:
-            last_execution = self.cooldown_cache[cache_key]
-            cooldown_seconds = cooldown_config.get("default_cooldown", 3)
-            
-            time_diff = (current_time - last_execution).total_seconds()
-            if time_diff < cooldown_seconds:
-                remaining = cooldown_seconds - time_diff
-                return False, f"指令冷却中，请等待 {remaining:.1f} 秒"
-        
-        # 更新冷却缓存
-        self.cooldown_cache[cache_key] = current_time
-        
-        return True, "冷却检查通过"
-    
     async def _generate_reply(self, event: Event, response: CommandResponse) -> Dict[str, Any]:
         """生成回复消息"""
         try:
@@ -214,17 +160,33 @@ class CommandHandler:
             
             # 构建API请求
             if isinstance(event, GroupMessageEvent) and not response.private_reply:
-                # 群聊回复
-                api_request = ApiHandler.create_send_group_msg_request(
-                    group_id=event.group_id,
-                    message=message_segments
-                )
+                if response.use_forward:
+                    # 合并转发
+                    api_request = ApiHandler.create_send_group_forward_msg_request(
+                        group_id=event.group_id,
+                        messages=[message_segments]
+                    )
+                
+                else:
+                    # 群聊回复
+                    api_request = ApiHandler.create_send_group_msg_request(
+                        group_id=event.group_id,
+                        message=message_segments
+                    )
             else:
-                # 私聊回复
-                api_request = ApiHandler.create_send_private_msg_request(
-                    user_id=event.user_id,
-                    message=message_segments
-                )
+                if response.use_forward:
+                    # 合并转发
+                    api_request = ApiHandler.create_send_private_forward_msg_request(
+                        user_id=event.user_id,
+                        messages=[message_segments]
+                    )
+                
+                else:
+                    # 私聊回复
+                    api_request = ApiHandler.create_send_private_msg_request(
+                        user_id=event.user_id,
+                        message=message_segments
+                    )
             
             return api_request.dict()
             
@@ -242,7 +204,7 @@ class CommandHandler:
                 "args": args,
                 "result": response.result.value,
                 "message_length": len(response.message),
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
             }
             
             if isinstance(event, GroupMessageEvent):
@@ -256,40 +218,6 @@ class CommandHandler:
         except Exception as e:
             self.logger.error(f"记录指令执行日志失败: {e}")
     
-    def get_command_stats(self) -> Dict[str, Any]:
-        """获取指令统计"""
-        return {
-            **self.command_stats,
-            "success_rate": (
-                self.command_stats["successful_executions"] / 
-                max(self.command_stats["total_executed"], 1)
-            ),
-            "cooldown_cache_size": len(self.cooldown_cache),
-            "registered_commands": len(command_registry.commands),
-            "enabled_commands": len(command_registry.get_enabled_commands())
-        }
-    
-    def reset_command_stats(self):
-        """重置指令统计"""
-        self.command_stats = {
-            "total_executed": 0,
-            "successful_executions": 0,
-            "failed_executions": 0,
-            "permission_denials": 0
-        }
-    
-    async def cleanup_cooldown_cache(self):
-        """清理冷却缓存"""
-        current_time = datetime.now()
-        expired_keys = []
-        
-        for cache_key, last_execution in self.cooldown_cache.items():
-            # 清理5分钟前的记录
-            if (current_time - last_execution).total_seconds() > 300:
-                expired_keys.append(cache_key)
-        
-        for key in expired_keys:
-            del self.cooldown_cache[key]
     
     def get_available_commands(self, event: Event) -> List[BaseCommand]:
         """获取用户可用的指令列表"""

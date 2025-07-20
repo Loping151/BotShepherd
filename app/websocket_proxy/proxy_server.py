@@ -11,8 +11,10 @@ from typing import Dict, List, Any, Optional, Tuple
 from collections import defaultdict
 from pathlib import Path
 
+from app.onebotv11.message_segment import MessageSegmentParser
+
 from ..onebotv11 import EventParser, MessageNormalizer, EventValidator
-from ..onebotv11.models import Event, PrivateMessageEvent, GroupMessageEvent
+from ..onebotv11.models import ApiResponse, Event, PrivateMessageEvent, GroupMessageEvent
 from ..commands import CommandHandler
 from .message_processor import MessageProcessor
 
@@ -189,6 +191,7 @@ class ProxyConnection:
         self.running = False
         self.client_headers = None
         self.first_message = None
+        self.self_id = None
         
         self.reconnect_locks = []  # 每个 target_index 一个 Lock
         for _ in self.config.get("target_endpoints", []):
@@ -242,7 +245,7 @@ class ProxyConnection:
             # 目标到客户端的转发任务
             for idx, target_ws in enumerate(self.target_connections):
                 tasks.append(asyncio.create_task(
-                    self._forward_target_to_client(target_ws, idx + 1)
+                    self._forward_target_to_client(target_ws, self.list_index2target_index(idx))
                 ))
 
             if tasks:
@@ -303,10 +306,10 @@ class ProxyConnection:
             
             if target_index > len(self.target_connections) + 1 or target_index == 0:
                 raise Exception(f"[{self.connection_id}] 目标ID {target_index} 超出范围!")
-            if target_index == len(self.target_connections) + 1:
+            if target_index == len(self.target_connections) + 1: # next one to append
                 self.target_connections.append(target_ws)
             else:
-                self.target_connections[target_index - 1] = target_ws
+                self.target_connections[self.target_index2list_index(target_index)] = target_ws
             self.logger.info(f"[{self.connection_id}] 已连接到目标: {endpoint}")
             return target_ws
             
@@ -320,7 +323,7 @@ class ProxyConnection:
         target_endpoints = self.config.get("target_endpoints", [])
         
         for idx, endpoint in enumerate(target_endpoints):
-            await self._connect_to_target(endpoint, idx + 1)
+            await self._connect_to_target(endpoint, self.list_index2target_index(idx))
     
     async def _forward_client_to_targets(self):
         """转发客户端消息到目标"""
@@ -339,13 +342,13 @@ class ProxyConnection:
                 await self._process_target_message(message, target_index)
         except websockets.exceptions.ConnectionClosed:
             self.logger.info(f"[{self.connection_id}] 目标连接 {target_index} 已关闭。将在60秒内持续尝试重新连接。")
-            lock = self.reconnect_locks[target_index - 1]
+            lock = self.reconnect_locks[self.target_index2list_index(target_index)]
             if not lock.locked():
                 async with lock:
                     for _ in range(60):
                         await asyncio.sleep(1)
                         try:
-                            target_ws = await self._connect_to_target(self.config.get("target_endpoints", [])[target_index - 1], target_index)
+                            target_ws = await self._connect_to_target(self.config.get("target_endpoints", [])[self.target_index2list_index(target_index)], target_index)
                             await self._process_client_message(self.first_message) # 比如yunzai需要使用first Message重新注册
                             self.logger.info(f"[{self.connection_id}] 目标连接 {target_index} 恢复成功，重新开始转发。")
                             await self._forward_target_to_client(target_ws, target_index)
@@ -359,14 +362,30 @@ class ProxyConnection:
         try:
             # 解析JSON消息
             message_data = json.loads(message)
-            
-            # 记录消息到数据库
-            await self.database_manager.save_message(
-                message_data, "RECV", self.connection_id
-            )
+            if message_data.get("self_id"): # 每次更新，客户端可能会换账号
+                if self.self_id and self.self_id != message_data["self_id"]:
+                    # 但是，不论是通过头注册还是yunzai的方式都不能支持账号的热切换
+                    self.logger.warning(f"[{self.connection_id}] 客户端账号已切换到 {message_data['self_id']}，请重启该连接！")
+                self.self_id = message_data["self_id"]
             
             # 消息预处理
             processed_message, parsed_event = await self._preprocess_message(message_data)
+            
+            # 记录消息到数据库，注意消息是先预处理再记录，所以统计功能是无视别名的，只需要按key搜索即可
+            if self._check_api_call_succ(parsed_event):
+                # 如果是发送成功
+                data_in_api = parsed_event.data
+                if isinstance(data_in_api, dict): # get list api 不可能是发送
+                    message_id = message_data.get("data", {}).get("message_id")
+                    await self.database_manager.save_message(
+                        await self._construct_msg_from_echo(message_data["echo"], message_id=message_id), "SEND", self.connection_id
+                    )
+            else:
+                # 收到裸消息不会是api response
+                self._log_api_call_fail(parsed_event)
+                await self.database_manager.save_message(
+                    message_data, "RECV", self.connection_id
+                )
             
             # 本体指令集
             resp_api = await self.command_handler.handle_message(parsed_event)
@@ -378,12 +397,12 @@ class ProxyConnection:
                 processed_json = json.dumps(processed_message, ensure_ascii=False)
                 
                 if message_data.get('echo'):
-                    # api请求内容
-                    target_index = self.echo_cache.pop(message_data['echo'], None)
-                    if target_index is not None:
+                    # api请求内容，尽可能保证各框架的发送api都使用了echo。
+                    target_index = self.echo_cache.pop(message_data['echo'], {}).get("target_index")
+                    if target_index is not None and target_index > 0:
                         self.logger.debug(f"[{self.connection_id}] 发送API请求到目标 {target_index}: {processed_json[:200]}")
                         try:
-                            await self.target_connections[target_index - 1].send(processed_json)
+                            await self.target_connections[self.target_index2list_index(target_index)].send(processed_json)
                         except Exception as e:
                             self.logger.error(f"[{self.connection_id}] 发送到目标失败: {e}")
                 else:
@@ -409,14 +428,13 @@ class ProxyConnection:
             else:
                 message_data = message
             
-            if message_data.get('echo'):
-                # api请求内容
-                self.logger.debug(f"[{self.connection_id}] 来自连接 {target_index} 的API响应: {str(message_data)[:200]}")
-                self.echo_cache[message_data['echo']] = target_index
-            else:
-                # 记录消息到数据库，api请求不需要记录
+            self.logger.debug(f"[{self.connection_id}] 来自连接 {target_index} 的API响应: {str(message_data)[:200]}")
+            
+            if not self._construct_echo_info(message_data, target_index):
+                # 兼容不使用echo回报的框架，不清楚有没有
+                message_data_as_recv = await self._construct_data_as_msg(message_data)
                 await self.database_manager.save_message(
-                    message_data, "SEND", self.connection_id
+                    message_data_as_recv, "SEND", self.connection_id
                 )
             
             # 消息后处理
@@ -441,6 +459,75 @@ class ProxyConnection:
     async def _postprocess_message(self, message_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """消息后处理"""
         return await self.message_processor.postprocess_target_message(message_data)
+    
+    def _construct_echo_info(self, message_data, target_index) -> str | None:
+        echo = message_data.get("echo")
+        if not echo:
+            return None
+        
+        echo_info = {
+            "data": message_data,
+            "create_timestamp": int(datetime.now().timestamp()),
+            "target_index": target_index
+        }
+
+        if echo in self.echo_cache:
+            self.logger.warning(f"[{self.connection_id}] echo {echo} 已经存在，将被覆盖!可能由于单个账号连接多个相同框架！")
+        self.echo_cache[echo] = echo_info
+        self.logger.debug(f"[{self.connection_id}] 收到echo {echo}，缓存大小 {len(self.echo_cache)}")
+
+        # 当缓存首次达到100个的时候。该函数阻塞。如网络正常不应该有这么多cache。
+        if len(self.echo_cache) % 100 == 0:
+            self.logger.warning(f"[{self.connection_id}] echo 缓存达到 {len(self.echo_cache)} 个，强制清理过期的echo!")
+            now_ts = int(datetime.now().timestamp())
+            old_keys = [k for k, v in self.echo_cache.items() if now_ts - v.get("create_timestamp", 0) > 120]
+            for k in old_keys:
+                del self.echo_cache[k]
+
+        return echo
+    
+    @staticmethod
+    def _check_api_call_succ(event: Event):
+        if isinstance(event, ApiResponse):
+            return event.status == "ok" and event.retcode == 0
+        return False
+    
+    def _log_api_call_fail(self, event: Event):
+        if isinstance(event, ApiResponse):
+            if event.status != "ok" or event.retcode != 0:
+                echo_info = self.echo_cache.get(event.echo, None)
+                if echo_info:
+                    self.logger.warning(f"[{self.connection_id}] API调用失败: {echo_info['data']} -> {event}")
+                    
+    async def _construct_msg_from_echo(self, echo, **kwargs):
+        """从api结果中构造模拟收到消息"""
+        echo_info = self.echo_cache.get(echo, None)
+        if echo_info:
+            return await self._construct_data_as_msg(echo_info["data"], **kwargs)
+        return {}
+    
+    async def _construct_data_as_msg(self, message_data, **kwargs):
+        """将发送api请求转换为消息事件"""
+        
+        if 'send' not in message_data.get('action'):
+            return {}
+        params = message_data.get("params", {})
+        params.update({"self_id": self.self_id})
+        # 这个 message_sent 不是 napcat 那种修改的 Onebot，而是本框架数据库中的标识
+        params.update({"post_type": "message_sent"})
+        raw_message = MessageSegmentParser.message2raw_message(params.get("message", []))
+        params.update({"raw_message": raw_message})
+        
+        params.update(kwargs)
+        return params
+    
+    @staticmethod
+    def target_index2list_index(target_index):
+        return target_index - 1
+    
+    @staticmethod
+    def list_index2target_index(list_index):
+        return list_index + 1
     
     async def stop(self):
         """停止代理连接"""

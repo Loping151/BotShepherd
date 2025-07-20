@@ -303,7 +303,7 @@ class MessageSegmentParser:
                     text_parts.append("@全体成员")
                 else:
                     text_parts.append(f"@{qq}")
-        return "".join(text_parts)
+        return " ".join(text_parts)
     
     @staticmethod
     def extract_at_list(segments: List[MessageSegment]) -> List[str]:
@@ -352,8 +352,6 @@ class MessageSegmentParser:
     def parse_command(segments: List[MessageSegment], prefix: str) -> Optional[tuple]:
         """解析指令，返回(指令名, 参数列表)"""
         text = MessageSegmentParser.extract_text(segments).strip()
-        if not text.startswith(prefix):
-            return None
         
         command_text = text[len(prefix):].strip()
         if not command_text:
@@ -364,3 +362,180 @@ class MessageSegmentParser:
         args = parts[1:] if len(parts) > 1 else []
         
         return command_name, args
+
+    @staticmethod
+    def message2raw_message(segments: List[MessageSegment]) -> str:
+        """将消息段数组转换为CQ码格式的raw_message字符串"""
+        if not segments:
+            return ""
+
+        result_parts = []
+
+        for segment in segments:
+            if isinstance(segment, dict):
+                segment = MessageSegment(**segment)
+
+            if segment.type == MessageSegmentType.TEXT:
+                # 文本消息直接添加
+                text = segment.data.get("text", "")
+                result_parts.append(text)
+
+            elif segment.type == MessageSegmentType.AT:
+                # @消息：[CQ:at,qq=QQ号]
+                qq = segment.data.get("qq", "")
+                result_parts.append(f"[CQ:at,qq={qq}]")
+
+            elif segment.type == MessageSegmentType.FACE:
+                # QQ表情：[CQ:face,id=表情ID]
+                face_id = segment.data.get("id", "")
+                result_parts.append(f"[CQ:face,id={face_id}]")
+
+            elif segment.type == MessageSegmentType.IMAGE:
+                # 图片：[CQ:image,file=文件名,sub_type=子类型,url=链接,file_size=文件大小]
+                params = []
+                for key in ["file", "sub_type", "url", "file_size", "summary"]:
+                    if key in segment.data and segment.data[key] is not None:
+                        value = MessageSegmentParser._escape_cq_param(str(segment.data[key]))
+                        params.append(f"{key}={value}")
+                result_parts.append(f"[CQ:image,{','.join(params)}]")
+
+            elif segment.type == MessageSegmentType.RECORD:
+                # 语音：[CQ:record,file=文件名]
+                params = []
+                for key in ["file", "magic", "url", "cache", "proxy", "timeout"]:
+                    if key in segment.data and segment.data[key] is not None:
+                        value = MessageSegmentParser._escape_cq_param(str(segment.data[key]))
+                        params.append(f"{key}={value}")
+                result_parts.append(f"[CQ:record,{','.join(params)}]")
+
+            elif segment.type == MessageSegmentType.VIDEO:
+                # 短视频：[CQ:video,file=文件名]
+                params = []
+                for key in ["file", "url", "cache", "proxy", "timeout"]:
+                    if key in segment.data and segment.data[key] is not None:
+                        value = MessageSegmentParser._escape_cq_param(str(segment.data[key]))
+                        params.append(f"{key}={value}")
+                result_parts.append(f"[CQ:video,{','.join(params)}]")
+
+            elif segment.type == MessageSegmentType.REPLY:
+                # 回复：[CQ:reply,id=消息ID]
+                reply_id = segment.data.get("id", "")
+                result_parts.append(f"[CQ:reply,id={reply_id}]")
+
+            elif segment.type == MessageSegmentType.JSON:
+                # JSON消息：[CQ:json,data=JSON数据]
+                json_data = segment.data.get("data", "")
+                escaped_data = MessageSegmentParser._escape_cq_param(json_data)
+                result_parts.append(f"[CQ:json,data={escaped_data}]")
+
+            elif segment.type == MessageSegmentType.XML:
+                # XML消息：[CQ:xml,data=XML数据]
+                xml_data = segment.data.get("data", "")
+                escaped_data = MessageSegmentParser._escape_cq_param(xml_data)
+                result_parts.append(f"[CQ:xml,data={escaped_data}]")
+
+            elif segment.type == MessageSegmentType.SHARE:
+                # 链接分享：[CQ:share,url=链接,title=标题,content=内容,image=图片]
+                params = []
+                for key in ["url", "title", "content", "image"]:
+                    if key in segment.data and segment.data[key] is not None:
+                        value = MessageSegmentParser._escape_cq_param(str(segment.data[key]))
+                        params.append(f"{key}={value}")
+                result_parts.append(f"[CQ:share,{','.join(params)}]")
+
+            elif segment.type == MessageSegmentType.CONTACT:
+                # 推荐好友/群：[CQ:contact,type=类型,id=ID]
+                params = []
+                for key in ["type", "id"]:
+                    if key in segment.data and segment.data[key] is not None:
+                        value = MessageSegmentParser._escape_cq_param(str(segment.data[key]))
+                        params.append(f"{key}={value}")
+                result_parts.append(f"[CQ:contact,{','.join(params)}]")
+
+            elif segment.type == MessageSegmentType.LOCATION:
+                # 位置：[CQ:location,lat=纬度,lon=经度,title=标题,content=内容]
+                params = []
+                for key in ["lat", "lon", "title", "content"]:
+                    if key in segment.data and segment.data[key] is not None:
+                        value = MessageSegmentParser._escape_cq_param(str(segment.data[key]))
+                        params.append(f"{key}={value}")
+                result_parts.append(f"[CQ:location,{','.join(params)}]")
+
+            elif segment.type == MessageSegmentType.MUSIC:
+                # 音乐：[CQ:music,type=类型,id=ID]
+                params = []
+                for key in ["type", "id", "url", "audio", "title", "content", "image"]:
+                    if key in segment.data and segment.data[key] is not None:
+                        value = MessageSegmentParser._escape_cq_param(str(segment.data[key]))
+                        params.append(f"{key}={value}")
+                result_parts.append(f"[CQ:music,{','.join(params)}]")
+
+            elif segment.type == MessageSegmentType.FORWARD:
+                # 合并转发：[CQ:forward,id=ID]
+                forward_id = segment.data.get("id", "")
+                result_parts.append(f"[CQ:forward,id={forward_id}]")
+
+            elif segment.type == MessageSegmentType.NODE:
+                # 合并转发节点：[CQ:node,id=ID] 或 [CQ:node,user_id=用户ID,nickname=昵称,content=内容]
+                if "id" in segment.data:
+                    node_id = segment.data.get("id", "")
+                    result_parts.append(f"[CQ:node,id={node_id}]")
+                else:
+                    params = []
+                    for key in ["user_id", "nickname", "content"]:
+                        if key in segment.data and segment.data[key] is not None:
+                            value = MessageSegmentParser._escape_cq_param(str(segment.data[key]))
+                            params.append(f"{key}={value}")
+                    result_parts.append(f"[CQ:node,{','.join(params)}]")
+
+            elif segment.type == MessageSegmentType.RPS:
+                # 猜拳魔法表情：[CQ:rps]
+                result_parts.append("[CQ:rps]")
+
+            elif segment.type == MessageSegmentType.DICE:
+                # 掷骰子魔法表情：[CQ:dice]
+                result_parts.append("[CQ:dice]")
+
+            elif segment.type == MessageSegmentType.SHAKE:
+                # 窗口抖动：[CQ:shake]
+                result_parts.append("[CQ:shake]")
+
+            elif segment.type == MessageSegmentType.POKE:
+                # 戳一戳：[CQ:poke,qq=QQ号]
+                qq = segment.data.get("qq", "")
+                result_parts.append(f"[CQ:poke,qq={qq}]")
+
+            elif segment.type == MessageSegmentType.ANONYMOUS:
+                # 匿名发消息：[CQ:anonymous,ignore=是否忽略]
+                if "ignore" in segment.data and segment.data["ignore"]:
+                    result_parts.append("[CQ:anonymous,ignore=1]")
+                else:
+                    result_parts.append("[CQ:anonymous]")
+
+            else:
+                # 未知类型，尝试通用处理
+                params = []
+                for key, value in segment.data.items():
+                    if value is not None:
+                        escaped_value = MessageSegmentParser._escape_cq_param(str(value))
+                        params.append(f"{key}={escaped_value}")
+                if params:
+                    result_parts.append(f"[CQ:{segment.type},{','.join(params)}]")
+                else:
+                    result_parts.append(f"[CQ:{segment.type}]")
+
+        return "".join(result_parts)
+
+    @staticmethod
+    def _escape_cq_param(text: str) -> str:
+        """转义CQ码参数中的特殊字符"""
+        if not text:
+            return text
+
+        # CQ码参数转义规则
+        text = text.replace("&", "&amp;")  # & 必须最先转义
+        text = text.replace("[", "&#91;")
+        text = text.replace("]", "&#93;")
+        text = text.replace(",", "&#44;")
+
+        return text

@@ -4,6 +4,7 @@ OneBot v11 API处理器
 """
 
 from typing import Dict, Any, List, Optional, Union
+import uuid
 from .models import ApiRequest, ApiResponse, MessageSegment
 from .message_segment import MessageSegmentBuilder
 
@@ -26,7 +27,28 @@ class ApiHandler:
                 "user_id": int(user_id),
                 "message": message_data,
                 "auto_escape": auto_escape
-            }
+            },
+            echo=uuid.uuid4().hex
+        )
+        
+    @staticmethod
+    def create_send_private_forward_msg_request(user_id: Union[int, str],
+                                              messages: List[Union[str, List[MessageSegment]]]) -> ApiRequest:
+        """创建发送私聊合并转发消息请求"""
+        message_data = []
+        for message in messages:
+            if isinstance(message, str):
+                message_data.append({"type": "text", "data": {"text": message}})
+            else:
+                message_data.append({"type": "node", "data": {"content": [seg.dict() for seg in message]}})
+        
+        return ApiRequest(
+            action="send_private_forward_msg",
+            params={
+                "user_id": int(user_id),
+                "messages": message_data
+            },
+            echo=uuid.uuid4().hex
         )
     
     @staticmethod
@@ -45,7 +67,28 @@ class ApiHandler:
                 "group_id": int(group_id),
                 "message": message_data,
                 "auto_escape": auto_escape
-            }
+            },
+            echo=uuid.uuid4().hex
+        )
+        
+    @staticmethod
+    def create_send_group_forward_msg_request(group_id: Union[int, str],
+                                            messages: List[Union[str, List[MessageSegment]]]) -> ApiRequest:
+        """创建发送群合并转发消息请求"""
+        message_data = []
+        for message in messages:
+            if isinstance(message, str):
+                message_data.append({"type": "text", "data": {"text": message}})
+            else:
+                message_data.append({"type": "node", "data": {"content": [seg.dict() for seg in message]}})
+        
+        return ApiRequest(
+            action="send_group_forward_msg",
+            params={
+                "group_id": int(group_id),
+                "messages": message_data
+            },
+            echo=uuid.uuid4().hex
         )
     
     @staticmethod
@@ -73,7 +116,8 @@ class ApiHandler:
         
         return ApiRequest(
             action="send_msg",
-            params=params
+            params=params.get,
+            echo=uuid.uuid4().hex
         )
     
     @staticmethod
@@ -81,7 +125,8 @@ class ApiHandler:
         """创建撤回消息请求"""
         return ApiRequest(
             action="delete_msg",
-            params={"message_id": int(message_id)}
+            params={"message_id": int(message_id)},
+            echo=uuid.uuid4().hex
         )
     
     @staticmethod
@@ -89,7 +134,8 @@ class ApiHandler:
         """创建获取消息请求"""
         return ApiRequest(
             action="get_msg",
-            params={"message_id": int(message_id)}
+            params={"message_id": int(message_id)},
+            echo=uuid.uuid4().hex
         )
     
     @staticmethod
@@ -97,7 +143,8 @@ class ApiHandler:
         """创建获取合并转发消息请求"""
         return ApiRequest(
             action="get_forward_msg",
-            params={"id": id}
+            params={"id": id},
+            echo=uuid.uuid4().hex
         )
     
     @staticmethod
@@ -108,7 +155,8 @@ class ApiHandler:
             params={
                 "user_id": int(user_id),
                 "times": times
-            }
+            },
+            echo=uuid.uuid4().hex
         )
     
     @staticmethod
@@ -122,7 +170,8 @@ class ApiHandler:
                 "group_id": int(group_id),
                 "user_id": int(user_id),
                 "reject_add_request": reject_add_request
-            }
+            },
+            echo=uuid.uuid4().hex
         )
     
     @staticmethod
@@ -136,7 +185,8 @@ class ApiHandler:
                 "group_id": int(group_id),
                 "user_id": int(user_id),
                 "duration": duration
-            }
+            },
+            echo=uuid.uuid4().hex
         )
     
     @staticmethod
@@ -150,7 +200,8 @@ class ApiHandler:
                 "group_id": int(group_id),
                 "anonymous": anonymous,
                 "duration": duration
-            }
+            },
+            echo=uuid.uuid4().hex
         )
     
     @staticmethod
@@ -162,7 +213,8 @@ class ApiHandler:
             params={
                 "group_id": int(group_id),
                 "enable": enable
-            }
+            },
+            echo=uuid.uuid4().hex
         )
     
     @staticmethod
@@ -176,7 +228,8 @@ class ApiHandler:
                 "group_id": int(group_id),
                 "user_id": int(user_id),
                 "enable": enable
-            }
+            },
+            echo=uuid.uuid4().hex
         )
     
     @staticmethod
@@ -188,7 +241,8 @@ class ApiHandler:
             params={
                 "group_id": int(group_id),
                 "enable": enable
-            }
+            },
+            echo=uuid.uuid4().hex
         )
     
     @staticmethod
@@ -202,7 +256,8 @@ class ApiHandler:
                 "group_id": int(group_id),
                 "user_id": int(user_id),
                 "card": card
-            }
+            },
+            echo=uuid.uuid4().hex
         )
     
     @staticmethod
@@ -214,7 +269,8 @@ class ApiHandler:
             params={
                 "group_id": int(group_id),
                 "group_name": group_name
-            }
+            },
+            echo=uuid.uuid4().hex
         )
     
     @staticmethod
@@ -226,7 +282,8 @@ class ApiHandler:
             params={
                 "group_id": int(group_id),
                 "is_dismiss": is_dismiss
-            }
+            },
+            echo=uuid.uuid4().hex
         )
     
     @staticmethod
@@ -242,7 +299,8 @@ class ApiHandler:
                 "user_id": int(user_id),
                 "special_title": special_title,
                 "duration": duration
-            }
+            },
+            echo=uuid.uuid4().hex
         )
     
     @staticmethod
@@ -255,7 +313,8 @@ class ApiHandler:
                 "flag": flag,
                 "approve": approve,
                 "remark": remark
-            }
+            },
+            echo=uuid.uuid4().hex
         )
     
     @staticmethod
@@ -270,7 +329,8 @@ class ApiHandler:
                 "sub_type": sub_type,
                 "approve": approve,
                 "reason": reason
-            }
+            },
+            echo=uuid.uuid4().hex
         )
     
     @staticmethod
@@ -287,7 +347,8 @@ class ApiHandler:
             params={
                 "user_id": int(user_id),
                 "no_cache": no_cache
-            }
+            },
+            echo=uuid.uuid4().hex
         )
     
     @staticmethod
@@ -304,7 +365,8 @@ class ApiHandler:
             params={
                 "group_id": int(group_id),
                 "no_cache": no_cache
-            }
+            },
+            echo=uuid.uuid4().hex
         )
     
     @staticmethod
@@ -323,7 +385,8 @@ class ApiHandler:
                 "group_id": int(group_id),
                 "user_id": int(user_id),
                 "no_cache": no_cache
-            }
+            },
+            echo=uuid.uuid4().hex
         )
     
     @staticmethod
@@ -343,7 +406,8 @@ class ApiHandler:
             params={
                 "group_id": int(group_id),
                 "type": type
-            }
+            },
+            echo=uuid.uuid4().hex
         )
     
     @staticmethod
@@ -351,20 +415,22 @@ class ApiHandler:
         """创建获取Cookies请求"""
         return ApiRequest(
             action="get_cookies",
-            params={"domain": domain}
+            params={"domain": domain},
+            echo=uuid.uuid4().hex
         )
     
     @staticmethod
     def create_get_csrf_token_request() -> ApiRequest:
         """创建获取CSRF Token请求"""
-        return ApiRequest(action="get_csrf_token")
+        return ApiRequest(action="get_csrf_token", echo=uuid.uuid4().hex)
     
     @staticmethod
     def create_get_credentials_request(domain: str = "") -> ApiRequest:
         """创建获取QQ相关接口凭证请求"""
         return ApiRequest(
             action="get_credentials",
-            params={"domain": domain}
+            params={"domain": domain},
+            echo=uuid.uuid4().hex
         )
     
     @staticmethod
@@ -375,7 +441,8 @@ class ApiHandler:
             params={
                 "file": file,
                 "out_format": out_format
-            }
+            },
+            echo=uuid.uuid4().hex
         )
     
     @staticmethod
@@ -383,38 +450,40 @@ class ApiHandler:
         """创建获取图片请求"""
         return ApiRequest(
             action="get_image",
-            params={"file": file}
+            params={"file": file},
+            echo=uuid.uuid4().hex
         )
     
     @staticmethod
     def create_can_send_image_request() -> ApiRequest:
         """创建检查是否可以发送图片请求"""
-        return ApiRequest(action="can_send_image")
+        return ApiRequest(action="can_send_image", echo=uuid.uuid4().hex)
     
     @staticmethod
     def create_can_send_record_request() -> ApiRequest:
         """创建检查是否可以发送语音请求"""
-        return ApiRequest(action="can_send_record")
+        return ApiRequest(action="can_send_record", echo=uuid.uuid4().hex)
     
     @staticmethod
     def create_get_status_request() -> ApiRequest:
         """创建获取运行状态请求"""
-        return ApiRequest(action="get_status")
+        return ApiRequest(action="get_status", echo=uuid.uuid4().hex)
     
     @staticmethod
     def create_get_version_info_request() -> ApiRequest:
         """创建获取版本信息请求"""
-        return ApiRequest(action="get_version_info")
+        return ApiRequest(action="get_version_info", echo=uuid.uuid4().hex)
     
     @staticmethod
     def create_set_restart_request(delay: int = 0) -> ApiRequest:
         """创建重启OneBot实现请求"""
         return ApiRequest(
             action="set_restart",
-            params={"delay": delay}
+            params={"delay": delay},
+            echo=uuid.uuid4().hex
         )
     
     @staticmethod
     def create_clean_cache_request() -> ApiRequest:
         """创建清理缓存请求"""
-        return ApiRequest(action="clean_cache")
+        return ApiRequest(action="clean_cache", echo=uuid.uuid4().hex)

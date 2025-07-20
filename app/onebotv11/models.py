@@ -275,7 +275,9 @@ class ApiResponse(BaseModel):
     """API响应"""
     status: Literal["ok", "async", "failed"] = Field(..., description="状态")
     retcode: int = Field(..., description="返回码")
-    data: Optional[Dict[str, Any]] = Field(None, description="数据")
+    data: Optional[Dict[str, Any]|List[Dict[str, Any]]] = Field(None, description="数据")
+    message: Optional[str] = Field(None, description="信息")
+    wording: Optional[str] = Field(None, description="暂时不知道是什么")
     echo: Optional[str] = Field(None, description="回声")
 
 # 联合类型

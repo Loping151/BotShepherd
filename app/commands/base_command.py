@@ -27,6 +27,7 @@ class CommandResponse:
     message: str
     data: Optional[Dict[str, Any]] = None
     reply_to_message: bool = True
+    use_forward:bool = False
     private_reply: bool = False
 
 class BaseCommand(ABC):
@@ -36,6 +37,7 @@ class BaseCommand(ABC):
         self.name = ""
         self.description = ""
         self.usage = ""
+        self.example = ""
         self.aliases = []
         self.required_permission = PermissionLevel.MEMBER
         self.enabled = True
@@ -76,6 +78,8 @@ class BaseCommand(ABC):
         help_text += f"描述: {self.description}\n"
         if self.usage:
             help_text += f"用法: {self.usage}\n"
+        if self.example:
+            help_text += f"示例: {self.example}\n"
         if self.aliases:
             help_text += f"别名: {', '.join(self.aliases)}\n"
         
@@ -99,33 +103,35 @@ class BaseCommand(ABC):
     def format_response(self, message: str, result: CommandResult = CommandResult.SUCCESS,
                        data: Optional[Dict[str, Any]] = None,
                        reply_to_message: bool = True,
+                       use_forward: bool = False,
                        private_reply: bool = False) -> CommandResponse:
         """格式化响应"""
         return CommandResponse(
             result=result,
             message=message,
             data=data,
-            reply_to_message=reply_to_message,
+            reply_to_message=reply_to_message if not use_forward else False,
+            use_forward=use_forward,
             private_reply=private_reply
         )
     
     def format_error(self, message: str, 
-                    result: CommandResult = CommandResult.ERROR) -> CommandResponse:
+                    result: CommandResult = CommandResult.ERROR, **kwargs) -> CommandResponse:
         """格式化错误响应"""
-        return self.format_response(f"❌ {message}", result)
+        return self.format_response(f"❌ {message}", result, **kwargs)
     
     def format_success(self, message: str, 
-                      data: Optional[Dict[str, Any]] = None) -> CommandResponse:
+                      data: Optional[Dict[str, Any]] = None, **kwargs) -> CommandResponse:
         """格式化成功响应"""
-        return self.format_response(f"✅ {message}", CommandResult.SUCCESS, data)
+        return self.format_response(f"✅ {message}", CommandResult.SUCCESS, data, **kwargs)
     
-    def format_info(self, message: str) -> CommandResponse:
+    def format_info(self, message: str, **kwargs) -> CommandResponse:
         """格式化信息响应"""
-        return self.format_response(f"ℹ️ {message}")
+        return self.format_response(f"ℹ️ {message}", **kwargs)
     
-    def format_warning(self, message: str) -> CommandResponse:
+    def format_warning(self, message: str, **kwargs) -> CommandResponse:
         """格式化警告响应"""
-        return self.format_response(f"⚠️ {message}")
+        return self.format_response(f"⚠️ {message}", **kwargs)
 
 class CommandRegistry:
     """指令注册器"""

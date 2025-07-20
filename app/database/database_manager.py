@@ -58,6 +58,29 @@ class DatabaseManager:
         # 使用SQLAlchemy模型创建表
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            
+    async def get_total_message_count(self) -> int:
+        """获取数据库中消息总数"""
+        async with self.session_factory() as session:
+            try:
+                stmt = select(func.count(Message.id))
+                result = await session.execute(stmt)
+                return result.scalar() or 0
+            except Exception as e:
+                print(f"获取消息总数失败: {e}")
+                return 0
+
+    def get_database_size(self) -> int:
+        """获取数据库文件大小（单位：字节）"""
+        try:
+            if self.db_path and self.db_path.exists():
+                return self.db_path.stat().st_size
+            else:
+                print("数据库文件不存在")
+                return 0
+        except Exception as e:
+            print(f"获取数据库大小失败: {e}")
+            return 0
     
     async def save_message(self, message_data: Dict[str, Any], direction: str, connection_id: str = None):
         """保存消息到数据库"""
@@ -68,10 +91,13 @@ class DatabaseManager:
 
         async with self.session_factory() as session:
             try:
-                # 提取消息信息
                 message_id = message_data.get("message_id")
                 self_id = str(message_data.get("self_id", ""))
                 user_id = str(message_data.get("user_id", "")) if message_data.get("user_id") else None
+                if direction == "RECV":
+                    # 提取消息信息
+                    if user_id == self_id:
+                        return # 不纪录自身上报的消息
                 group_id = str(message_data.get("group_id", "")) if message_data.get("group_id") else None
                 message_type = message_data.get("message_type", "unknown")
                 sub_type = message_data.get("sub_type")
@@ -95,7 +121,7 @@ class DatabaseManager:
                 sender_info = json.dumps(message_data.get("sender", {}), ensure_ascii=False)
 
                 # 时间戳
-                timestamp = datetime.fromtimestamp(message_data.get("time", datetime.now().timestamp()))
+                timestamp = int(message_data.get("time", datetime.now().timestamp()))
 
                 # 创建消息记录
                 message_record = Message(
@@ -207,46 +233,74 @@ class DatabaseManager:
             except Exception as e:
                 print(f"按开头词查询消息失败: {e}")
                 return []
+            
+    def _build_message_conditions(self,
+                                self_id: Optional[str] = None,
+                                user_id: Optional[str] = None,
+                                group_id: Optional[str] = None,
+                                start_time: Optional[int] = None,
+                                end_time: Optional[int] = None,
+                                keywords: Optional[List[str]] = None,
+                                keyword_type: str = "and",
+                                prefix: Optional[str] = None,
+                                direction: Optional[str] = "SEND") -> List[Any]:
+        """构建通用的查询条件"""
+        conditions = []
+
+        if self_id:
+            conditions.append(Message.self_id == self_id)
+        if user_id:
+            conditions.append(Message.user_id == user_id)
+        if group_id:
+            conditions.append(Message.group_id == group_id)
+        if start_time:
+            conditions.append(Message.timestamp >= start_time)
+        if end_time:
+            conditions.append(Message.timestamp <= end_time)
+        if direction:
+            conditions.append(Message.direction == direction)
+        
+        if keywords:
+            keyword_conditions = [
+                or_(
+                    Message.raw_message.contains(kw),
+                    Message.message_content.contains(kw)
+                ) for kw in keywords
+            ]
+            if keyword_type == "or":
+                conditions.append(or_(*keyword_conditions))
+            else:
+                conditions.append(and_(*keyword_conditions))
+
+        if prefix:
+            prefix_condition = or_(
+                Message.raw_message.startswith(prefix),
+                Message.message_content.startswith(prefix)
+            )
+            conditions.append(prefix_condition)
+
+        return conditions
+
 
     async def query_messages_combined(self,
                                     self_id: str = None,
                                     user_id: str = None,
                                     group_id: str = None,
-                                    start_time: datetime = None,
-                                    end_time: datetime = None,
-                                    keyword: str = None,
+                                    start_time: int = None,
+                                    end_time: int = None,
+                                    keywords: List[str] = None,
+                                    keyword_type: str = "and",
                                     prefix: str = None,
+                                    direction: str = "SEND",
                                     limit: int = 100,
                                     offset: int = 0) -> List[MessageRecord]:
         """组合查询消息"""
         async with self.session_factory() as session:
             try:
-                conditions = []
-
-                if self_id:
-                    conditions.append(Message.self_id == self_id)
-                if user_id:
-                    conditions.append(Message.user_id == user_id)
-                if group_id:
-                    conditions.append(Message.group_id == group_id)
-                if start_time:
-                    conditions.append(Message.timestamp >= start_time)
-                if end_time:
-                    conditions.append(Message.timestamp <= end_time)
-                if keyword:
-                    conditions.append(
-                        or_(
-                            Message.raw_message.contains(keyword),
-                            Message.message_content.contains(keyword)
-                        )
-                    )
-                if prefix:
-                    conditions.append(
-                        or_(
-                            Message.raw_message.startswith(prefix),
-                            Message.message_content.startswith(prefix)
-                        )
-                    )
+                conditions = self._build_message_conditions(
+                    self_id, user_id, group_id, start_time, end_time,
+                    keywords, keyword_type, prefix, direction
+                )
 
                 stmt = select(Message)
                 if conditions:
@@ -261,42 +315,22 @@ class DatabaseManager:
                 return []
 
     async def count_messages(self,
-                           self_id: str = None,
-                           user_id: str = None,
-                           group_id: str = None,
-                           start_time: datetime = None,
-                           end_time: datetime = None,
-                           keyword: str = None,
-                           prefix: str = None) -> int:
+                            self_id: str = None,
+                            user_id: str = None,
+                            group_id: str = None,
+                            start_time: int = None,
+                            end_time: int = None,
+                            keywords: List[str] = None,
+                            keyword_type: str = "and",
+                            prefix: str = None,
+                            direction: str = "SEND") -> int:
         """统计消息数量"""
         async with self.session_factory() as session:
             try:
-                conditions = []
-
-                if self_id:
-                    conditions.append(Message.self_id == self_id)
-                if user_id:
-                    conditions.append(Message.user_id == user_id)
-                if group_id:
-                    conditions.append(Message.group_id == group_id)
-                if start_time:
-                    conditions.append(Message.timestamp >= start_time)
-                if end_time:
-                    conditions.append(Message.timestamp <= end_time)
-                if keyword:
-                    conditions.append(
-                        or_(
-                            Message.raw_message.contains(keyword),
-                            Message.message_content.contains(keyword)
-                        )
-                    )
-                if prefix:
-                    conditions.append(
-                        or_(
-                            Message.raw_message.startswith(prefix),
-                            Message.message_content.startswith(prefix)
-                        )
-                    )
+                conditions = self._build_message_conditions(
+                    self_id, user_id, group_id, start_time, end_time,
+                    keywords, keyword_type, prefix, direction
+                )
 
                 stmt = select(func.count(Message.id))
                 if conditions:
@@ -307,6 +341,65 @@ class DatabaseManager:
             except Exception as e:
                 print(f"统计消息数量失败: {e}")
                 return 0
+
+    async def count_messages_group_by_group_id(self,
+                                            self_id: str = None,
+                                            user_id: str = None,
+                                            start_time: int = None,
+                                            end_time: int = None,
+                                            keywords: List[str] = None,
+                                            keyword_type: str = "and",
+                                            prefix: str = None,
+                                            direction: str = "SEND") -> Dict[str, int]:
+        """按 group_id 分组统计消息数量"""
+        async with self.session_factory() as session:
+            try:
+                conditions = self._build_message_conditions(
+                    self_id, user_id, None, start_time, end_time,
+                    keywords, keyword_type, prefix, direction
+                )
+
+                stmt = select(Message.group_id, func.count(Message.id)).group_by(Message.group_id)
+                if conditions:
+                    stmt = stmt.where(and_(*conditions))
+
+                result = await session.execute(stmt)
+                rows = result.all()
+
+                return {group_id: count for group_id, count in rows if group_id}
+            except Exception as e:
+                print(f"按群号统计消息数量失败: {e}")
+                return {}
+
+
+    async def count_messages_group_by_self_id(self,
+                                            user_id: str = None,
+                                            group_id: str = None,
+                                            start_time: int = None,
+                                            end_time: int = None,
+                                            keywords: List[str] = None,
+                                            keyword_type: str = "and",
+                                            prefix: str = None,
+                                            direction: str = "SEND") -> Dict[str, int]:
+        """按 self_id 分组统计消息数量"""
+        async with self.session_factory() as session:
+            try:
+                conditions = self._build_message_conditions(
+                    None, user_id, group_id, start_time, end_time,
+                    keywords, keyword_type, prefix, direction
+                )
+
+                stmt = select(Message.self_id, func.count(Message.id)).group_by(Message.self_id)
+                if conditions:
+                    stmt = stmt.where(and_(*conditions))
+
+                result = await session.execute(stmt)
+                rows = result.all()
+
+                return {self_id: count for self_id, count in rows if self_id}
+            except Exception as e:
+                print(f"按 self_id 统计消息数量失败: {e}")
+                return {}
 
 
     async def _start_cleanup_task(self):
@@ -323,7 +416,7 @@ class DatabaseManager:
     async def _cleanup_expired_data(self):
         """清理过期数据"""
         expire_days = self.db_config.get("auto_expire_days", 30)
-        cutoff_date = datetime.now() - timedelta(days=expire_days)
+        cutoff_date = int((datetime.now() - timedelta(days=expire_days)).timestamp())
 
         async with self.session_factory() as session:
             try:

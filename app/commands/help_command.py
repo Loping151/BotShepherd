@@ -75,7 +75,7 @@ class HelpCommand(BaseCommand):
         if restrictions:
             help_text += f"\n使用限制: {', '.join(restrictions)}"
         
-        return self.format_info(help_text)
+        return self.format_response(help_text, use_forward=True)
     
     async def _show_general_help(self, event: Event, permission_manager, config_manager) -> CommandResponse:
         """显示总体帮助"""
@@ -90,7 +90,7 @@ class HelpCommand(BaseCommand):
         command_prefix = global_config.get("command_prefix", "bs")
         
         # 构建帮助信息
-        help_text = "🤖 BotShepherd 帮助信息\n\n"
+        help_text = "🐏 BotShepherd 帮助信息\n\n"
         
         # 用户权限信息
         permission_desc = permission_manager.get_permission_description(user_level)
@@ -111,8 +111,8 @@ class HelpCommand(BaseCommand):
         # 显示各等级指令
         level_names = {
             PermissionLevel.MEMBER: "📝 普通指令",
-            PermissionLevel.ADMIN: "👑 管理指令", 
-            PermissionLevel.SUPERUSER: "⚡ 超级指令"
+            PermissionLevel.ADMIN: "👑 群管指令", 
+            PermissionLevel.SUPERUSER: "⚡ 主人指令"
         }
         
         for level in [PermissionLevel.MEMBER, PermissionLevel.ADMIN, PermissionLevel.SUPERUSER]:
@@ -126,32 +126,14 @@ class HelpCommand(BaseCommand):
                     if command.aliases:
                         cmd_info += f" ({', '.join(command.aliases[:2])})"
                     
-                    # 使用限制标识
-                    restrictions = []
-                    if command.group_only:
-                        restrictions.append("群")
-                    if command.private_only:
-                        restrictions.append("私")
-                    
-                    if restrictions:
-                        cmd_info += f" [{'/'.join(restrictions)}]"
-                    
                     help_text += f"  • {cmd_info} - {command.description}\n"
-                
-                help_text += "\n"
-        
+                        
         # 使用说明
         help_text += "💡 使用说明:\n"
         help_text += f"• 使用 {command_prefix}指令名 执行指令\n"
         help_text += f"• 使用 {command_prefix}帮助 指令名 查看详细帮助\n"
-        help_text += "• [群] 表示仅限群聊，[私] 表示仅限私聊\n\n"
         
-        # 系统信息
-        total_commands = len(command_registry.commands)
-        enabled_commands = len(command_registry.get_enabled_commands())
-        help_text += f"📊 系统信息: 共 {total_commands} 个指令，{enabled_commands} 个已启用"
-        
-        return self.format_info(help_text)
+        return self.format_response(help_text, use_forward=True)
 
 class StatusCommand(BaseCommand):
     """状态指令"""
@@ -162,7 +144,7 @@ class StatusCommand(BaseCommand):
         self.description = "显示系统运行状态"
         self.usage = "状态"
         self.aliases = ["status", "stat"]
-        self.required_permission = PermissionLevel.MEMBER
+        self.required_permission = PermissionLevel.SUPERUSER
     
     def _setup_parser(self):
         """设置参数解析器"""
@@ -184,43 +166,47 @@ class StatusCommand(BaseCommand):
             status_info += f"📋 配置状态:\n"
             status_info += f"  • 连接配置: {len(connections_config)} 个\n"
             status_info += f"  • 指令前缀: {global_config.get('command_prefix', 'bs')}\n"
-            status_info += f"  • 超级用户: {len(global_config.get('superusers', []))} 个\n\n"
-            
-            # 指令统计
-            total_commands = len(command_registry.commands)
-            enabled_commands = len(command_registry.get_enabled_commands())
-            
-            status_info += f"⚙️ 指令系统:\n"
-            status_info += f"  • 总指令数: {total_commands}\n"
-            status_info += f"  • 已启用: {enabled_commands}\n"
-            status_info += f"  • 别名数: {len(command_registry.aliases)}\n\n"
             
             # 数据库信息
             try:
-                db_info = await database_manager.get_database_info()
+                db_config = global_config.get("database", {})
                 status_info += f"💾 数据库状态:\n"
-                status_info += f"  • 数据库大小: {db_info.get('database_size', 0) / 1024 / 1024:.2f} MB\n"
-                status_info += f"  • 自动过期: {db_info.get('auto_expire_days', 30)} 天\n"
-                
-                # 表统计
-                tables = db_info.get('tables', [])
-                if tables:
-                    status_info += f"  • 数据表:\n"
-                    for table in tables[:3]:  # 只显示前3个表
-                        status_info += f"    - {table['table_name']}: {table['row_count']} 条记录\n"
+                status_info += f"  • 数据库大小: {database_manager.get_database_size() / 1024 / 1024:.2f} MB\n"
+                status_info += f"  • 消息条数: {await database_manager.get_total_message_count()} 条\n"
+                status_info += f"  • 消息保留: {db_config.get('auto_expire_days', 30)} 天\n"
                 
             except Exception as e:
                 status_info += f"💾 数据库状态: 获取失败 ({e})\n"
             
-            status_info += f"\n🕐 查询时间: {context.get('timestamp', '未知')}"
+            status_info += f"\n🕐 当前UTC时间: {context.get('timestamp', '未知')}"
             
-            return self.format_info(status_info)
+            return self.format_response(status_info, use_forward=True)
             
         except Exception as e:
             return self.format_error(f"获取状态信息失败: {e}")
+        
+class PINGCommand(BaseCommand):
+    """PING指令"""
+    
+    def __init__(self):
+        super().__init__()
+        self.name = "PING"
+        self.description = "测试连接是否正常"
+        self.usage = "PING"
+        self.aliases = ["ping"]
+        self.required_permission = PermissionLevel.SUPERUSER
+    
+    def _setup_parser(self):
+        """设置参数解析器"""
+        super()._setup_parser()
+    
+    async def execute(self, event: Event, args: List[str], context: Dict[str, Any]) -> CommandResponse:
+        """执行PING指令"""
+        return self.format_response("PONG")
 
 # 注册指令
 def register_basic_commands():
     """注册基础指令"""
     command_registry.register(HelpCommand())
     command_registry.register(StatusCommand())
+    command_registry.register(PINGCommand())
