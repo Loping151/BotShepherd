@@ -150,13 +150,6 @@ config/account/
 config/group/
 config/backups/
 
-# 保留配置目录结构但忽略实际配置文件
-!config/
-!config/.gitkeep
-!config/connections/.gitkeep
-!config/account/.gitkeep
-!config/group/.gitkeep
-
 # 数据库文件（包含用户消息、统计数据等敏感信息）
 data/
 *.db
