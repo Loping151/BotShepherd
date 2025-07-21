@@ -15,11 +15,11 @@ class BlacklistCommand(BaseCommand):
         super().__init__()
         self.name = "黑名单"
         self.description = "管理用户和群组黑名单"
-        self.usage = "黑名单 <add|remove|list> <user|group> [ID]"
+        self.usage = "黑名单 <添加|移除|查看|查找> <用户|群> [ID]"
         self.example = """
-bl add user 123456
-bl list
-bl check 123456"""
+    黑名单 add user 123456
+    黑名单 查看
+    黑名单 查找 123456"""
         self.aliases = ["blacklist", "bl"]
         self.required_permission = PermissionLevel.SUPERUSER
     
@@ -27,19 +27,24 @@ bl check 123456"""
         """设置参数解析器"""
         super()._setup_parser()
         
+        self.user_aliases = ["用户", "u", "user"]
+        self.group_aliases = ["群", "群组", "群聊", "g", "group"]
         subparsers = self.parser.add_subparsers(dest="action", help="操作类型")
         
         # 添加子命令
-        add_parser = subparsers.add_parser("add", help="添加到黑名单")
-        add_parser.add_argument("type", choices=["user", "group"], help="类型")
+        add_parser = subparsers.add_parser("add", aliases=["a", "添加", "+"], help="添加到黑名单")
+        add_parser.add_argument("type", choices=self.user_aliases + self.group_aliases, help="类型")
         add_parser.add_argument("id", help="用户ID或群组ID")
         
-        remove_parser = subparsers.add_parser("remove", help="从黑名单移除")
-        remove_parser.add_argument("type", choices=["user", "group"], help="类型")
+        remove_parser = subparsers.add_parser("remove", aliases=["r", "rm", "移除", "-"], help="从黑名单移除")
+        remove_parser.add_argument("type", choices=self.user_aliases + self.group_aliases, help="类型")
         remove_parser.add_argument("id", help="用户ID或群组ID")
         
-        list_parser = subparsers.add_parser("list", help="查看黑名单")
-        list_parser.add_argument("type", nargs="?", choices=["user", "group"], help="类型（可选）")
+        list_parser = subparsers.add_parser("list", aliases=["ls", "查看"], help="查看黑名单")
+        list_parser.add_argument("type", nargs="?", choices=self.user_aliases + self.group_aliases, help="类型（可选）")
+        
+        check_parser = subparsers.add_parser("check", aliases=["ck", "查找"], help="查找黑名单，不需要类型")
+        check_parser.add_argument("id", help="用户ID或群组ID")
     
     async def execute(self, event: Event, args: List[str], context: Dict[str, Any]) -> CommandResponse:
         """执行黑名单指令"""
@@ -49,16 +54,20 @@ bl check 123456"""
                 return self.format_error(parsed_args, CommandResult.INVALID_ARGS)
             
             if not parsed_args.action:
-                return self.format_error("请指定操作类型: add, remove, list")
+                return self.format_error("请指定操作类型: 添加, 查看, 查找")
             
             config_manager = context["config_manager"]
             
-            if parsed_args.action == "add":
+            if parsed_args.action in ["add", "a", "添加", "+"]:
                 return await self._add_to_blacklist(parsed_args, config_manager)
-            elif parsed_args.action == "remove":
+            elif parsed_args.action in ["remove", "r", "rm", "移除", "-"]:
                 return await self._remove_from_blacklist(parsed_args, config_manager)
-            elif parsed_args.action == "list":
+            elif parsed_args.action in ["list", "ls", "查看"]:
                 return await self._list_blacklist(parsed_args, config_manager)
+            elif parsed_args.action in ["check", "ck", "查找"]:
+                return await self._check_blacklist(parsed_args, config_manager)
+            else:
+                return self.format_error("不支持的操作类型")
             
         except Exception as e:
             return self.format_error(f"黑名单操作失败: {e}")
@@ -66,7 +75,7 @@ bl check 123456"""
     async def _add_to_blacklist(self, args, config_manager) -> CommandResponse:
         """添加到黑名单"""
         try:
-            item_type = "users" if args.type == "user" else "groups"
+            item_type = "users" if args.type in self.user_aliases else "groups"
             item_id = args.id.strip()
             
             # 验证ID格式
@@ -75,13 +84,13 @@ bl check 123456"""
             
             # 检查是否已在黑名单中
             if config_manager.is_in_blacklist(item_type, item_id):
-                type_name = "用户" if args.type == "user" else "群组"
+                type_name = "用户" if args.type in self.user_aliases else "群组"
                 return self.format_warning(f"{type_name} {item_id} 已在黑名单中")
             
             # 添加到黑名单
             await config_manager.add_to_blacklist(item_type, item_id)
             
-            type_name = "用户" if args.type == "user" else "群组"
+            type_name = "用户" if args.type in self.user_aliases else "群组"
             return self.format_success(f"已将{type_name} {item_id} 添加到黑名单")
             
         except Exception as e:
@@ -90,7 +99,7 @@ bl check 123456"""
     async def _remove_from_blacklist(self, args, config_manager) -> CommandResponse:
         """从黑名单移除"""
         try:
-            item_type = "users" if args.type == "user" else "groups"
+            item_type = "users" if args.type in self.user_aliases else "groups"
             item_id = args.id.strip()
             
             # 验证ID格式
@@ -99,13 +108,13 @@ bl check 123456"""
             
             # 检查是否在黑名单中
             if not config_manager.is_in_blacklist(item_type, item_id):
-                type_name = "用户" if args.type == "user" else "群组"
+                type_name = "用户" if args.type in self.user_aliases else "群组"
                 return self.format_warning(f"{type_name} {item_id} 不在黑名单中")
             
             # 从黑名单移除
             await config_manager.remove_from_blacklist(item_type, item_id)
             
-            type_name = "用户" if args.type == "user" else "群组"
+            type_name = "用户" if args.type in self.user_aliases else "群组"
             return self.format_success(f"已将{type_name} {item_id} 从黑名单移除")
             
         except Exception as e:
@@ -116,11 +125,12 @@ bl check 123456"""
         try:
             global_config = config_manager.get_global_config()
             blacklist = global_config.get("blacklist", {})
+            result_list = []
             
             if args.type:
                 # 查看特定类型的黑名单
-                item_type = "users" if args.type == "user" else "groups"
-                type_name = "用户" if args.type == "user" else "群组"
+                item_type = "users" if args.type in self.user_aliases else "groups"
+                type_name = "用户" if args.type in self.user_aliases else "群组"
                 
                 items = blacklist.get(item_type, [])
                 if not items:
@@ -129,8 +139,13 @@ bl check 123456"""
                 result = f"📋 {type_name}黑名单 ({len(items)} 个):\n"
                 for i, item_id in enumerate(items, 1):
                     result += f"{i}. {item_id}\n"
+                    if len(result) > 2000:
+                        result_list.append(result)
+                        result = ""
+                if result:
+                    result_list.append(result)
                 
-                return self.format_info(result.strip())
+                return self.format_response(result_list, use_forward=True)
             else:
                 # 查看所有黑名单
                 user_blacklist = blacklist.get("users", [])
@@ -155,10 +170,38 @@ bl check 123456"""
                     if len(group_blacklist) > 10:
                         result += f"  ... 还有 {len(group_blacklist) - 10} 个\n"
                 
-                return self.format_info(result.strip())
+                if result.count("\n") > 10:            
+                    return self.format_response(result.strip(), use_forward=True)
+                else:
+                    return self.format_response(result.strip())
                 
         except Exception as e:
             return self.format_error(f"查看黑名单失败: {e}")
+        
+
+    async def _check_blacklist(self, args, config_manager) -> CommandResponse:
+        """查找黑名单"""
+        try:
+            item_id = args.id.strip()
+            
+            # 验证ID格式
+            if not item_id.isdigit():
+                return self.format_error("ID必须是数字")
+            
+            result = ""
+            
+            # 检查是否在黑名单中
+            if config_manager.is_in_blacklist("users", item_id):
+                result += f"用户 {item_id} 在黑名单中\n"
+            elif config_manager.is_in_blacklist("groups", item_id):
+                result += f"群组 {item_id} 在黑名单中\n"
+            if not result:
+                return self.format_warning(f"ID {item_id} 不在黑名单中")
+            return self.format_info(result)
+            
+        except Exception as e:
+            return self.format_error(f"查找黑名单失败: {e}")
+
 
 class QuickBlacklistCommand(BaseCommand):
     """快速黑名单指令"""
@@ -168,7 +211,7 @@ class QuickBlacklistCommand(BaseCommand):
         self.name = "拉黑"
         self.description = "快速将用户或当前群组加入黑名单"
         self.usage = "拉黑 [用户ID] 或在群聊中直接使用"
-        self.aliases = ["block"]
+        self.aliases = ["lh"]
         self.required_permission = PermissionLevel.SUPERUSER
     
     def _setup_parser(self):
@@ -178,11 +221,6 @@ class QuickBlacklistCommand(BaseCommand):
             "user_id", 
             nargs="?", 
             help="要拉黑的用户ID（群聊中可省略表示拉黑当前群）"
-        )
-        self.parser.add_argument(
-            "--group", 
-            action="store_true", 
-            help="拉黑当前群组"
         )
     
     async def execute(self, event: Event, args: List[str], context: Dict[str, Any]) -> CommandResponse:
@@ -195,7 +233,7 @@ class QuickBlacklistCommand(BaseCommand):
             config_manager = context["config_manager"]
             
             # 拉黑群组
-            if parsed_args.group or (not parsed_args.user_id and isinstance(event, GroupMessageEvent)):
+            if not parsed_args.user_id:
                 if not isinstance(event, GroupMessageEvent):
                     return self.format_error("只能在群聊中拉黑群组")
                 
@@ -220,7 +258,7 @@ class QuickBlacklistCommand(BaseCommand):
                 await config_manager.add_to_blacklist("users", user_id)
                 return self.format_success(f"已将用户 {user_id} 加入黑名单")
             
-            return self.format_error("请指定要拉黑的用户ID或使用 --group 拉黑当前群")
+            return self.format_error("请指定要拉黑的用户ID或留空") # 有这种情况？
             
         except Exception as e:
             return self.format_error(f"快速拉黑失败: {e}")

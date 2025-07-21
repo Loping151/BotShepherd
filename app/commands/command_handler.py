@@ -79,10 +79,13 @@ class CommandHandler:
             # 获取指令
             command = command_registry.get_command(command_name)
             if not command:
-                return CommandResponse(
-                    result=CommandResult.NOT_FOUND,
-                    message=f"未找到指令: {command_name}\n使用 {command_info['prefix']}帮助 查看可用指令"
-                )
+                if self.config_manager.is_superuser(event.user_id):
+                    return CommandResponse(
+                        result=CommandResult.NOT_FOUND,
+                        message=f"未找到指令: {command_name}\n使用 {command_info['prefix']}帮助 查看可用指令"
+                    )
+                else:
+                    return
             
             # 检查指令是否启用
             if not command.enabled:
@@ -102,10 +105,11 @@ class CommandHandler:
             # 检查权限
             permission_check = await self._check_command_permission(event, command)
             if not permission_check[0]:
-                return CommandResponse(
-                    result=CommandResult.PERMISSION_DENIED,
-                    message=permission_check[1]
-                )
+                return
+                # return CommandResponse(
+                #     result=CommandResult.PERMISSION_DENIED,
+                #     message=permission_check[1]
+                # )
             
             # 准备执行上下文
             context = {
@@ -150,23 +154,31 @@ class CommandHandler:
         try:
             # 构建消息段
             message_segments = []
-            
             # 如果需要回复原消息
             if response.reply_to_message and hasattr(event, 'message_id'):
                 message_segments.append(MessageSegmentBuilder.reply(event.message_id))
             
-            # 添加响应文本
-            message_segments.append(MessageSegmentBuilder.text(response.message))
+            # 处理响应文本，支持多段
+            if isinstance(response.message, list):
+                for msg in response.message:
+                    message_segments.append(MessageSegmentBuilder.text(msg))
+            else:
+                message_segments.append(MessageSegmentBuilder.text(response.message))
             
             # 构建API请求
             if isinstance(event, GroupMessageEvent) and not response.private_reply:
                 if response.use_forward:
-                    # 合并转发
+                    # 合并转发，支持多段
+                    forward_messages = []
+                    if isinstance(response.message, list):
+                        for msg in response.message:
+                            forward_messages.append([MessageSegmentBuilder.text(msg)])
+                    else:
+                        forward_messages = [message_segments]
                     api_request = ApiHandler.create_send_group_forward_msg_request(
                         group_id=event.group_id,
-                        messages=[message_segments]
+                        messages=forward_messages
                     )
-                
                 else:
                     # 群聊回复
                     api_request = ApiHandler.create_send_group_msg_request(
@@ -175,12 +187,17 @@ class CommandHandler:
                     )
             else:
                 if response.use_forward:
-                    # 合并转发
+                    # 合并转发，支持多段
+                    forward_messages = []
+                    if isinstance(response.message, list):
+                        for msg in response.message:
+                            forward_messages.append([MessageSegmentBuilder.text(msg)])
+                    else:
+                        forward_messages = [message_segments]
                     api_request = ApiHandler.create_send_private_forward_msg_request(
                         user_id=event.user_id,
-                        messages=[message_segments]
+                        messages=forward_messages
                     )
-                
                 else:
                     # 私聊回复
                     api_request = ApiHandler.create_send_private_msg_request(

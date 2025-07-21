@@ -8,7 +8,7 @@ from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime
 
 from ..onebotv11 import EventParser, MessageNormalizer
-from ..onebotv11.models import Event, MessageEvent, PrivateMessageEvent, GroupMessageEvent, MessageSegment
+from ..onebotv11.models import ApiRequest, Event, MessageEvent, PrivateMessageEvent, GroupMessageEvent, MessageSegment
 from ..onebotv11.message_segment import MessageSegmentParser
 from ..utils.logger import log_message_flat
 from ..commands.permission_manager import PermissionManager
@@ -71,35 +71,35 @@ class MessageProcessor:
             self.logger.error(f"预处理客户端消息失败: {e}")
             return None, None
     
-    async def postprocess_target_message(self, message_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    async def postprocess_target_message(self, message_data: Dict[str, Any], self_id: str) -> Optional[Dict[str, Any]]:
         """后处理目标消息"""
-        try:
+        try:            
             # 记录原始消息
             self._log_message(message_data, "SEND", "RAW")
             
             # 解析事件
             event = self.event_parser.parse_event_data(message_data)
             if event:
-                if isinstance(event, MessageEvent):
+                if isinstance(event, ApiRequest) and "send" in event.action:
                     # 更新账号活动时间
                     await self.config_manager.update_account_last_activity(
-                        str(event.self_id), "send"
+                        self_id, "send"
                     )
                 
                     # 消息事件特殊处理
-                    processed_data = await self._postprocess_message_event(event, message_data)
+                    processed_data = await self._postprocess_message_event(event, self_id, message_data)
                     if not processed_data:
                         return None
                     message_data = processed_data
-            
-            # 记录处理后的消息
-            self._log_message(message_data, "SEND", "PROCESSED")
+                    
+                    # 记录处理后的消息
+                    self._log_message(message_data, "SEND", "PROCESSED")
             
             return message_data
             
         except Exception as e:
             self.logger.error(f"后处理目标消息失败: {e}")
-            return message_data
+            return None
     
     async def _normalize_message(self, message_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """标准化消息"""
@@ -162,12 +162,19 @@ class MessageProcessor:
 
         return message_data
     
-    async def _postprocess_message_event(self, event: Event, 
+    async def _postprocess_message_event(self, event: Event, self_id: str,
                                        message_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """后处理消息事件"""
+        message_data = await self.filter_manager.filter_send_message(event, message_data)
+                
+        if not message_data:
+            return None
+        
         # 更新群组最后消息时间（机器人发送的消息）
         if isinstance(event, GroupMessageEvent):
             await self.config_manager.update_group_last_message_time(str(event.group_id))
+        
+        await self.config_manager.update_account_last_activity(self_id, "send")
         
         return message_data
     

@@ -21,6 +21,8 @@ from app.database.database_manager import DatabaseManager
 from app.websocket_proxy.proxy_server import ProxyServer
 from app.web_api.web_server import WebServer
 from app.utils.logger import setup_logger
+from app.commands import initialize_builtin_commands, load_plugins
+
 
 class BotShepherd:
     """BotShepherd主应用类"""
@@ -59,6 +61,10 @@ class BotShepherd:
                 database_manager=self.database_manager,
                 logger=self.logger
             )
+            
+            # 初始化指令系统
+            initialize_builtin_commands(self.logger)
+            load_plugins(self.logger)
 
             # 初始化Web服务器
             self.web_server = WebServer(

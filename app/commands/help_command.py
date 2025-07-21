@@ -3,6 +3,7 @@
 显示系统帮助信息和指令列表
 """
 
+import psutil
 from typing import Dict, Any, List
 from ..onebotv11.models import Event
 from .permission_manager import PermissionLevel
@@ -83,7 +84,7 @@ class HelpCommand(BaseCommand):
         available_commands = command_registry.get_commands_by_permission(user_level)
         
         if not available_commands:
-            return self.format_info("暂无可用指令")
+            return self.format_warning("暂无可用指令")
         
         # 获取指令前缀
         global_config = config_manager.get_global_config()
@@ -111,7 +112,7 @@ class HelpCommand(BaseCommand):
         # 显示各等级指令
         level_names = {
             PermissionLevel.MEMBER: "📝 普通指令",
-            PermissionLevel.ADMIN: "👑 群管指令", 
+            PermissionLevel.ADMIN: "👥 群管指令", 
             PermissionLevel.SUPERUSER: "⚡ 主人指令"
         }
         
@@ -165,24 +166,40 @@ class StatusCommand(BaseCommand):
             
             status_info += f"📋 配置状态:\n"
             status_info += f"  • 连接配置: {len(connections_config)} 个\n"
-            status_info += f"  • 指令前缀: {global_config.get('command_prefix', 'bs')}\n"
+            status_info += f"  • 最近活跃账号: {len(await config_manager.get_recently_active_accounts())}/{len(config_manager.get_all_account_configs())}个\n"
+            status_info += f"  • 最近活跃群聊: {len(await config_manager.get_recently_active_groups())}/{len(config_manager.get_all_group_configs())}个\n"
             
             # 数据库信息
             try:
                 db_config = global_config.get("database", {})
                 status_info += f"💾 数据库状态:\n"
                 status_info += f"  • 数据库大小: {database_manager.get_database_size() / 1024 / 1024:.2f} MB\n"
-                status_info += f"  • 消息条数: {await database_manager.get_total_message_count()} 条\n"
+                status_info += f"  • 记录条数: {await database_manager.get_total_message_count()} 条\n"
                 status_info += f"  • 消息保留: {db_config.get('auto_expire_days', 30)} 天\n"
                 
             except Exception as e:
                 status_info += f"💾 数据库状态: 获取失败 ({e})\n"
+                
+            # 系统状态
+            status_info += f"💻 系统状态:\n"
+            # 获取当前进程和系统资源占用
+            process = psutil.Process()
+            app_cpu = process.cpu_percent(interval=0.1)
+            total_cpu = psutil.cpu_percent()
+            app_mem = process.memory_info().rss / (1024 * 1024)  # MB
+            total_mem = psutil.virtual_memory().used / (1024 * 1024)  # MB
+            total_mem_percent = psutil.virtual_memory().percent
+
+            status_info += f"  • CPU: {app_cpu:.1f}% / {total_cpu:.1f}%\n"
+            status_info += f"  • 内存: {app_mem:.1f}MB / {total_mem:.1f}MB ({total_mem_percent:.1f}%)\n"
             
             status_info += f"\n🕐 当前UTC时间: {context.get('timestamp', '未知')}"
             
             return self.format_response(status_info, use_forward=True)
             
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             return self.format_error(f"获取状态信息失败: {e}")
         
 class PINGCommand(BaseCommand):
@@ -202,7 +219,28 @@ class PINGCommand(BaseCommand):
     
     async def execute(self, event: Event, args: List[str], context: Dict[str, Any]) -> CommandResponse:
         """执行PING指令"""
-        return self.format_response("PONG")
+        return self.format_response("pong")
+
+
+class EchoCommand(BaseCommand):
+    """Echo指令"""
+    
+    def __init__(self):
+        super().__init__()
+        self.name = "echo"
+        self.description = "复读"
+        self.usage = "echo xxx"
+        self.aliases = ["Echo"]
+        self.required_permission = PermissionLevel.SUPERUSER
+    
+    def _setup_parser(self):
+        """设置参数解析器"""
+        super()._setup_parser()
+    
+    async def execute(self, event: Event, args: List[str], context: Dict[str, Any]) -> CommandResponse:
+        """执行PING指令"""
+        return self.format_response(" ".join(args))
+
 
 # 注册指令
 def register_basic_commands():
@@ -210,3 +248,4 @@ def register_basic_commands():
     command_registry.register(HelpCommand())
     command_registry.register(StatusCommand())
     command_registry.register(PINGCommand())
+    command_registry.register(EchoCommand())

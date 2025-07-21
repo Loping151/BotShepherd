@@ -149,90 +149,90 @@ class DatabaseManager:
                 print(f"保存消息失败: {e}")
                 raise
     
-    async def query_messages_by_self_id(self, self_id: str, limit: int = 100, offset: int = 0) -> List[MessageRecord]:
-        """按self_id查询消息"""
-        async with self.session_factory() as session:
-            try:
-                stmt = select(Message).where(Message.self_id == self_id).order_by(desc(Message.timestamp)).limit(limit).offset(offset)
-                result = await session.execute(stmt)
-                messages = result.scalars().all()
-                return [MessageRecord.from_db_row(msg) for msg in messages]
-            except Exception as e:
-                print(f"按self_id查询消息失败: {e}")
-                return []
+    # async def query_messages_by_self_id(self, self_id: str, limit: int = 100, offset: int = 0) -> List[MessageRecord]:
+    #     """按self_id查询消息"""
+    #     async with self.session_factory() as session:
+    #         try:
+    #             stmt = select(Message).where(Message.self_id == self_id).order_by(desc(Message.timestamp)).limit(limit).offset(offset)
+    #             result = await session.execute(stmt)
+    #             messages = result.scalars().all()
+    #             return [MessageRecord.from_db_row(msg) for msg in messages]
+    #         except Exception as e:
+    #             print(f"按self_id查询消息失败: {e}")
+    #             return []
 
-    async def query_messages_by_time_range(self, start_time: datetime, end_time: datetime,
-                                         limit: int = 100, offset: int = 0) -> List[MessageRecord]:
-        """按时间段查询消息"""
-        async with self.session_factory() as session:
-            try:
-                stmt = select(Message).where(
-                    and_(Message.timestamp >= start_time, Message.timestamp <= end_time)
-                ).order_by(desc(Message.timestamp)).limit(limit).offset(offset)
-                result = await session.execute(stmt)
-                messages = result.scalars().all()
-                return [MessageRecord.from_db_row(msg) for msg in messages]
-            except Exception as e:
-                print(f"按时间段查询消息失败: {e}")
-                return []
+    # async def query_messages_by_time_range(self, start_time: datetime, end_time: datetime,
+    #                                      limit: int = 100, offset: int = 0) -> List[MessageRecord]:
+    #     """按时间段查询消息"""
+    #     async with self.session_factory() as session:
+    #         try:
+    #             stmt = select(Message).where(
+    #                 and_(Message.timestamp >= start_time, Message.timestamp <= end_time)
+    #             ).order_by(desc(Message.timestamp)).limit(limit).offset(offset)
+    #             result = await session.execute(stmt)
+    #             messages = result.scalars().all()
+    #             return [MessageRecord.from_db_row(msg) for msg in messages]
+    #         except Exception as e:
+    #             print(f"按时间段查询消息失败: {e}")
+    #             return []
 
-    async def query_messages_by_user_id(self, user_id: str, limit: int = 100, offset: int = 0) -> List[MessageRecord]:
-        """按用户ID查询消息"""
-        async with self.session_factory() as session:
-            try:
-                stmt = select(Message).where(Message.user_id == user_id).order_by(desc(Message.timestamp)).limit(limit).offset(offset)
-                result = await session.execute(stmt)
-                messages = result.scalars().all()
-                return [MessageRecord.from_db_row(msg) for msg in messages]
-            except Exception as e:
-                print(f"按用户ID查询消息失败: {e}")
-                return []
+    # async def query_messages_by_user_id(self, user_id: str, limit: int = 100, offset: int = 0) -> List[MessageRecord]:
+    #     """按用户ID查询消息"""
+    #     async with self.session_factory() as session:
+    #         try:
+    #             stmt = select(Message).where(Message.user_id == user_id).order_by(desc(Message.timestamp)).limit(limit).offset(offset)
+    #             result = await session.execute(stmt)
+    #             messages = result.scalars().all()
+    #             return [MessageRecord.from_db_row(msg) for msg in messages]
+    #         except Exception as e:
+    #             print(f"按用户ID查询消息失败: {e}")
+    #             return []
 
-    async def query_messages_by_group_id(self, group_id: str, limit: int = 100, offset: int = 0) -> List[MessageRecord]:
-        """按群聊ID查询消息"""
-        async with self.session_factory() as session:
-            try:
-                stmt = select(Message).where(Message.group_id == group_id).order_by(desc(Message.timestamp)).limit(limit).offset(offset)
-                result = await session.execute(stmt)
-                messages = result.scalars().all()
-                return [MessageRecord.from_db_row(msg) for msg in messages]
-            except Exception as e:
-                print(f"按群聊ID查询消息失败: {e}")
-                return []
+    # async def query_messages_by_group_id(self, group_id: str, limit: int = 100, offset: int = 0) -> List[MessageRecord]:
+    #     """按群聊ID查询消息"""
+    #     async with self.session_factory() as session:
+    #         try:
+    #             stmt = select(Message).where(Message.group_id == group_id).order_by(desc(Message.timestamp)).limit(limit).offset(offset)
+    #             result = await session.execute(stmt)
+    #             messages = result.scalars().all()
+    #             return [MessageRecord.from_db_row(msg) for msg in messages]
+    #         except Exception as e:
+    #             print(f"按群聊ID查询消息失败: {e}")
+    #             return []
 
-    async def query_messages_by_keyword(self, keyword: str, limit: int = 100, offset: int = 0) -> List[MessageRecord]:
-        """查询包含关键字的消息（从raw_message中搜索）"""
-        async with self.session_factory() as session:
-            try:
-                stmt = select(Message).where(
-                    or_(
-                        Message.raw_message.contains(keyword),
-                        Message.message_content.contains(keyword)
-                    )
-                ).order_by(desc(Message.timestamp)).limit(limit).offset(offset)
-                result = await session.execute(stmt)
-                messages = result.scalars().all()
-                return [MessageRecord.from_db_row(msg) for msg in messages]
-            except Exception as e:
-                print(f"按关键字查询消息失败: {e}")
-                return []
+    # async def query_messages_by_keyword(self, keyword: str, limit: int = 100, offset: int = 0) -> List[MessageRecord]:
+    #     """查询包含关键字的消息（从raw_message中搜索）"""
+    #     async with self.session_factory() as session:
+    #         try:
+    #             stmt = select(Message).where(
+    #                 or_(
+    #                     Message.raw_message.contains(keyword),
+    #                     Message.message_content.contains(keyword)
+    #                 )
+    #             ).order_by(desc(Message.timestamp)).limit(limit).offset(offset)
+    #             result = await session.execute(stmt)
+    #             messages = result.scalars().all()
+    #             return [MessageRecord.from_db_row(msg) for msg in messages]
+    #         except Exception as e:
+    #             print(f"按关键字查询消息失败: {e}")
+    #             return []
 
-    async def query_messages_by_startswith(self, prefix: str, limit: int = 100, offset: int = 0) -> List[MessageRecord]:
-        """查询以指定词开头的消息"""
-        async with self.session_factory() as session:
-            try:
-                stmt = select(Message).where(
-                    or_(
-                        Message.raw_message.startswith(prefix),
-                        Message.message_content.startswith(prefix)
-                    )
-                ).order_by(desc(Message.timestamp)).limit(limit).offset(offset)
-                result = await session.execute(stmt)
-                messages = result.scalars().all()
-                return [MessageRecord.from_db_row(msg) for msg in messages]
-            except Exception as e:
-                print(f"按开头词查询消息失败: {e}")
-                return []
+    # async def query_messages_by_startswith(self, prefix: str, limit: int = 100, offset: int = 0) -> List[MessageRecord]:
+    #     """查询以指定词开头的消息"""
+    #     async with self.session_factory() as session:
+    #         try:
+    #             stmt = select(Message).where(
+    #                 or_(
+    #                     Message.raw_message.startswith(prefix),
+    #                     Message.message_content.startswith(prefix)
+    #                 )
+    #             ).order_by(desc(Message.timestamp)).limit(limit).offset(offset)
+    #             result = await session.execute(stmt)
+    #             messages = result.scalars().all()
+    #             return [MessageRecord.from_db_row(msg) for msg in messages]
+    #         except Exception as e:
+    #             print(f"按开头词查询消息失败: {e}")
+    #             return []
             
     def _build_message_conditions(self,
                                 self_id: Optional[str] = None,
@@ -292,7 +292,7 @@ class DatabaseManager:
                                     keyword_type: str = "and",
                                     prefix: str = None,
                                     direction: str = "SEND",
-                                    limit: int = 100,
+                                    limit: int = 20,
                                     offset: int = 0) -> List[MessageRecord]:
         """组合查询消息"""
         async with self.session_factory() as session:
@@ -399,6 +399,35 @@ class DatabaseManager:
                 return {self_id: count for self_id, count in rows if self_id}
             except Exception as e:
                 print(f"按 self_id 统计消息数量失败: {e}")
+                return {}
+            
+    async def count_messages_group_by_user_id(self,
+                                            self_id: str = None,
+                                            group_id: str = None,
+                                            start_time: int = None,
+                                            end_time: int = None,
+                                            keywords: List[str] = None,
+                                            keyword_type: str = "and",
+                                            prefix: str = None,
+                                            direction: str = "SEND") -> Dict[str, int]:
+        """按 user_id 分组统计消息数量"""
+        async with self.session_factory() as session:
+            try:
+                conditions = self._build_message_conditions(
+                    self_id, None, group_id, start_time, end_time,
+                    keywords, keyword_type, prefix, direction
+                )
+
+                stmt = select(Message.user_id, func.count(Message.id)).group_by(Message.user_id)
+                if conditions:
+                    stmt = stmt.where(and_(*conditions))
+
+                result = await session.execute(stmt)
+                rows = result.all()
+
+                return {user_id: count for user_id, count in rows if user_id}
+            except Exception as e:
+                print(f"按 user_id 统计消息数量失败: {e}")
                 return {}
 
 

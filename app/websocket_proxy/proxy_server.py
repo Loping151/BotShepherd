@@ -341,16 +341,17 @@ class ProxyConnection:
             async for message in target_ws:
                 await self._process_target_message(message, target_index)
         except websockets.exceptions.ConnectionClosed:
-            self.logger.info(f"[{self.connection_id}] 目标连接 {target_index} 已关闭。将在60秒内持续尝试重新连接。")
+            self.logger.info(f"[{self.connection_id}] 目标连接 {target_index} 已关闭。将在120秒内持续尝试重新连接。")
             lock = self.reconnect_locks[self.target_index2list_index(target_index)]
             if not lock.locked():
                 async with lock:
-                    for _ in range(60):
+                    for _ in range(120):
                         await asyncio.sleep(1)
                         try:
                             target_ws = await self._connect_to_target(self.config.get("target_endpoints", [])[self.target_index2list_index(target_index)], target_index)
                             await self._process_client_message(self.first_message) # 比如yunzai需要使用first Message重新注册
-                            self.logger.info(f"[{self.connection_id}] 目标连接 {target_index} 恢复成功，重新开始转发。")
+                            self.logger.info(f"[{self.connection_id}] 目标连接 {target_index} 恢复成功，5秒后重新开始转发。")
+                            await asyncio.sleep(5)
                             await self._forward_target_to_client(target_ws, target_index)
                         except Exception as e:
                             self.logger.warning(f"[{self.connection_id}] 尝试重连目标 {target_index} 失败: {e}")
@@ -438,7 +439,7 @@ class ProxyConnection:
                 )
             
             # 消息后处理
-            processed_message = await self._postprocess_message(message_data)
+            processed_message = await self._postprocess_message(message_data, self.self_id)
             
             if processed_message:
                 # 发送到客户端
@@ -456,9 +457,9 @@ class ProxyConnection:
         """消息预处理"""
         return await self.message_processor.preprocess_client_message(message_data)
 
-    async def _postprocess_message(self, message_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    async def _postprocess_message(self, message_data: Dict[str, Any], self_id: start_proxy) -> Optional[Dict[str, Any]]:
         """消息后处理"""
-        return await self.message_processor.postprocess_target_message(message_data)
+        return await self.message_processor.postprocess_target_message(message_data, self_id)
     
     def _construct_echo_info(self, message_data, target_index) -> str | None:
         echo = message_data.get("echo")
@@ -513,6 +514,8 @@ class ProxyConnection:
             return {}
         params = message_data.get("params", {})
         params.update({"self_id": self.self_id})
+        if "sender" not in params:
+            params.update({"sender": {"user_id": self.self_id, "nickname": "BS Bot"}})
         # 这个 message_sent 不是 napcat 那种修改的 Onebot，而是本框架数据库中的标识
         params.update({"post_type": "message_sent"})
         raw_message = MessageSegmentParser.message2raw_message(params.get("message", []))

@@ -217,6 +217,10 @@ class ConfigManager:
             config_file.unlink()
     
     # 账号配置相关方法
+    def get_all_account_configs(self) -> Dict[str, Dict[str, Any]]:
+        """获取所有账号配置"""
+        return self._account_configs.copy()
+    
     def get_account_config(self, account_id: str) -> Optional[Dict[str, Any]]:
         """获取账号配置"""
         return self._account_configs.get(account_id)
@@ -247,8 +251,32 @@ class ConfigManager:
             config["last_send_time"] = current_time
         
         await self.save_account_config(account_id, config)
+        
+    async def get_recently_active_accounts(self, hours: int = 24) -> List[Dict[str, Any]]:
+        """获取最近活跃的账号"""
+        cutoff_time = datetime.now() - timedelta(hours=hours)
+        
+        active_accounts = []
+        for account_id, config in self._account_configs.items():
+            last_receive_time = config.get("last_receive_time", "1970-01-01T00:00:00")
+            last_send_time = config.get("last_send_time", "1970-01-01T00:00:00")
+            if not last_receive_time or not last_send_time:
+                continue
+            
+            if datetime.fromisoformat(last_send_time) >= cutoff_time:
+                active_accounts.append({
+                    "account_id": account_id,
+                    "last_receive_time": last_receive_time,
+                    "last_send_time": last_send_time
+                })
+        
+        return active_accounts
     
     # 群组配置相关方法
+    def get_all_group_configs(self) -> Dict[str, Dict[str, Any]]:
+        """获取所有群组配置"""
+        return self._group_configs.copy()
+    
     def get_group_config(self, group_id: str) -> Optional[Dict[str, Any]]:
         """获取群组配置"""
         return self._group_configs.get(group_id)
@@ -294,6 +322,24 @@ class ConfigManager:
         # 更新最后消息时间
         config["last_message_time"] = datetime.now().isoformat()
         await self.save_group_config(group_id, config)
+        
+        
+    async def get_recently_active_groups(self, hours: int = 24) -> List[Dict[str, Any]]:
+        """获取最近活跃的群组"""
+        cutoff_time = datetime.now() - timedelta(hours=hours)
+        
+        active_groups = []
+        for group_id, config in self._group_configs.items():
+            last_message_time = config.get("last_message_time", "1970-01-01T00:00:00")
+            if not last_message_time:
+                continue
+            if datetime.fromisoformat(last_message_time) >= cutoff_time:
+                active_groups.append({
+                    "group_id": group_id,
+                    "last_message_time": last_message_time
+                })
+        
+        return active_groups
 
     async def set_group_expire_time(self, group_id: str, expire_days: int):
         """设置群组到期时间"""
@@ -416,6 +462,19 @@ class ConfigManager:
             user_id = str(user_id)
         superusers = self.get_superuser()
         return user_id in superusers
+    
+    # 别名管理
+    async def add_global_alias(self, alias: str, target: str):
+        """添加全局别名"""
+        aliases = self._global_config.get("global_aliases", {})
+        if alias not in aliases:
+            aliases[alias] = []
+        if target not in aliases[alias]:
+            aliases[alias].append(target)
+            self._global_config["global_aliases"] = aliases
+            await self._save_global_config()
+            
+    ### 正在写别名！！！！！！！！
 
     # 过滤词管理
     async def add_global_filter(self, filter_type: str, word: str):
@@ -442,6 +501,11 @@ class ConfigManager:
             filters[filter_type].remove(word)
             self._global_config["global_filters"] = filters
             await self._save_global_config()
+            
+    async def list_global_filters(self) -> Dict[str, List[str]]:
+        """列出全局过滤词"""
+        filters = self._global_config.get("global_filters", {})
+        return filters
 
     async def add_group_filter(self, group_id: str, filter_level: str, word: str):
         """添加群组过滤词"""
@@ -475,6 +539,15 @@ class ConfigManager:
             filters[filter_level].remove(word)
             config["filters"] = filters
             await self.save_group_config(group_id, config)
+            
+    async def list_group_filters(self, group_id: str) -> Dict[str, List[str]]:
+        """列出群组过滤词"""
+        config = self.get_group_config(group_id)
+        if not config:
+            return {}
+
+        filters = config.get("filters", {})
+        return filters
 
     # 配置验证
     def validate_connection_config(self, config: Dict[str, Any]) -> bool:

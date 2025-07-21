@@ -24,7 +24,7 @@ class CommandResult(Enum):
 class CommandResponse:
     """指令响应"""
     result: CommandResult
-    message: str
+    message: str | list
     data: Optional[Dict[str, Any]] = None
     reply_to_message: bool = True
     use_forward:bool = False
@@ -100,7 +100,7 @@ class BaseCommand(ABC):
         
         return None
     
-    def format_response(self, message: str, result: CommandResult = CommandResult.SUCCESS,
+    def format_response(self, message: str | list, result: CommandResult = CommandResult.SUCCESS,
                        data: Optional[Dict[str, Any]] = None,
                        reply_to_message: bool = True,
                        use_forward: bool = False,
@@ -111,7 +111,7 @@ class BaseCommand(ABC):
             message=message,
             data=data,
             reply_to_message=reply_to_message if not use_forward else False,
-            use_forward=use_forward,
+            use_forward=use_forward or isinstance(message, list),
             private_reply=private_reply
         )
     

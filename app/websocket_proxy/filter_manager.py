@@ -7,7 +7,7 @@ import re
 from typing import Dict, Any, Optional, List, Tuple
 from enum import Enum
 
-from ..onebotv11.models import Event, MessageEvent, PrivateMessageEvent, GroupMessageEvent
+from ..onebotv11.models import ApiRequest, Event, MessageEvent, MessageSegmentType, PrivateMessageEvent, GroupMessageEvent
 from ..onebotv11.message_segment import MessageSegmentParser
 from ..commands.permission_manager import PermissionManager, PermissionLevel
 
@@ -34,7 +34,7 @@ class FilterManager:
         self.logger = logger
     
     async def filter_receive_message(self, event: Event, 
-                                   message_data: Dict[str, Any]) -> Tuple[bool, str, Dict[str, Any]]:
+                                   message_data: Dict[str, Any]) -> bool:
         """过滤接收消息 True表示被过滤"""
         try:
             
@@ -57,25 +57,23 @@ class FilterManager:
             return True
     
     async def filter_send_message(self, event: Event, 
-                                message_data: Dict[str, Any]) -> Tuple[bool, str, Dict[str, Any]]:
+                                message_data: Dict[str, Any]) -> Dict[str, Any] | None:
         """过滤发送消息"""
         try:
             # 检查全局发送过滤词
-            if isinstance(event, (PrivateMessageEvent, GroupMessageEvent)):
-                filtered, reason, modified_data = await self._apply_global_send_filters(event, message_data)
-                if not filtered:
-                    return False, reason, modified_data
-                message_data = modified_data
+            if isinstance(event, ApiRequest):
+                filtered = await self._apply_global_send_filters(event, message_data)
+                if filtered:
+                    return None
                 
-                # 检查前缀保护
-                filtered, reason, modified_data = await self._apply_prefix_protection(event, message_data)
+                modified_data = await self._apply_prefix_protection(event, message_data)
                 message_data = modified_data
             
-            return True, "通过过滤", message_data
+            return message_data
             
         except Exception as e:
-            self.logger.error(f"过滤发送消息失败: {e}")
-            return True, "过滤器错误，默认通过", message_data
+            self.logger.error(f"过滤发送消息失败: {e}，将拦截！")
+            return None
     
     async def _apply_global_receive_filters(self, event: Event, 
                                           message_data: Dict[str, Any]) -> bool:
@@ -103,18 +101,18 @@ class FilterManager:
         return False
     
     async def _apply_global_send_filters(self, event: Event, 
-                                       message_data: Dict[str, Any]) -> Tuple[bool, str, Dict[str, Any]]:
+                                       message_data: Dict[str, Any]) -> bool:
         """应用全局发送过滤词"""
         global_config = self.config_manager.get_global_config()
         send_filters = global_config.get("global_filters", {}).get("send_filters", [])
         
         if not send_filters:
-            return True, "无过滤词", message_data
+            return False
         
         # 提取消息文本
-        message_text = self._extract_message_text(message_data)
+        message_text = self._extract_message_text(message_data.get("params", {}))
         if not message_text:
-            return True, "无文本内容", message_data
+            return False
         
         # 检查过滤词
         for filter_word in send_filters:
@@ -123,39 +121,34 @@ class FilterManager:
                     event, FilterType.SEND_FILTER, 
                     f"包含全局发送过滤词: {filter_word}", FilterAction.BLOCK
                 )
-                return False, f"包含发送过滤词: {filter_word}", message_data
+                return True
         
-        return True, "通过全局发送过滤", message_data
+        return False
     
     async def _apply_prefix_protection(self, event: Event, 
-                                     message_data: Dict[str, Any]) -> Tuple[bool, str, Dict[str, Any]]:
+                                     message_data: Dict[str, Any]) -> Dict[str, Any]:
         """应用前缀保护"""
         global_config = self.config_manager.get_global_config()
         prefix_protections = global_config.get("global_filters", {}).get("prefix_protections", [])
         
-        if not prefix_protections:
-            return True, "无前缀保护", message_data
-        
-        # 提取消息文本
-        message_text = self._extract_message_text(message_data)
-        if not message_text:
-            return True, "无文本内容", message_data
+        if not prefix_protections or not message_data.get("params", {}).get("message"):
+            return message_data
         
         # 检查保护前缀
         for prefix in prefix_protections:
-            if message_text.startswith(prefix):
-                # 在消息前添加保护标识
-                protected_text = f"[禁止诱导触发]{message_text}"
-                modified_data = self._modify_message_text(message_data, protected_text)
-                
-                await self._log_filter_action(
-                    event, FilterType.PREFIX_PROTECTION, 
-                    f"触发前缀保护: {prefix}", FilterAction.MODIFY
-                )
-                
-                return True, f"应用前缀保护: {prefix}", modified_data
-        
-        return True, "通过前缀保护", message_data
+            for idx , item in enumerate(message_data.get("params", {}).get("message")):
+                t, text = item.get("type"), item.get("data", {}).get("text", "")
+                if t == MessageSegmentType.TEXT:
+                    if text.startswith(prefix):
+                        message_data["params"]["message"][idx]["data"]["text"] = f"[禁止诱导触发]{text}"
+                        await self._log_filter_action(
+                            event, FilterType.PREFIX_PROTECTION, 
+                            f"触发前缀保护: {prefix}", FilterAction.MODIFY
+                        )
+                        return message_data
+                    break
+                        
+        return message_data
     
     async def _apply_group_filters(self, event: GroupMessageEvent, 
                                  message_data: Dict[str, Any]) -> bool:
@@ -243,7 +236,7 @@ class FilterManager:
         try:
             log_info = {
                 "self_id": getattr(event, 'self_id', None),
-                "user_id": event.user_id,
+                "user_id": event.params.get("user_id"),
                 "filter_type": filter_type.value,
                 "reason": reason,
                 "action": action.value

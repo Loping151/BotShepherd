@@ -396,6 +396,8 @@ class MessageSegmentParser:
                 for key in ["file", "sub_type", "url", "file_size", "summary"]:
                     if key in segment.data and segment.data[key] is not None:
                         value = MessageSegmentParser._escape_cq_param(str(segment.data[key]))
+                        if value.startswith("base64://"):
+                            value = "base64://..."
                         params.append(f"{key}={value}")
                 result_parts.append(f"[CQ:image,{','.join(params)}]")
 
@@ -405,6 +407,8 @@ class MessageSegmentParser:
                 for key in ["file", "magic", "url", "cache", "proxy", "timeout"]:
                     if key in segment.data and segment.data[key] is not None:
                         value = MessageSegmentParser._escape_cq_param(str(segment.data[key]))
+                        if value.startswith("base64://"):
+                            value = "base64://..."
                         params.append(f"{key}={value}")
                 result_parts.append(f"[CQ:record,{','.join(params)}]")
 
@@ -414,6 +418,8 @@ class MessageSegmentParser:
                 for key in ["file", "url", "cache", "proxy", "timeout"]:
                     if key in segment.data and segment.data[key] is not None:
                         value = MessageSegmentParser._escape_cq_param(str(segment.data[key]))
+                        if value.startswith("base64://"):
+                            value = "base64://..."
                         params.append(f"{key}={value}")
                 result_parts.append(f"[CQ:video,{','.join(params)}]")
 
