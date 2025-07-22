@@ -19,7 +19,7 @@ class ApiHandler:
         if isinstance(message, str):
             message_data = [{"type": "text", "data": {"text": message}}]
         else:
-            message_data = [seg.model_dump() for seg in message]
+            message_data = [seg.model_dump() if isinstance(seg, MessageSegment) else {"type": "text", "data": {"text": seg}} for seg in message]
         
         return ApiRequest(
             action="send_private_msg",
@@ -40,7 +40,7 @@ class ApiHandler:
             if isinstance(message, str):
                 message_data.append({"type": "text", "data": {"text": message}})
             else:
-                message_data.append({"type": "node", "data": {"content": [seg.model_dump() for seg in message]}})
+                message_data.append({"type": "node", "data": {"content": [seg.model_dump() if isinstance(seg, MessageSegment) else {"type": "text", "data": {"text": seg}} for seg in message]}})
         
         return ApiRequest(
             action="send_private_forward_msg",
@@ -59,7 +59,7 @@ class ApiHandler:
         if isinstance(message, str):
             message_data = [{"type": "text", "data": {"text": message}}]
         else:
-            message_data = [seg.model_dump() for seg in message]
+            message_data = [seg.model_dump() if isinstance(seg, MessageSegment) else {"type": "text", "data": {"text": seg}} for seg in message]
         
         return ApiRequest(
             action="send_group_msg",
@@ -80,7 +80,7 @@ class ApiHandler:
             if isinstance(message, str):
                 message_data.append({"type": "text", "data": {"text": message}})
             else:
-                message_data.append({"type": "node", "data": {"content": [seg.model_dump() for seg in message]}})
+                message_data.append({"type": "node", "data": {"content": [seg.model_dump() if isinstance(seg, MessageSegment) else {"type": "text", "data": {"text": seg}} for seg in message]}})
         
         return ApiRequest(
             action="send_group_forward_msg",
@@ -101,7 +101,7 @@ class ApiHandler:
         if isinstance(message, str):
             message_data = [{"type": "text", "data": {"text": message}}]
         else:
-            message_data = [seg.model_dump() for seg in message]
+            message_data = [seg.model_dump() if isinstance(seg, MessageSegment) else {"type": "text", "data": {"text": seg}} for seg in message]
         
         params = {
             "message_type": message_type,

@@ -236,6 +236,8 @@ class MessageProcessor:
                 return # 暂时不记录其他类型
             
             # 生成内容摘要
+            if "params" in message_data:
+                message_data = message_data["params"]
             if "message" in message_data:
                 if isinstance(message_data["message"], list):
                     # 提取文本内容

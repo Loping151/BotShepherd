@@ -27,7 +27,7 @@ class CommandResponse:
     message: str | list
     data: Optional[Dict[str, Any]] = None
     reply_to_message: bool = True
-    use_forward:bool = False
+    use_forward: bool = False
     private_reply: bool = False
 
 class BaseCommand(ABC):
@@ -111,7 +111,7 @@ class BaseCommand(ABC):
             message=message,
             data=data,
             reply_to_message=reply_to_message if not use_forward else False,
-            use_forward=use_forward or isinstance(message, list),
+            use_forward=use_forward,
             private_reply=private_reply
         )
     

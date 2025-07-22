@@ -7,7 +7,7 @@ import asyncio
 from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime, timezone
 
-from ..onebotv11.models import Event, MessageSegmentType, PrivateMessageEvent, GroupMessageEvent
+from ..onebotv11.models import Event, MessageSegment, MessageSegmentType, PrivateMessageEvent, GroupMessageEvent
 from ..onebotv11.message_segment import MessageSegmentParser, MessageSegmentBuilder
 from ..onebotv11.api_handler import ApiHandler
 from .permission_manager import PermissionManager
@@ -225,7 +225,10 @@ class CommandHandler:
             # 处理响应文本，支持多段
             if isinstance(response.message, list):
                 for msg in response.message:
-                    message_segments.append(MessageSegmentBuilder.text(msg))
+                    if isinstance(msg, MessageSegment):
+                        message_segments.append(msg)
+                    else:
+                        message_segments.append(MessageSegmentBuilder.text(msg))
             else:
                 message_segments.append(MessageSegmentBuilder.text(response.message))
             
