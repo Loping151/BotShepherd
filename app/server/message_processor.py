@@ -10,7 +10,6 @@ from datetime import datetime
 from ..onebotv11 import EventParser, MessageNormalizer
 from ..onebotv11.models import ApiRequest, Event, MessageEvent, PrivateMessageEvent, GroupMessageEvent, MessageSegment
 from ..onebotv11.message_segment import MessageSegmentParser
-from ..utils.logger import log_message_flat
 from ..commands.permission_manager import PermissionManager
 from .filter_manager import FilterManager
 
@@ -234,6 +233,7 @@ class MessageProcessor:
                 msg_type = f"REQUEST_{request_type}"
             else:
                 msg_type = post_type.upper()
+                return # 暂时不记录其他类型
             
             # 生成内容摘要
             if "message" in message_data:
@@ -245,10 +245,14 @@ class MessageProcessor:
                         if isinstance(segment, dict):
                             if segment.get("type") == "text":
                                 text_parts.append(segment.get("data", {}).get("text", ""))
+                            else:
+                                text_parts.append(str(segment)[:1000])
                         # 处理MessageSegment对象
                         elif hasattr(segment, 'type') and hasattr(segment, 'data'):
                             if segment.type == "text":
                                 text_parts.append(segment.data.get("text", ""))
+                            else:
+                                text_parts.append(str(segment)[:1000])
                     content_summary = "".join(text_parts)[:100]
                 else:
                     content_summary = str(message_data["message"])[:100]
@@ -269,7 +273,7 @@ class MessageProcessor:
             extra_str = " ".join(extra_info) if extra_info else ""
             
             # 记录扁平化日志
-            log_message_flat(
+            self.logger.log_message(
                 direction=f"{direction}_{stage}",
                 message_type=msg_type,
                 content_summary=content_summary,
@@ -292,16 +296,20 @@ class MessageProcessor:
     async def _apply_aliases(self, message_data: Dict[str, Any], aliases: Dict[str, List[str]]) -> Dict[str, Any]:
         # 处理消息段
         modified = False
-        for segment in message_data["message"]:
+        for sid, segment in enumerate(message_data["message"]):
             if segment.get("type") == "text":
                 text = segment.get("data", {}).get("text", "")
                 # 检查是否匹配别名
                 for target, alias_list in aliases.items():
+                    if text.startswith(target) and target not in alias_list: # 旁路原名
+                        message_data["message"][sid]["data"]["text"] = text.replace(target, "", 1)
+                        modified = True
+                        break
                     for alias in alias_list:
                         if text.startswith(alias):
                             # 替换别名
                             new_text = target + text[len(alias):]
-                            segment["data"]["text"] = new_text
+                            message_data["message"][sid]["data"]["text"] = new_text
                             modified = True
                             break
                     if modified:

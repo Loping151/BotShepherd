@@ -4,9 +4,9 @@
 """
 
 from typing import Dict, Any, List
-from ..onebotv11.models import Event
-from .permission_manager import PermissionLevel
-from .base_command import BaseCommand, CommandResponse, CommandResult, command_registry
+from ...onebotv11.models import Event
+from ..permission_manager import PermissionLevel
+from ..base_command import BaseCommand, CommandResponse, CommandResult, command_registry
 from datetime import datetime, timedelta
 from datetime import timezone
 
@@ -21,7 +21,7 @@ class SumCommand(BaseCommand):
         self.example = """
     统计 -d 2025-07-21
     统计 -k 草 -t all
-    统计 -c ww -t recv
+    统计 -g 本群
     统计 --all"""
         self.aliases = ["sum", "summary"]
         self.required_permission = PermissionLevel.ADMIN # 此处ADMIN只能查看本群数据
@@ -30,7 +30,7 @@ class SumCommand(BaseCommand):
         """设置参数解析器"""
         super()._setup_parser()
         self.parser.add_argument("-d", "--date", type=str, help="指定日期，如 昨天, 2024-06-01，默认今天")
-        self.parser.add_argument("-g", "--group", type=str, help="可跟群号，传入all时按群统计")
+        self.parser.add_argument("-g", "--group", type=str, help="可跟群号，传入all时按群统计，可填写“本群”")
         self.parser.add_argument("-u", "--user", type=str, help="指定用户QQ号")
         self.parser.add_argument("-c", "--command", type=str, help="指定指令前缀")
         self.parser.add_argument("-k", "--keyword", type=str, help="指定关键词，+隔开为and查询，|隔开为or查询")
@@ -75,6 +75,11 @@ class SumCommand(BaseCommand):
                     return self.format_error("非主人，仅支持群管在群聊中查询")
             elif parsed_args.group:
                 group = parsed_args.group
+                if group in ["本群", "此群", "你群"]:
+                    if hasattr(event, "group_id"):
+                        group = str(event.group_id)
+                    else:
+                        group = None
             else:
                 group = None
                 
@@ -135,7 +140,7 @@ class SumCommand(BaseCommand):
             return self.format_error(f"获取统计信息失败: {e}")
         
     async def basic_query(self, event: Event, database_manager) -> CommandResponse:
-        """基础统计信息"""
+        """基础统计信息，是私聊群聊总发送量"""
         try:
             result = f"当前账号：{event.self_id}\n🕒 当前时间：{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')}\n\n📊 统计结果：\n"
             
@@ -354,11 +359,11 @@ class QueryCommand(BaseCommand):
     
     def __init__(self):
         super().__init__()
-        self.name = "查询"
-        self.description = "基于数据库的消息查询"
+        self.name = "搜索"
+        self.description = "基于数据库的消息搜索"
         self.usage = ""
         self.example = """
-查询 -g 123 -k 你好"""
+搜索 -g 123 -k 你好"""
         self.aliases = ["query", "查询", "q"]
         self.required_permission = PermissionLevel.SUPERUSER # 此处ADMIN只能查看本群数据
     
@@ -375,7 +380,6 @@ class QueryCommand(BaseCommand):
     async def execute(self, event: Event, args: List[str], context: Dict[str, Any]) -> CommandResponse:
         """执行查询指令"""
         try:
-            config_manager = context["config_manager"]
             database_manager = context["database_manager"]
 
             if not args:
@@ -476,9 +480,9 @@ class QueryCommand(BaseCommand):
             result += f"\n📊 统计结果：\n"
             
             q_result = await database_manager.query_messages_combined(group_id=group, user_id=user, prefix=command, keywords=keywords, keyword_type=keyword_type, direction=direction, limit=limit)
-            for record in q_result:
-                time_str = datetime.fromtimestamp(record.timestamp, tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
-                result += f"{time_str} {record.self_id}|用户{record.user_id}于群{record.group_id}发送：{record.message_content}\n"
+            for record in q_result[1:]: # 因为第一条一定是刚刚写入的查询消息
+                time_str = datetime.fromtimestamp(record.timestamp, tz=timezone.utc).strftime('%Y-%m-%d %H:%M')
+                result += f"{time_str} {record.self_id}|{record.user_id if not record.sender_info.get("nickname") else record.sender_info['nickname'] + '(' + str(record.user_id) + ')'}{"于群" + str(record.group_id) if record.group_id else '私聊'}发送：{record.message_content}\n"
                 
                 if len(result) > 2000:
                     result_list.append(result)
@@ -496,7 +500,9 @@ class QueryCommand(BaseCommand):
         
 # 注册指令
 def register_query_commands():
-    """注册基础指令"""
+    """注册指令"""
     command_registry.register(SumCommand())
     command_registry.register(RankCommand())
     command_registry.register(QueryCommand())
+    
+register_query_commands()

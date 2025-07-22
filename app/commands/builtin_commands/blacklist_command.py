@@ -4,9 +4,9 @@
 """
 
 from typing import Dict, Any, List
-from ..onebotv11.models import Event, GroupMessageEvent
-from .permission_manager import PermissionLevel
-from .base_command import BaseCommand, CommandResponse, CommandResult, command_registry
+from ...onebotv11.models import Event, GroupMessageEvent
+from ..permission_manager import PermissionLevel
+from ..base_command import BaseCommand, CommandResponse, CommandResult, command_registry
 
 class BlacklistCommand(BaseCommand):
     """黑名单管理指令"""
@@ -268,3 +268,5 @@ def register_blacklist_commands():
     """注册黑名单管理指令"""
     command_registry.register(BlacklistCommand())
     command_registry.register(QuickBlacklistCommand())
+
+register_blacklist_commands()

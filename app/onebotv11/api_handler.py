@@ -17,9 +17,9 @@ class ApiHandler:
                                       auto_escape: bool = False) -> ApiRequest:
         """创建发送私聊消息请求"""
         if isinstance(message, str):
-            message_data = message
+            message_data = [{"type": "text", "data": {"text": message}}]
         else:
-            message_data = [seg.dict() for seg in message]
+            message_data = [seg.model_dump() for seg in message]
         
         return ApiRequest(
             action="send_private_msg",
@@ -40,7 +40,7 @@ class ApiHandler:
             if isinstance(message, str):
                 message_data.append({"type": "text", "data": {"text": message}})
             else:
-                message_data.append({"type": "node", "data": {"content": [seg.dict() for seg in message]}})
+                message_data.append({"type": "node", "data": {"content": [seg.model_dump() for seg in message]}})
         
         return ApiRequest(
             action="send_private_forward_msg",
@@ -57,9 +57,9 @@ class ApiHandler:
                                     auto_escape: bool = False) -> ApiRequest:
         """创建发送群消息请求"""
         if isinstance(message, str):
-            message_data = message
+            message_data = [{"type": "text", "data": {"text": message}}]
         else:
-            message_data = [seg.dict() for seg in message]
+            message_data = [seg.model_dump() for seg in message]
         
         return ApiRequest(
             action="send_group_msg",
@@ -80,7 +80,7 @@ class ApiHandler:
             if isinstance(message, str):
                 message_data.append({"type": "text", "data": {"text": message}})
             else:
-                message_data.append({"type": "node", "data": {"content": [seg.dict() for seg in message]}})
+                message_data.append({"type": "node", "data": {"content": [seg.model_dump() for seg in message]}})
         
         return ApiRequest(
             action="send_group_forward_msg",
@@ -99,9 +99,9 @@ class ApiHandler:
                               auto_escape: bool = False) -> ApiRequest:
         """创建发送消息请求（通用）"""
         if isinstance(message, str):
-            message_data = message
+            message_data = [{"type": "text", "data": {"text": message}}]
         else:
-            message_data = [seg.dict() for seg in message]
+            message_data = [seg.model_dump() for seg in message]
         
         params = {
             "message_type": message_type,
@@ -116,7 +116,7 @@ class ApiHandler:
         
         return ApiRequest(
             action="send_msg",
-            params=params.get,
+            params=params,
             echo=uuid.uuid4().hex
         )
     

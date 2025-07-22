@@ -5,9 +5,9 @@
 
 import psutil
 from typing import Dict, Any, List
-from ..onebotv11.models import Event
-from .permission_manager import PermissionLevel
-from .base_command import BaseCommand, CommandResponse, CommandResult, command_registry
+from ...onebotv11.models import Event
+from ..permission_manager import PermissionLevel
+from ..base_command import BaseCommand, CommandResponse, CommandResult, command_registry
 
 class HelpCommand(BaseCommand):
     """帮助指令"""
@@ -244,8 +244,10 @@ class EchoCommand(BaseCommand):
 
 # 注册指令
 def register_basic_commands():
-    """注册基础指令"""
+    """注册指令"""
     command_registry.register(HelpCommand())
     command_registry.register(StatusCommand())
     command_registry.register(PINGCommand())
     command_registry.register(EchoCommand())
+
+register_basic_commands()

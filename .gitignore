@@ -3,3 +3,5 @@ logs
 __pycache__
 *.json
 devnote.md
+*.png
+*.jpg

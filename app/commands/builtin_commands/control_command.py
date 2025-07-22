@@ -2,9 +2,10 @@ import asyncio
 import os
 import sys
 from typing import Dict, Any, List
-from ..onebotv11.models import Event
-from .permission_manager import PermissionLevel
-from .base_command import BaseCommand, CommandResponse, CommandResult, command_registry
+from ...onebotv11.models import Event
+from ...utils.reboot import reboot
+from ..permission_manager import PermissionLevel
+from ..base_command import BaseCommand, CommandResponse, CommandResult, command_registry
 
 class RestartCommand(BaseCommand):
     """重启指令"""
@@ -24,14 +25,9 @@ class RestartCommand(BaseCommand):
     async def execute(self, event: Event, args: List[str], context: Dict[str, Any]) -> CommandResponse:
         """执行重启指令"""
         try:
-            # 定义一个在后台执行重启的异步函数
-            async def _do_restart():
-                await asyncio.sleep(3)
-                os.execv(sys.executable, ['python'] + sys.argv)
-
             # 创建一个后台任务来执行重启逻辑，这样不会阻塞当前响应
             loop = asyncio.get_event_loop()
-            loop.create_task(_do_restart())
+            loop.create_task(reboot(event, wait_seconds = 3))
             
             # 立即返回一个消息，告知用户重启指令已收到
             return self.format_info("将在3秒后重启...")
@@ -76,7 +72,7 @@ class FilterCommand(BaseCommand):
         try:
             parsed_args = self.parse_args(args)
             if isinstance(parsed_args, str):
-                return self.format_error(parsed_args, CommandResult.INVALID_ARGS)
+                return self.format_error(parsed_args, CommandResult.INVALID_ARGS, use_forward=True)
             if not hasattr(event, "group_id"):
                 return self.format_error("仅支持在群聊中使用")
             
@@ -143,7 +139,7 @@ class FilterCommand(BaseCommand):
 
 
 class GlobalFilterCommand(BaseCommand):
-    """全局过滤管理指令"""
+    """全局过滤管理指令，其中前缀保护和发送过滤请在配置文件或控制台管理"""
     
     def __init__(self):
         super().__init__()
@@ -177,7 +173,7 @@ class GlobalFilterCommand(BaseCommand):
         try:
             parsed_args = self.parse_args(args)
             if isinstance(parsed_args, str):
-                return self.format_error(parsed_args, CommandResult.INVALID_ARGS)
+                return self.format_error(parsed_args, CommandResult.INVALID_ARGS, use_forward=True)
             
             config_manager = context["config_manager"]
                         
@@ -235,3 +231,5 @@ def register_control_commands():
     command_registry.register(RestartCommand())
     command_registry.register(FilterCommand())
     command_registry.register(GlobalFilterCommand())
+
+register_control_commands()

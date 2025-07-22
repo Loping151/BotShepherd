@@ -269,7 +269,7 @@ class ApiRequest(BaseModel):
     """API请求"""
     action: str = Field(..., description="API动作")
     params: Dict[str, Any] = Field(default_factory=dict, description="参数")
-    echo: Optional[str] = Field(None, description="回声")
+    echo: Optional[str|dict] = Field(None, description="回声")
 
 class ApiResponse(BaseModel):
     """API响应"""
@@ -278,7 +278,7 @@ class ApiResponse(BaseModel):
     data: Optional[Dict[str, Any]|List[Dict[str, Any]]] = Field(None, description="数据")
     message: Optional[str] = Field(None, description="信息")
     wording: Optional[str] = Field(None, description="暂时不知道是什么")
-    echo: Optional[str] = Field(None, description="回声")
+    echo: Optional[str|dict] = Field(None, description="回声")
 
 # 联合类型
 Event = Union[

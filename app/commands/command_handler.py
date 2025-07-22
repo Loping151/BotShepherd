@@ -7,7 +7,7 @@ import asyncio
 from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime, timezone
 
-from ..onebotv11.models import Event, PrivateMessageEvent, GroupMessageEvent
+from ..onebotv11.models import Event, MessageSegmentType, PrivateMessageEvent, GroupMessageEvent
 from ..onebotv11.message_segment import MessageSegmentParser, MessageSegmentBuilder
 from ..onebotv11.api_handler import ApiHandler
 from .permission_manager import PermissionManager
@@ -22,6 +22,57 @@ class CommandHandler:
         self.permission_manager = PermissionManager(config_manager, logger)
         self.logger = logger
         
+        
+    async def preprocesser(self, message_data: dict) -> dict:
+        """预处理消息数据"""
+        try:
+            # 仅超级用户允许执行
+            if not "user_id" in message_data or not self.config_manager.is_superuser(message_data.get("user_id")):
+                return message_data
+            
+            global_config = self.config_manager.get_global_config()
+            trigger_prefix = global_config.get("trigger_prefix", "")
+            if not trigger_prefix:
+                return message_data
+            
+            at_id = None
+            for message_seg in message_data.get("message", []):
+                if message_seg["type"] == "at" and message_seg["data"]["qq"] != "all":
+                    at_id = message_seg["data"]["qq"]
+            
+            for message_seg in message_data.get("message", []):
+                if message_seg["type"] == "text" and message_seg["data"]["text"].startswith(trigger_prefix):
+                    # 触发指令
+                    args = message_seg["data"]["text"][len(trigger_prefix):].strip()
+                    if " " not in args and not at_id:
+                        raise ValueError("触发指令需要至少两个参数：id 和 指令名称")
+                    
+                    self.logger.command.info(f"使用触发指令: {args}")
+                    if at_id:
+                        user_id, command = at_id, args
+                    else:
+                        user_id, command = args.split(maxsplit=1)
+                        
+                    if not user_id.isdigit():
+                        raise ValueError("触发指令的用户ID必须是数字")
+                    
+                    message_data["user_id"] = user_id
+                    if "sender" in message_data:
+                        message_data["sender"]["user_id"] = user_id
+                        message_data["sender"]["nickname"] = "被触发用户"
+                        message_data["sender"]["role"] = "member"
+                    message_data["message"] = [{"type": "text", "data": {"text": command}}]
+                    message_data["raw_message"] = command
+                    break
+            
+            return message_data
+            
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            self.logger.command.error(f"预处理器配置错误: {e}")
+            return message_data
+        
     
     async def handle_message(self, event: Event) -> Optional[Dict[str, Any]]:
         """处理消息中的指令"""
@@ -35,6 +86,10 @@ class CommandHandler:
             if not command_info:
                 return None
             
+            # 检查是否 at 别人
+            if await self._check_at_other(event):
+                return None
+            
             # 执行指令
             response = await self._execute_command(event, command_info)
             if not response:
@@ -44,7 +99,7 @@ class CommandHandler:
             return await self._generate_reply(event, response)
             
         except Exception as e:
-            self.logger.error(f"处理指令失败: {e}")
+            self.logger.command.error(f"处理指令失败: {e}")
             return None
     
     async def _extract_command_info(self, event: Event) -> Optional[Dict[str, Any]]:
@@ -70,6 +125,15 @@ class CommandHandler:
             "prefix": command_prefix
         }
     
+    async def _check_at_other(self, event: Event) -> bool:
+        """检查是否 at 别人"""
+        global_config = self.config_manager.get_global_config()
+        if global_config.get("command_ignore_at_other", True):
+            for message_seg in event.message:
+                if message_seg.type == MessageSegmentType.AT and message_seg.data["qq"] != str(event.self_id):
+                    return True
+        return False
+    
     async def _execute_command(self, event: Event, command_info: Dict[str, Any]) -> Optional[CommandResponse]:
         """执行指令"""
         command_name = command_info["command_name"]
@@ -85,7 +149,7 @@ class CommandHandler:
                         message=f"未找到指令: {command_name}\n使用 {command_info['prefix']}帮助 查看可用指令"
                     )
                 else:
-                    return
+                    return None
             
             # 检查指令是否启用
             if not command.enabled:
@@ -105,7 +169,7 @@ class CommandHandler:
             # 检查权限
             permission_check = await self._check_command_permission(event, command)
             if not permission_check[0]:
-                return
+                return None
                 # return CommandResponse(
                 #     result=CommandResult.PERMISSION_DENIED,
                 #     message=permission_check[1]
@@ -130,7 +194,7 @@ class CommandHandler:
             return response
             
         except Exception as e:
-            self.logger.error(f"执行指令失败 {command_name}: {e}")
+            self.logger.command.error(f"执行指令失败 {command_name}: {e}")
             
             return CommandResponse(
                 result=CommandResult.ERROR,
@@ -205,10 +269,10 @@ class CommandHandler:
                         message=message_segments
                     )
             
-            return api_request.dict()
+            return api_request.model_dump()
             
         except Exception as e:
-            self.logger.error(f"生成回复消息失败: {e}")
+            self.logger.command.error(f"生成回复消息失败: {e}")
             return None
     
     async def _log_command_execution(self, event: Event, command: BaseCommand, 
@@ -228,12 +292,12 @@ class CommandHandler:
                 log_info["group_id"] = event.group_id
             
             if response.result == CommandResult.SUCCESS:
-                self.logger.info(f"指令执行成功: {log_info}")
+                self.logger.command.info(f"指令执行成功: {log_info}")
             else:
-                self.logger.warning(f"指令执行失败: {log_info}")
+                self.logger.command.warning(f"指令执行失败: {log_info}")
                 
         except Exception as e:
-            self.logger.error(f"记录指令执行日志失败: {e}")
+            self.logger.command.error(f"记录指令执行日志失败: {e}")
     
     
     def get_available_commands(self, event: Event) -> List[BaseCommand]:

@@ -149,7 +149,7 @@ class WebServer:
                 )
                 return jsonify({'success': True})
             except Exception as e:
-                self.logger.error(f"更新连接配置失败: {e}")
+                self.logger.web.error(f"更新连接配置失败: {e}")
                 return jsonify({'error': f'更新连接配置失败: {str(e)}'}), 500
         
         @self.app.route('/api/global-config')
@@ -174,7 +174,7 @@ class WebServer:
                 )
                 return jsonify({'success': True})
             except Exception as e:
-                self.logger.error(f"更新全局配置失败: {e}")
+                self.logger.web.error(f"更新全局配置失败: {e}")
                 return jsonify({'error': f'更新全局配置失败: {str(e)}'}), 500
         
         @self.app.route('/api/statistics')
@@ -203,7 +203,7 @@ class WebServer:
                 )
                 return jsonify(stats)
             except Exception as e:
-                self.logger.error(f"获取统计数据失败: {e}")
+                self.logger.web.error(f"获取统计数据失败: {e}")
                 return jsonify({'error': f'获取统计数据失败: {str(e)}'}), 500
 
         @self.app.route('/api/accounts')
@@ -231,7 +231,7 @@ class WebServer:
                 )
                 return jsonify({'success': True})
             except Exception as e:
-                self.logger.error(f"更新账号配置失败: {e}")
+                self.logger.web.error(f"更新账号配置失败: {e}")
                 return jsonify({'error': f'更新账号配置失败: {str(e)}'}), 500
 
         @self.app.route('/api/groups')
@@ -260,7 +260,7 @@ class WebServer:
                 )
                 return jsonify({'success': True})
             except Exception as e:
-                self.logger.error(f"更新群组配置失败: {e}")
+                self.logger.web.error(f"更新群组配置失败: {e}")
                 return jsonify({'error': f'更新群组配置失败: {str(e)}'}), 500
 
         @self.app.route('/api/connections/<connection_id>', methods=['DELETE'])
@@ -336,7 +336,7 @@ class WebServer:
                 )
                 return jsonify({'success': True})
             except Exception as e:
-                self.logger.error(f"添加黑名单失败: {e}")
+                self.logger.web.error(f"添加黑名单失败: {e}")
                 return jsonify({'error': f'添加黑名单失败: {str(e)}'}), 500
 
         @self.app.route('/api/blacklist', methods=['DELETE'])
@@ -359,7 +359,7 @@ class WebServer:
                 )
                 return jsonify({'success': True})
             except Exception as e:
-                self.logger.error(f"移除黑名单失败: {e}")
+                self.logger.web.error(f"移除黑名单失败: {e}")
                 return jsonify({'error': f'移除黑名单失败: {str(e)}'}), 500
     
     def _check_auth(self) -> bool:
@@ -369,7 +369,7 @@ class WebServer:
     async def start(self):
         """启动Web服务器"""
         self.running = True
-        self.logger.info("启动Web服务器...")
+        self.logger.web.info("启动Web服务器...")
         
         # 在单独线程中运行Flask应用
         def run_server():
@@ -378,7 +378,7 @@ class WebServer:
         self.server_thread = threading.Thread(target=run_server, daemon=True)
         self.server_thread.start()
         
-        self.logger.info("Web服务器已启动在 http://localhost:5000")
+        self.logger.web.info("Web服务器已启动在 http://localhost:5000")
         
         # 保持运行状态
         while self.running:
@@ -387,8 +387,8 @@ class WebServer:
     async def stop(self):
         """停止Web服务器"""
         self.running = False
-        self.logger.info("正在停止Web服务器...")
+        self.logger.web.info("正在停止Web服务器...")
         
         # TODO: 优雅关闭Waitress服务器
         
-        self.logger.info("Web服务器已停止")
+        self.logger.web.info("Web服务器已停止")

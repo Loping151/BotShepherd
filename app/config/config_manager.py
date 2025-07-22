@@ -35,6 +35,25 @@ class ConfigManager:
         # 配置验证器
         self._validator = ConfigValidator()
         
+    def set_logger(self, logger):
+        self.logger = logger
+        
+    def log(self, message, level="info"):
+        if self.logger:
+            if level == "info":
+                self.logger.info(message)
+            elif level == "warning":
+                self.logger.warning(message)
+            elif level == "error":
+                self.logger.error(message)
+        else:
+            if level == "info":
+                print(message)
+            elif level == "warning":
+                print(f"WARNING: {message}")
+            elif level == "error":
+                print(f"ERROR: {message}")
+
     async def initialize(self):
         """初始化配置管理器"""
         # 创建配置目录
@@ -42,12 +61,6 @@ class ConfigManager:
         
         # 加载所有配置
         await self._load_all_configs()
-        
-        # 初始化配置备份管理器
-        # self._config_backup = ConfigBackup(self.config_dir)
-
-        # 启动配置文件监控
-        # await self._start_config_watchers()
     
     def _ensure_directories(self):
         """确保配置目录存在"""
@@ -79,7 +92,7 @@ class ConfigManager:
                 with open(global_config_file, 'r', encoding='utf-8') as f:
                     self._global_config = json.load(f)
             except Exception as e:
-                print(f"加载全局配置失败: {e}")
+                self.log(f"加载全局配置失败: {e}", "error")
                 self._global_config = ConfigTemplate.get_default_global_config()
         else:
             self._global_config = ConfigTemplate.get_default_global_config()
@@ -99,7 +112,7 @@ class ConfigManager:
                     connection_id = config_file.stem
                     self._connections_config[connection_id] = config
             except Exception as e:
-                print(f"加载连接配置失败 {config_file}: {e}")
+                self.log(f"加载连接配置失败 {config_file}: {e}", "error")
     
     async def _load_account_configs(self):
         """加载账号配置"""
@@ -115,7 +128,7 @@ class ConfigManager:
                     account_id = config_file.stem
                     self._account_configs[account_id] = config
             except Exception as e:
-                print(f"加载账号配置失败 {config_file}: {e}")
+                self.log(f"加载账号配置失败 {config_file}: {e}", "error")
     
     async def _load_group_configs(self):
         """加载群组配置"""
@@ -131,7 +144,7 @@ class ConfigManager:
                     group_id = config_file.stem
                     self._group_configs[group_id] = config
             except Exception as e:
-                print(f"加载群组配置失败 {config_file}: {e}")
+                self.log(f"加载群组配置失败 {config_file}: {e}", "error")
     
     # async def _start_config_watchers(self):
     #     """启动配置文件监控"""
@@ -179,7 +192,7 @@ class ConfigManager:
             with open(global_config_file, 'w', encoding='utf-8') as f:
                 json.dump(self._global_config, f, indent=2, ensure_ascii=False)
         except Exception as e:
-            print(f"保存全局配置失败: {e}")
+            self.log(f"保存全局配置失败: {e}", "error")
     
     # 连接配置相关方法
     def get_connections_config(self) -> Dict[str, Dict[str, Any]]:
@@ -204,7 +217,7 @@ class ConfigManager:
             with open(config_file, 'w', encoding='utf-8') as f:
                 json.dump(config, f, indent=2, ensure_ascii=False)
         except Exception as e:
-            print(f"保存连接配置失败 {connection_id}: {e}")
+            self.log(f"保存连接配置失败 {connection_id}: {e}", "error")
             raise
     
     async def delete_connection_config(self, connection_id: str):
@@ -234,7 +247,7 @@ class ConfigManager:
             with open(config_file, 'w', encoding='utf-8') as f:
                 json.dump(config, f, indent=2, ensure_ascii=False)
         except Exception as e:
-            print(f"保存账号配置失败 {account_id}: {e}")
+            self.log(f"保存账号配置失败 {account_id}: {e}", "error")
     
     async def update_account_last_activity(self, account_id: str, activity_type: str):
         """更新账号最后活动时间"""
@@ -295,7 +308,7 @@ class ConfigManager:
             with open(config_file, 'w', encoding='utf-8') as f:
                 json.dump(config, f, indent=2, ensure_ascii=False)
         except Exception as e:
-            print(f"保存群组配置失败 {group_id}: {e}")
+            self.log(f"保存群组配置失败 {group_id}: {e}", "error")
             raise
 
     async def delete_group_config(self, group_id: str):
@@ -464,18 +477,91 @@ class ConfigManager:
         return user_id in superusers
     
     # 别名管理
+    async def _add_alias(self, aliases: Dict[str, List[str]], alias: str, target: str):
+        all_targets = set(aliases.keys())
+        all_aliases = set()
+        for alias_list in aliases.values():
+            all_aliases.update(alias_list)
+        if alias in all_targets and alias != target:
+            raise ValueError(f"别名 {alias} 已作为原指令存在！")
+        if alias in all_aliases:
+            raise ValueError(f"别名 {alias} 已作为其他指令别名！")
+        if target not in aliases:
+            aliases[target] = []
+        if alias not in aliases[target]:
+            aliases[target].append(alias)
+            return aliases
+        return None
+    
+    async def _remove_alias(self, aliases: Dict[str, List[str]], alias: str, target: str):
+        if target in aliases and alias in aliases[target]:
+            aliases[target].remove(alias)
+            if not aliases[target]:
+                del aliases[target] # 如果原本是转移别名，清空了会把原名放出来，需要注意
+            return aliases
+        return None
+    
+    # 别名管理
     async def add_global_alias(self, alias: str, target: str):
         """添加全局别名"""
         aliases = self._global_config.get("global_aliases", {})
-        if alias not in aliases:
-            aliases[alias] = []
-        if target not in aliases[alias]:
-            aliases[alias].append(target)
-            self._global_config["global_aliases"] = aliases
+        new_aliases = await self._add_alias(aliases, alias, target)
+        if new_aliases:
+            self._global_config["global_aliases"] = new_aliases
             await self._save_global_config()
             
-    ### 正在写别名！！！！！！！！
-
+    async def remove_global_alias(self, alias: str, target: str):
+        """移除全局别名"""
+        aliases = self._global_config.get("global_aliases", {})
+        new_aliases = await self._remove_alias(aliases, alias, target)
+        if new_aliases:
+            self._global_config["global_aliases"] = new_aliases
+            await self._save_global_config()
+            
+    async def add_account_alias(self, account_id: str, alias: str, target: str):
+        """添加账号别名"""
+        account_config = self.get_account_config(account_id)
+        if not account_config:
+            raise ValueError(f"账号 {account_id} 未找到")
+        aliases = account_config.get("aliases", {})
+        new_aliases = await self._add_alias(aliases, alias, target)
+        if new_aliases:
+            account_config["aliases"] = new_aliases
+            await self.save_account_config(account_id, account_config)
+            
+    async def remove_account_alias(self, account_id: str, alias: str, target: str):
+        """移除账号别名"""
+        account_config = self.get_account_config(account_id)
+        if not account_config:
+            raise ValueError(f"账号 {account_id} 未找到")
+        aliases = account_config.get("aliases", {})
+        new_aliases = await self._remove_alias(aliases, alias, target)
+        if new_aliases:
+            account_config["aliases"] = new_aliases
+            await self.save_account_config(account_id, account_config)
+            
+    async def add_group_alias(self, group_id: str, alias: str, target: str):
+        """添加群组别名"""
+        group_config = self.get_group_config(group_id)
+        if not group_config:
+            raise ValueError(f"群组 {group_id} 未找到")
+        aliases = group_config.get("aliases", {})
+        new_aliases = await self._add_alias(aliases, alias, target)
+        if new_aliases:
+            group_config["aliases"] = new_aliases
+            await self.save_group_config(group_id, group_config)
+            
+    async def remove_group_alias(self, group_id: str, alias: str, target: str):
+        """移除群组别名"""
+        group_config = self.get_group_config(group_id)
+        if not group_config:
+            raise ValueError(f"群组 {group_id} 未找到")
+        aliases = group_config.get("aliases", {})
+        new_aliases = await self._remove_alias(aliases, alias, target)
+        if new_aliases:
+            group_config["aliases"] = new_aliases
+            await self.save_group_config(group_id, group_config)
+    
     # 过滤词管理
     async def add_global_filter(self, filter_type: str, word: str):
         """添加全局过滤词"""

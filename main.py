@@ -18,9 +18,9 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from app.config.config_manager import ConfigManager
 from app.database.database_manager import DatabaseManager
-from app.websocket_proxy.proxy_server import ProxyServer
+from app.server.proxy_server import ProxyServer
 from app.web_api.web_server import WebServer
-from app.utils.logger import setup_logger
+from app.utils.logger import BSLogger
 from app.commands import initialize_builtin_commands, load_plugins
 
 
@@ -48,7 +48,8 @@ class BotShepherd:
             await self.config_manager.initialize()
 
             # 设置日志系统
-            self.logger = setup_logger(self.config_manager.get_global_config())
+            self.logger = BSLogger(self.config_manager.get_global_config())
+            self.config_manager.set_logger(self.logger)
             self.logger.info("BotShepherd正在启动...")
 
             # 初始化数据库
@@ -78,6 +79,8 @@ class BotShepherd:
             return True
 
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             if self.logger:
                 self.logger.error(f"系统初始化失败: {e}")
             else:

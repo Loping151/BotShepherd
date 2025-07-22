@@ -17,6 +17,7 @@ from ..onebotv11 import EventParser, MessageNormalizer, EventValidator
 from ..onebotv11.models import ApiResponse, Event, PrivateMessageEvent, GroupMessageEvent
 from ..commands import CommandHandler
 from .message_processor import MessageProcessor
+from ..utils.reboot import construct_reboot_message
 
 class ProxyServer:
     """WebSocket代理服务器"""
@@ -33,7 +34,7 @@ class ProxyServer:
     async def start(self):
         """启动代理服务器"""
         self.running = True
-        self.logger.info("启动WebSocket代理服务器...")
+        self.logger.ws.info("启动WebSocket代理服务器...")
         
         # 获取连接配置
         connections_config = self.config_manager.get_connections_config()
@@ -50,7 +51,7 @@ class ProxyServer:
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
         else:
-            self.logger.warning("没有启用的连接配置")
+            self.logger.ws.warning("没有启用的连接配置")
             # 保持运行状态
             while self.running:
                 await asyncio.sleep(1)
@@ -78,7 +79,7 @@ class ProxyServer:
             else:
                 raise ValueError(f"不支持的客户端端点格式: {client_endpoint}")
             
-            self.logger.info(f"启动连接代理 {connection_id}: {host}:{port}")
+            self.logger.ws.info(f"启动连接代理 {connection_id}: {host}:{port}")
             
             # 创建处理器函数
             async def connection_handler(ws):
@@ -86,12 +87,12 @@ class ProxyServer:
                 path = ws.path if hasattr(ws, 'path') else "/"
                 
                 if connection_id in self.active_connections:
-                    self.logger.warning(f"[{connection_id}] 已存在连接，正在关闭旧连接以替换为新连接")
+                    self.logger.ws.warning(f"[{connection_id}] 已存在连接，正在关闭旧连接以替换为新连接")
                     try:
                         await self.active_connections[connection_id].stop()
                         await asyncio.sleep(1) # 禁止频繁重启
                     except Exception as e:
-                        self.logger.error(f"[{connection_id}] 关闭旧连接失败: {e}")
+                        self.logger.ws.error(f"[{connection_id}] 关闭旧连接失败: {e}")
         
                 return await self._handle_client_connection(ws, path, connection_id, config)
 
@@ -106,19 +107,19 @@ class ProxyServer:
                 ping_timeout=10,   # 心跳超时
                 close_timeout=10   # 关闭超时
             ):
-                self.logger.info(f"连接代理 {connection_id} 已启动在 {client_endpoint}")
+                self.logger.ws.info(f"连接代理 {connection_id} 已启动在 {client_endpoint}")
 
                 # 保持运行
                 while self.running:
                     await asyncio.sleep(1)
                     
         except Exception as e:
-            self.logger.error(f"启动连接代理失败 {connection_id}: {e}")
+            self.logger.ws.error(f"启动连接代理失败 {connection_id}: {e}")
     
     async def _handle_client_connection(self, client_ws, path, connection_id: str, config: Dict[str, Any]):
         """处理客户端连接"""
         client_ip = client_ws.remote_address
-        self.logger.info(f"[{connection_id}] 新的客户端连接: {client_ip}")
+        self.logger.ws.info(f"[{connection_id}] 新的客户端连接: {client_ip}")
         
         try:
             # 创建代理连接对象
@@ -138,18 +139,18 @@ class ProxyServer:
             await proxy_connection.start_proxy()
             
         except Exception as e:
-            self.logger.error(f"[{connection_id}] 处理客户端连接失败: {e}")
+            self.logger.ws.error(f"[{connection_id}] 处理客户端连接失败: {e}")
         finally:
             # 清理连接
             if connection_id in self.active_connections:
                 del self.active_connections[connection_id]
-            self.logger.info(f"[{connection_id}] 客户端连接已关闭: {client_ip}")
+            self.logger.ws.info(f"[{connection_id}] 客户端连接已关闭: {client_ip}")
     
     
     async def stop(self):
         """停止代理服务器"""
         self.running = False
-        self.logger.info("正在停止WebSocket代理服务器...")
+        self.logger.ws.info("正在停止WebSocket代理服务器...")
 
         # 关闭所有活动连接
         stop_tasks = []
@@ -158,7 +159,7 @@ class ProxyServer:
                 if getattr(connection, "running", True):
                     stop_tasks.append(asyncio.create_task(connection.stop()))
             except Exception as e:
-                self.logger.error(f"关闭连接时出错: {e}")
+                self.logger.ws.error(f"关闭连接时出错: {e}")
 
         if stop_tasks:
             try:
@@ -167,12 +168,12 @@ class ProxyServer:
                     timeout=5.0  # 5秒超时
                 )
             except asyncio.TimeoutError:
-                self.logger.warning("部分连接关闭超时")
+                self.logger.ws.warning("部分连接关闭超时")
             except Exception as e:
-                self.logger.error(f"关闭连接任务时出错: {e}")
+                self.logger.ws.error(f"关闭连接任务时出错: {e}")
 
         self.active_connections.clear()
-        self.logger.info("WebSocket代理服务器已停止")
+        self.logger.ws.info("WebSocket代理服务器已停止")
 
 
 class ProxyConnection:
@@ -191,7 +192,7 @@ class ProxyConnection:
         self.running = False
         self.client_headers = None
         self.first_message = None
-        self.self_id = None
+        self.self_id: int | None = None
         
         self.reconnect_locks = []  # 每个 target_index 一个 Lock
         for _ in self.config.get("target_endpoints", []):
@@ -222,9 +223,9 @@ class ProxyConnection:
                     self.client_headers = self.client_ws.request.headers
                 else:
                     self.client_headers = {}
-                    self.logger.warning(f"[{self.connection_id}] 无法获取客户端请求头")
+                    self.logger.ws.warning(f"[{self.connection_id}] 无法获取客户端请求头")
             except Exception as e:
-                self.logger.warning(f"[{self.connection_id}] 获取客户端请求头失败: {e}")
+                self.logger.ws.warning(f"[{self.connection_id}] 获取客户端请求头失败: {e}")
                 self.client_headers = {}
             
             
@@ -233,8 +234,10 @@ class ProxyConnection:
             
             # 处理第一个消息，其中yunzai需要这个lifecycle消息来注册
             await self._process_client_message(self.first_message)
+            
+            await self.send_reboot_message()
 
-            self.logger.info(f"[{self.connection_id}] 已连接到 {len(self.target_connections)} 个目标端点")
+            self.logger.ws.info(f"[{self.connection_id}] 已连接到 {len(self.target_connections)} 个目标端点")
 
             # 启动消息转发任务
             tasks = []
@@ -252,10 +255,10 @@ class ProxyConnection:
                 # 等待任务完成
                 await asyncio.gather(*tasks, return_exceptions=True)
             else:
-                self.logger.warning(f"[{self.connection_id}] 没有转发任务，连接将关闭")
+                self.logger.ws.warning(f"[{self.connection_id}] 没有转发任务，连接将关闭")
             
         except Exception as e:
-            self.logger.error(f"[{self.connection_id}] 代理运行错误: {e}")
+            self.logger.ws.error(f"[{self.connection_id}] 代理运行错误: {e}")
         finally:
             await self.stop()
 
@@ -310,12 +313,12 @@ class ProxyConnection:
                 self.target_connections.append(target_ws)
             else:
                 self.target_connections[self.target_index2list_index(target_index)] = target_ws
-            self.logger.info(f"[{self.connection_id}] 已连接到目标: {endpoint}")
+            self.logger.ws.info(f"[{self.connection_id}] 已连接到目标: {endpoint}")
             return target_ws
             
          except Exception as e:
-            self.logger.error(f"[{self.connection_id}] 连接目标失败 {endpoint}: {e}")
-            raise e
+            self.logger.ws.error(f"[{self.connection_id}] 连接目标失败 {endpoint}: {e}")
+            return None
 
 
     async def _connect_to_targets(self):
@@ -331,9 +334,9 @@ class ProxyConnection:
             async for message in self.client_ws:
                 await self._process_client_message(message)
         except websockets.exceptions.ConnectionClosed:
-            self.logger.info(f"[{self.connection_id}] 客户端连接已关闭")
+            self.logger.ws.info(f"[{self.connection_id}] 客户端连接已关闭")
         except Exception as e:
-            self.logger.error(f"[{self.connection_id}] 客户端消息转发错误: {e}")
+            self.logger.ws.error(f"[{self.connection_id}] 客户端消息转发错误: {e}")
     
     async def _forward_target_to_client(self, target_ws, target_index):
         """转发目标消息到客户端"""
@@ -341,7 +344,7 @@ class ProxyConnection:
             async for message in target_ws:
                 await self._process_target_message(message, target_index)
         except websockets.exceptions.ConnectionClosed:
-            self.logger.info(f"[{self.connection_id}] 目标连接 {target_index} 已关闭。将在120秒内持续尝试重新连接。")
+            self.logger.ws.info(f"[{self.connection_id}] 目标连接 {target_index} 已关闭。将在120秒内持续尝试重新连接。")
             lock = self.reconnect_locks[self.target_index2list_index(target_index)]
             if not lock.locked():
                 async with lock:
@@ -350,13 +353,13 @@ class ProxyConnection:
                         try:
                             target_ws = await self._connect_to_target(self.config.get("target_endpoints", [])[self.target_index2list_index(target_index)], target_index)
                             await self._process_client_message(self.first_message) # 比如yunzai需要使用first Message重新注册
-                            self.logger.info(f"[{self.connection_id}] 目标连接 {target_index} 恢复成功，5秒后重新开始转发。")
+                            self.logger.ws.info(f"[{self.connection_id}] 目标连接 {target_index} 恢复成功，5秒后重新开始转发。")
                             await asyncio.sleep(5)
                             await self._forward_target_to_client(target_ws, target_index)
                         except Exception as e:
-                            self.logger.warning(f"[{self.connection_id}] 尝试重连目标 {target_index} 失败: {e}")
+                            self.logger.ws.warning(f"[{self.connection_id}] 尝试重连目标 {target_index} 失败: {e}")
         except Exception as e:
-            self.logger.error(f"[{self.connection_id}] 目标消息转发错误 {target_index}: {e}")
+            self.logger.ws.error(f"[{self.connection_id}] 目标消息转发错误 {target_index}: {e}")
     
     async def _process_client_message(self, message: str):
         """处理客户端消息"""
@@ -366,59 +369,61 @@ class ProxyConnection:
             if message_data.get("self_id"): # 每次更新，客户端可能会换账号
                 if self.self_id and self.self_id != message_data["self_id"]:
                     # 但是，不论是通过头注册还是yunzai的方式都不能支持账号的热切换
-                    self.logger.warning(f"[{self.connection_id}] 客户端账号已切换到 {message_data['self_id']}，请重启该连接！")
+                    self.logger.ws.warning(f"[{self.connection_id}] 客户端账号已切换到 {message_data['self_id']}，请重启该连接！")
                 self.self_id = message_data["self_id"]
             
             # 消息预处理
+            message_data = await self.command_handler.preprocesser(message_data)
             processed_message, parsed_event = await self._preprocess_message(message_data)
             
-            # 记录消息到数据库，注意消息是先预处理再记录，所以统计功能是无视别名的，只需要按key搜索即可
-            if self._check_api_call_succ(parsed_event):
-                # 如果是发送成功
-                data_in_api = parsed_event.data
-                if isinstance(data_in_api, dict): # get list api 不可能是发送
-                    message_id = message_data.get("data", {}).get("message_id")
-                    await self.database_manager.save_message(
-                        await self._construct_msg_from_echo(message_data["echo"], message_id=message_id), "SEND", self.connection_id
-                    )
-            else:
-                # 收到裸消息不会是api response
-                self._log_api_call_fail(parsed_event)
-                await self.database_manager.save_message(
-                    message_data, "RECV", self.connection_id
-                )
-            
-            # 本体指令集
-            resp_api = await self.command_handler.handle_message(parsed_event)
-            if resp_api:
-                await self._process_target_message(resp_api, 0) # 自身的index为0，其实并不是连接
-            
             if processed_message:
+                if self._check_api_call_succ(parsed_event):
+                    # 如果是发送成功
+                    data_in_api = parsed_event.data
+                    if isinstance(data_in_api, dict): # get list api 不可能是发送
+                        message_id = message_data.get("data", {}).get("message_id")
+                        await self.database_manager.save_message(
+                            await self._construct_msg_from_echo(message_data["echo"], message_id=message_id), "SEND", self.connection_id
+                        )
+                else:
+                    # 记录消息到数据库，注意记录的是处理后的消息，所以统计功能是无视别名的，只需要按key搜索即可
+                    # 收到裸消息不会是api response
+                    self._log_api_call_fail(parsed_event)
+                    await self.database_manager.save_message(
+                        processed_message, "RECV", self.connection_id
+                    )
+                
+                # 本体指令集
+                resp_api = await self.command_handler.handle_message(parsed_event)
+                if resp_api:
+                    processed_message = None # 自身返回时，阻止事件传递给框架 Preprocesser不受影响
+                    await self._process_target_message(resp_api, 0) # 自身的index为0，其实并不是连接
+            
                 # 转发到所有目标
                 processed_json = json.dumps(processed_message, ensure_ascii=False)
                 
-                if message_data.get('echo'):
+                if message_data.get("echo"):
                     # api请求内容，尽可能保证各框架的发送api都使用了echo。
-                    target_index = self.echo_cache.pop(message_data['echo'], {}).get("target_index")
+                    target_index = self.echo_cache.pop(str(message_data["echo"]), {}).get("target_index")
                     if target_index is not None and target_index > 0:
-                        self.logger.debug(f"[{self.connection_id}] 发送API请求到目标 {target_index}: {processed_json[:200]}")
+                        self.logger.ws.debug(f"[{self.connection_id}] 发送API请求到目标 {target_index}: {processed_json[:1000]}")
                         try:
                             await self.target_connections[self.target_index2list_index(target_index)].send(processed_json)
                         except Exception as e:
-                            self.logger.error(f"[{self.connection_id}] 发送到目标失败: {e}")
+                            self.logger.ws.error(f"[{self.connection_id}] 发送到目标失败: {e}")
                 else:
                     for target_ws in self.target_connections:
                         try:
                             await target_ws.send(processed_json)
                         except Exception as e:
-                            self.logger.error(f"[{self.connection_id}] 发送到目标失败: {e}")
+                            self.logger.ws.error(f"[{self.connection_id}] 发送到目标失败: {e}")
             
         except json.JSONDecodeError:
-            self.logger.warning(f"[{self.connection_id}] 收到非JSON消息: {message[:100]}")
+            self.logger.ws.warning(f"[{self.connection_id}] 收到非JSON消息: {message[:1000]}")
         except Exception as e:
             import traceback
             traceback.print_exc()
-            self.logger.error(f"[{self.connection_id}] 处理客户端消息失败: {e}")
+            self.logger.ws.error(f"[{self.connection_id}] 处理客户端消息失败: {e}")
     
     async def _process_target_message(self, message: str | dict, target_index: int):
         """处理目标消息"""
@@ -429,7 +434,7 @@ class ProxyConnection:
             else:
                 message_data = message
             
-            self.logger.debug(f"[{self.connection_id}] 来自连接 {target_index} 的API响应: {str(message_data)[:200]}")
+            self.logger.ws.debug(f"[{self.connection_id}] 来自连接 {target_index} 的API响应: {str(message_data)[:1000]}")
             
             if not self._construct_echo_info(message_data, target_index):
                 # 兼容不使用echo回报的框架，不清楚有没有
@@ -447,11 +452,11 @@ class ProxyConnection:
                 await self.client_ws.send(processed_json)
             
         except json.JSONDecodeError:
-            self.logger.warning(f"[{self.connection_id}] 目标 {target_index} 发送非JSON消息: {message[:100]}")
+            self.logger.ws.warning(f"[{self.connection_id}] 目标 {target_index} 发送非JSON消息: {message[:1000]}")
         except Exception as e:
             import traceback
             traceback.print_exc()
-            self.logger.error(f"[{self.connection_id}] 处理目标消息 {message} 失败: {e}")
+            self.logger.ws.error(f"[{self.connection_id}] 处理目标消息 {message} 失败: {e}")
     
     async def _preprocess_message(self, message_data: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], Optional[Event]]:
         """消息预处理"""
@@ -461,8 +466,13 @@ class ProxyConnection:
         """消息后处理"""
         return await self.message_processor.postprocess_target_message(message_data, self_id)
     
+    async def send_reboot_message(self):
+        api_resp = await construct_reboot_message(str(self.self_id))
+        if api_resp:
+            await self._process_target_message(api_resp, 0)
+    
     def _construct_echo_info(self, message_data, target_index) -> str | None:
-        echo = message_data.get("echo")
+        echo = str(message_data.get("echo"))
         if not echo:
             return None
         
@@ -473,13 +483,13 @@ class ProxyConnection:
         }
 
         if echo in self.echo_cache:
-            self.logger.warning(f"[{self.connection_id}] echo {echo} 已经存在，将被覆盖!可能由于单个账号连接多个相同框架！")
+            self.logger.ws.warning(f"[{self.connection_id}] echo {echo} 已经存在，将被覆盖!可能由于单个账号连接多个相同框架！")
         self.echo_cache[echo] = echo_info
-        self.logger.debug(f"[{self.connection_id}] 收到echo {echo}，缓存大小 {len(self.echo_cache)}")
+        self.logger.ws.debug(f"[{self.connection_id}] 收到echo {echo}，缓存大小 {len(self.echo_cache)}")
 
         # 当缓存首次达到100个的时候。该函数阻塞。如网络正常不应该有这么多cache。
         if len(self.echo_cache) % 100 == 0:
-            self.logger.warning(f"[{self.connection_id}] echo 缓存达到 {len(self.echo_cache)} 个，强制清理过期的echo!")
+            self.logger.ws.warning(f"[{self.connection_id}] echo 缓存达到 {len(self.echo_cache)} 个，强制清理过期的echo!")
             now_ts = int(datetime.now().timestamp())
             old_keys = [k for k, v in self.echo_cache.items() if now_ts - v.get("create_timestamp", 0) > 120]
             for k in old_keys:
@@ -496,13 +506,13 @@ class ProxyConnection:
     def _log_api_call_fail(self, event: Event):
         if isinstance(event, ApiResponse):
             if event.status != "ok" or event.retcode != 0:
-                echo_info = self.echo_cache.get(event.echo, None)
+                echo_info = self.echo_cache.get(str(event.echo), None)
                 if echo_info:
-                    self.logger.warning(f"[{self.connection_id}] API调用失败: {echo_info['data']} -> {event}")
+                    self.logger.ws.warning(f"[{self.connection_id}] API调用失败: {echo_info['data']} -> {event}")
                     
     async def _construct_msg_from_echo(self, echo, **kwargs):
         """从api结果中构造模拟收到消息"""
-        echo_info = self.echo_cache.get(echo, None)
+        echo_info = self.echo_cache.get(str(echo), None)
         if echo_info:
             return await self._construct_data_as_msg(echo_info["data"], **kwargs)
         return {}
@@ -552,9 +562,9 @@ class ProxyConnection:
                     timeout=3.0  # 3秒超时
                 )
             except asyncio.TimeoutError:
-                self.logger.warning(f"[{self.connection_id}] 关闭连接超时")
+                self.logger.ws.warning(f"[{self.connection_id}] 关闭连接超时")
             except Exception as e:
-                self.logger.error(f"[{self.connection_id}] 关闭连接时出错: {e}")
+                self.logger.ws.error(f"[{self.connection_id}] 关闭连接时出错: {e}")
 
         self.target_connections.clear()
 
@@ -563,5 +573,5 @@ class ProxyConnection:
         try:
             await ws.close()
         except Exception as e:
-            self.logger.error(f"[{self.connection_id}] 关闭WebSocket连接时出错: {e}")
+            self.logger.ws.error(f"[{self.connection_id}] 关闭WebSocket连接时出错: {e}")
             

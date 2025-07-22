@@ -19,6 +19,8 @@ class ConfigValidator:
         required_fields = {
             "superusers": list,
             "command_prefix": str,
+            "trigger_prefix": str,
+            "command_ignore_at_other": str,
             "global_aliases": dict,
             "blacklist": dict,
             "allow_private": bool,
@@ -27,6 +29,7 @@ class ConfigValidator:
             "database": dict,
             "logging": dict,
             "message_normalization": dict,
+            "sendcount_notifications": bool,
             "notifications": dict,
             "web_auth": dict
         }
@@ -313,6 +316,8 @@ class ConfigTemplate:
         return {
             "superusers": ["644572093"], # 不是后门奥，自己改
             "command_prefix": "bs",
+            "trigger_prefix": "bs触发",
+            "command_ignore_at_other": True,
             "global_aliases": {
                 "ww": ["ww"]
             },
@@ -340,6 +345,7 @@ class ConfigTemplate:
                 "enabled": False,
                 "normalize_napcat_sent": True
             },
+            "sendcount_notifications": True, 
             "notifications": {
                 "friend_requests": False,
                 "group_invites": False,
@@ -374,6 +380,7 @@ class ConfigTemplate:
             "description": "自动创建的账号配置",
             "enabled": True,
             "aliases": {},
+            "send_count": 0,
             "last_receive_time": None,
             "last_send_time": None
         }

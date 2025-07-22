@@ -51,7 +51,7 @@ class PermissionManager:
             return PermissionLevel.UNKNOWN
             
         except Exception as e:
-            self.logger.error(f"获取用户权限等级失败: {e}")
+            self.logger.command.error(f"获取用户权限等级失败: {e}")
             return PermissionLevel.UNKNOWN
     
     def check_permission(self, event: Event, required_level: PermissionLevel) -> bool:
