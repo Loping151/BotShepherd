@@ -8,7 +8,7 @@ import os
 import asyncio
 from pathlib import Path
 from typing import Dict, List, Any, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from .config_validator import ConfigValidator, ConfigTemplate
 # from .config_watcher import ConfigWatcher
@@ -249,7 +249,7 @@ class ConfigManager:
         except Exception as e:
             self.log(f"保存账号配置失败 {account_id}: {e}", "error")
     
-    async def update_account_last_activity(self, account_id: str, activity_type: str):
+    async def update_account_last_activity(self, account_id: str, group_id: Optional[str], activity_type: str):
         """更新账号最后活动时间"""
         config = self.get_account_config(account_id)
         if not config:
@@ -262,6 +262,23 @@ class ConfigManager:
             config["last_receive_time"] = current_time
         elif activity_type == "send":
             config["last_send_time"] = current_time
+        
+            # 为什么要另外维护这个数字呢，是为了避免频繁使用数据库造成性能消耗，用读写换开销，但是查询指令使用数据库。先测测两个统计一不一样再说吧。
+            count_info = config.get("send_count", {"date": None, "group": {"total": 0}, "private": 0})
+            
+            # 是否重置
+            if count_info["date"] != datetime.now(timezone.utc).date().strftime("%Y-%m-%d"):
+                count_info["date"] = datetime.now(timezone.utc).date().strftime("%Y-%m-%d")
+                count_info["group"] = {"total": 0}
+                count_info["private"] = 0
+            
+            if group_id:
+                count_info["group"][group_id] = count_info["group"].get(group_id, 0) + 1
+                count_info["group"]["total"] += 1
+            else:
+                count_info["private"] += 1
+                
+            config["send_count"] = count_info
         
         await self.save_account_config(account_id, config)
         
@@ -284,6 +301,17 @@ class ConfigManager:
                 })
         
         return active_accounts
+    
+    async def set_account_enabled(self, account_id: str, enabled: bool):
+        """设置账号启用状态"""
+        config = self.get_account_config(account_id)
+        if not config:
+            raise ValueError(f"账号 {account_id} 未找到")
+        elif config["enabled"] == enabled:
+            raise ValueError(f"账号 {account_id} 已经是 {'开启' if enabled else '关闭'} 状态")
+        
+        config["enabled"] = enabled
+        await self.save_account_config(account_id, config)
     
     # 群组配置相关方法
     def get_all_group_configs(self) -> Dict[str, Dict[str, Any]]:
@@ -356,8 +384,6 @@ class ConfigManager:
 
     async def set_group_expire_time(self, group_id: str, expire_days: int):
         """设置群组到期时间"""
-        from ..utils.logger import get_operation_logger
-
         config = self.get_group_config(group_id)
         if not config:
             config = {
@@ -384,8 +410,7 @@ class ConfigManager:
         await self.save_group_config(group_id, config)
 
         # 记录操作日志
-        operation_logger = get_operation_logger()
-        operation_logger.info(f"群组到期时间修改 - 群号: {group_id}, 原到期时间: {old_expire_time}, 新到期时间: {new_expire_time}")
+        self.logger.op.info(f"群组到期时间修改 - 群号: {group_id}, 原到期时间: {old_expire_time}, 新到期时间: {new_expire_time}")
 
     def is_group_expired(self, group_id: str) -> bool:
         """检查群组是否已过期"""
@@ -402,11 +427,21 @@ class ConfigManager:
             return datetime.now() > expire_date
         except (ValueError, TypeError):
             return False
+        
+    async def set_group_enabled(self, group_id: str, enabled: bool):
+        """设置群组启用状态"""
+        config = self.get_group_config(group_id)
+        if not config:
+            raise ValueError(f"群组 {group_id} 未找到")
+        elif config["enabled"] == enabled:
+            raise ValueError(f"群组 {group_id} 已经是 {'开启' if enabled else '关闭'} 状态")
+        
+        config["enabled"] = enabled
+        await self.save_group_config(group_id, config)
 
     # 黑名单管理
     async def add_to_blacklist(self, item_type: str, item_id: str):
         """添加到黑名单"""
-        from ..utils.logger import get_operation_logger
 
         if item_type not in ["groups", "users"]:
             raise ValueError("item_type must be 'groups' or 'users'")
@@ -421,13 +456,10 @@ class ConfigManager:
             await self._save_global_config()
 
             # 记录操作日志
-            operation_logger = get_operation_logger()
-            operation_logger.info(f"黑名单添加 - 类型: {item_type}, ID: {item_id}")
+            self.logger.op.info(f"黑名单添加 - 类型: {item_type}, ID: {item_id}")
 
     async def remove_from_blacklist(self, item_type: str, item_id: str):
         """从黑名单移除"""
-        from ..utils.logger import get_operation_logger
-
         if item_type not in ["groups", "users"]:
             raise ValueError("item_type must be 'groups' or 'users'")
 
@@ -438,8 +470,7 @@ class ConfigManager:
             await self._save_global_config()
 
             # 记录操作日志
-            operation_logger = get_operation_logger()
-            operation_logger.info(f"黑名单移除 - 类型: {item_type}, ID: {item_id}")
+            self.logger.op.info(f"黑名单移除 - 类型: {item_type}, ID: {item_id}")
 
     def is_in_blacklist(self, item_type: str, item_id: str) -> bool:
         """检查是否在黑名单中"""
@@ -477,21 +508,25 @@ class ConfigManager:
         return user_id in superusers
     
     # 别名管理
-    async def _add_alias(self, aliases: Dict[str, List[str]], alias: str, target: str):
+    async def _add_alias(self, aliases: Dict[str, List[str]], alias_str: str, target: str):
         all_targets = set(aliases.keys())
         all_aliases = set()
         for alias_list in aliases.values():
             all_aliases.update(alias_list)
-        if alias in all_targets and alias != target:
-            raise ValueError(f"别名 {alias} 已作为原指令存在！")
-        if alias in all_aliases:
-            raise ValueError(f"别名 {alias} 已作为其他指令别名！")
-        if target not in aliases:
-            aliases[target] = []
-        if alias not in aliases[target]:
-            aliases[target].append(alias)
-            return aliases
-        return None
+        
+        alias_list = [a.strip() for a in alias_str.replace("，", ",").split(",") if a.strip()]
+        for alias in alias_list:
+            if alias in all_targets and alias != target:
+                raise ValueError(f"别名 {alias} 已作为原指令存在！")
+            if alias in all_aliases:
+                raise ValueError(f"别名 {alias} 已作为其他指令别名！")
+            if target not in aliases:
+                aliases[target] = []
+            if alias not in aliases[target]:
+                aliases[target].append(alias)
+            else:
+                raise ValueError(f"别名 {alias} 已作为 {target} 的别名！")
+        return aliases
     
     async def _remove_alias(self, aliases: Dict[str, List[str]], alias: str, target: str):
         if target in aliases and alias in aliases[target]:
@@ -501,7 +536,6 @@ class ConfigManager:
             return aliases
         return None
     
-    # 别名管理
     async def add_global_alias(self, alias: str, target: str):
         """添加全局别名"""
         aliases = self._global_config.get("global_aliases", {})

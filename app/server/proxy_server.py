@@ -444,7 +444,7 @@ class ProxyConnection:
                 )
             
             # 消息后处理
-            processed_message = await self._postprocess_message(message_data, self.self_id)
+            processed_message = await self._postprocess_message(message_data, str(self.self_id))
             
             if processed_message:
                 # 发送到客户端
@@ -462,7 +462,7 @@ class ProxyConnection:
         """消息预处理"""
         return await self.message_processor.preprocess_client_message(message_data)
 
-    async def _postprocess_message(self, message_data: Dict[str, Any], self_id: start_proxy) -> Optional[Dict[str, Any]]:
+    async def _postprocess_message(self, message_data: Dict[str, Any], self_id: str) -> Optional[Dict[str, Any]]:
         """消息后处理"""
         return await self.message_processor.postprocess_target_message(message_data, self_id)
     

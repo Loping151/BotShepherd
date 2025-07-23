@@ -8,7 +8,7 @@ from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime
 
 from ..onebotv11 import EventParser, MessageNormalizer
-from ..onebotv11.models import ApiRequest, Event, MessageEvent, PrivateMessageEvent, GroupMessageEvent, MessageSegment
+from ..onebotv11.models import ApiRequest, Event, MessageEvent, MessageSegmentType, PrivateMessageEvent, GroupMessageEvent, MessageSegment
 from ..onebotv11.message_segment import MessageSegmentParser
 from ..commands.permission_manager import PermissionManager
 from .filter_manager import FilterManager
@@ -47,7 +47,7 @@ class MessageProcessor:
             # 更新账号活动时间
             if isinstance(event, MessageEvent):
                 await self.config_manager.update_account_last_activity(
-                    str(event.self_id), "receive"
+                    str(event.self_id), None, "receive"
                 )
             
                 # 消息事件预处理，包括决定是否拦截，应用别名等
@@ -80,10 +80,6 @@ class MessageProcessor:
             event = self.event_parser.parse_event_data(message_data)
             if event:
                 if isinstance(event, ApiRequest) and "send" in event.action:
-                    # 更新账号活动时间
-                    await self.config_manager.update_account_last_activity(
-                        self_id, "send"
-                    )
                 
                     # 消息事件特殊处理
                     processed_data = await self._postprocess_message_event(event, self_id, message_data)
@@ -117,15 +113,16 @@ class MessageProcessor:
                                       message_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """预处理消息事件"""
         # 检查账号是否启用
+        is_su = self.config_manager.is_superuser(event.user_id)
         account_config = self.config_manager.get_account_config(str(event.self_id))
-        if account_config and not account_config.get("enabled", True):
+        if account_config and not account_config.get("enabled", True) and not is_su:
             self.logger.info(f"账号 {event.self_id} 已禁用，跳过消息处理")
             return None
         
         # 检查群组是否启用和过期
         if isinstance(event, GroupMessageEvent):
             group_config = self.config_manager.get_group_config(str(event.group_id))
-            if group_config:
+            if group_config and is_su:
                 if not group_config.get("enabled", True):
                     self.logger.info(f"群组 {event.group_id} 已禁用，跳过消息处理")
                     return None
@@ -133,17 +130,14 @@ class MessageProcessor:
                 if self.config_manager.is_group_expired(str(event.group_id)):
                     self.logger.info(f"群组 {event.group_id} 已过期，跳过消息处理")
                     return None
-            
-            # 更新群组最后消息时间
-            await self.config_manager.update_group_last_message_time(str(event.group_id))
-        
+
         # 检查黑名单
-        if self._is_in_blacklist(event):
+        if self._is_in_blacklist(event) and not is_su:
             self.logger.info(f"消息来自黑名单，跳过处理: user={event.user_id}, group={getattr(event, 'group_id', None)}")
             return None
         
         # 检查私聊设置
-        if isinstance(event, PrivateMessageEvent):
+        if isinstance(event, PrivateMessageEvent) and not is_su:
             if not await self._check_private_message_allowed(event):
                 self.logger.info(f"私聊消息被拒绝: user={event.user_id}, sub_type={event.sub_type}")
                 return None
@@ -165,15 +159,60 @@ class MessageProcessor:
                                        message_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """后处理消息事件"""
         message_data = await self.filter_manager.filter_send_message(event, message_data)
+        message_data = await self.decorate_message(event, self_id, message_data)
                 
         if not message_data:
             return None
         
         # 更新群组最后消息时间（机器人发送的消息）
-        if isinstance(event, GroupMessageEvent):
-            await self.config_manager.update_group_last_message_time(str(event.group_id))
+        if isinstance(event, ApiRequest) and event.params.get("group_id"):
+            await self.config_manager.update_group_last_message_time(str(event.params.get("group_id")))
+            await self.config_manager.update_account_last_activity(self_id, str(event.params.get("group_id")), "send")
+        else:
+            await self.config_manager.update_account_last_activity(self_id, None, "send")
         
-        await self.config_manager.update_account_last_activity(self_id, "send")
+        return message_data
+    
+    async def decorate_message(self, event: Event, self_id: str, message_data: Dict[str, Any]) -> Dict[str, Any]:
+        """装饰消息"""
+        if not isinstance(event, ApiRequest):
+            return message_data
+        
+        global_config = self.config_manager.get_global_config()
+        if not global_config.get("sendcount_notifications", True):
+            return message_data
+        
+        account_config = self.config_manager.get_account_config(str(self_id))
+        send_info = account_config.get("send_count", {"date": None, "group": {"total": 0}, "private": 0})
+        
+        decorate_info = None
+        if event.params.get("group_id"):
+            total_count = send_info["group"]["total"]
+            group_count = send_info["group"].get(str(event.params.get("group_id")), 0)
+            group_deco_template = f"\n📈 今日已发送{total_count + 1}/4000，本群 {group_count + 1}，超出将被限制发言"
+            if total_count < 3000:
+                if group_count + 1 % 100 == 0:
+                    decorate_info = group_deco_template
+            elif total_count < 4000:
+                if total_count + 1 % 25 == 0 or group_count + 1 % 10 == 0:
+                    decorate_info = group_deco_template
+            else:
+                if group_count + 1 % 3 == 0:
+                    decorate_info = group_deco_template
+        else:
+            private_count = send_info["private"]
+            private_deco_template = f"\n📈 今日私聊已发送{private_count + 1}"
+            if private_count + 1 % 10 == 0:
+                decorate_info = private_deco_template
+
+        
+        if decorate_info:
+            existing_types = set()
+            allowed_types = set([MessageSegmentType.AT, MessageSegmentType.TEXT, MessageSegmentType.IMAGE, MessageSegmentType.REPLY])
+            for seg in message_data["params"]["message"]:
+                existing_types.add(seg["type"])
+            if existing_types <= allowed_types:
+                message_data["params"]["message"].append({"type": "text", "data": {"text": decorate_info}})
         
         return message_data
     

@@ -30,7 +30,6 @@ class ConfigValidator:
             "logging": dict,
             "message_normalization": dict,
             "sendcount_notifications": bool,
-            "notifications": dict,
             "web_auth": dict
         }
         
@@ -345,13 +344,7 @@ class ConfigTemplate:
                 "enabled": False,
                 "normalize_napcat_sent": True
             },
-            "sendcount_notifications": True, 
-            "notifications": {
-                "friend_requests": False,
-                "group_invites": False,
-                "group_kicks": False,
-                "mute_notifications": False
-            },
+            "sendcount_notifications": True,
             "web_auth": {
                 "username": "admin",
                 "password": "admin"
@@ -380,7 +373,7 @@ class ConfigTemplate:
             "description": "自动创建的账号配置",
             "enabled": True,
             "aliases": {},
-            "send_count": 0,
+            "send_count": {"date": None, "group": {"total": 0}, "private": 0},
             "last_receive_time": None,
             "last_send_time": None
         }

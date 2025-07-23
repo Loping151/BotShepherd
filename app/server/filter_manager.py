@@ -152,7 +152,7 @@ class FilterManager:
     
     async def _apply_group_filters(self, event: GroupMessageEvent, 
                                  message_data: Dict[str, Any]) -> bool:
-        """应用群组过滤词"""
+        """应用群组过滤词，具有额外规则：可以设为QQ号，实现群内机器人的开关或不响应单个群员"""
         group_config = self.config_manager.get_group_config(str(event.group_id))
         if not group_config:
             return False
@@ -165,6 +165,10 @@ class FilterManager:
         message_text = self._extract_message_text(message_data)
         if not message_text:
             return False
+        
+        self_id = str(event.self_id)
+        user_id = str(event.user_id)
+        message_text = message_text + self_id + user_id
                 
         # 先检查超级用户设置的过滤词
         superuser_filters = filters.get("superuser_filters", [])
@@ -244,6 +248,8 @@ class FilterManager:
             
             if isinstance(event, GroupMessageEvent):
                 log_info["group_id"] = event.group_id
+            elif event.params.get("group_id"):
+                log_info["group_id"] = event.params.get("group_id")
             
             if action == FilterAction.BLOCK:
                 self.logger.warning(f"消息被过滤: {log_info}")
