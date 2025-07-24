@@ -14,6 +14,8 @@ Powered by PPT. TODO
 <details>
 <summary>点此展开</summary>
 2025-07-15 v0.0.0 画饼
+
+碎碎念：虽然有些地方看上去有点ai，但实际上试了几次以后就放弃用AI写了，虽然一开始AI构建了基本框架，但后面除了webui几乎没有用上AI。框架其实也还行，就是指令框架写的比较烂。
 </details>
 
 ## 🌟 核心特性
