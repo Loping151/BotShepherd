@@ -369,7 +369,7 @@ async function saveAllSettings() {
             const key = row.querySelector('.alias-key').value.trim();
             const values = row.querySelector('.alias-values').value.trim();
             if (key && values) {
-                globalAliases[key] = values.split(',').map(v => v.trim()).filter(v => v);
+                globalAliases[key] = values.split(/[,，]/).map(v => v.trim()).filter(v => v);
             }
         });
         
