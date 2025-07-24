@@ -164,7 +164,6 @@ class WebServer:
                 return jsonify({'error': '未授权'}), 401
 
             try:
-                from app import __github__
                 response = requests.get("https://raw.githubusercontent.com/Loping151/BotShepherd/main/app/__init__.py", timeout=3)
                 response.raise_for_status()
                 content = response.text
@@ -181,7 +180,7 @@ class WebServer:
                 })
             except Exception as e:
                 return jsonify({
-                    'version': f'访问{__github__}失败',
+                    'version': f'访问Github失败',
                     'author': 'unknown',
                     'description': 'unknown',
                     'error': str(e)
@@ -566,6 +565,7 @@ class WebServer:
                 start_date = request.args.get('start_date')
                 end_date = request.args.get('end_date')
                 self_id = request.args.get('self_id')
+                direction = request.args.get('direction', 'SEND')
 
                 # 计算时间范围
                 now = datetime.now()
@@ -596,7 +596,7 @@ class WebServer:
                         self_id=self_id,
                         start_time=start_time,
                         end_time=end_time,
-                        direction="SEND"
+                        direction=direction
                     )
                 )
 
@@ -606,7 +606,7 @@ class WebServer:
                         self_id=self_id,
                         start_time=start_time,
                         end_time=end_time,
-                        direction="SEND"
+                        direction=direction
                     )
                 )
                 active_users = len(user_stats)
@@ -617,7 +617,7 @@ class WebServer:
                         self_id=self_id,
                         start_time=start_time,
                         end_time=end_time,
-                        direction="SEND"
+                        direction=direction
                     )
                 )
                 active_groups = len(group_stats)
@@ -631,7 +631,7 @@ class WebServer:
                         self_id=self_id,
                         start_time=yesterday_start,
                         end_time=yesterday_end,
-                        direction="SEND"
+                        direction=direction
                     )
                 )
 
@@ -640,7 +640,7 @@ class WebServer:
                         self_id=self_id,
                         start_time=yesterday_start,
                         end_time=yesterday_end,
-                        direction="SEND"
+                        direction=direction
                     )
                 )
                 yesterday_users = len(yesterday_user_stats)
@@ -650,7 +650,7 @@ class WebServer:
                         self_id=self_id,
                         start_time=yesterday_start,
                         end_time=yesterday_end,
-                        direction="SEND"
+                        direction=direction
                     )
                 )
                 yesterday_groups = len(yesterday_group_stats)
@@ -662,7 +662,7 @@ class WebServer:
                         start_time=start_time,
                         end_time=end_time,
                         interval_hours=3,
-                        direction="SEND"
+                        direction=direction
                     )
                 )
 
@@ -672,7 +672,27 @@ class WebServer:
                         self_id=self_id,
                         start_time=start_time,
                         end_time=end_time,
-                        direction="SEND"
+                        direction=direction
+                    )
+                )
+
+                # 获取收到的消息总量（RECV方向）
+                received_messages = asyncio.run(
+                    self.database_manager.count_messages(
+                        self_id=self_id,
+                        start_time=start_time,
+                        end_time=end_time,
+                        direction="RECV"
+                    )
+                )
+
+                # 获取昨日收到的消息数量用于对比
+                yesterday_received_messages = asyncio.run(
+                    self.database_manager.count_messages(
+                        self_id=self_id,
+                        start_time=yesterday_start,
+                        end_time=yesterday_end,
+                        direction="RECV"
                     )
                 )
 
@@ -681,7 +701,7 @@ class WebServer:
                     'total_messages': total_messages,
                     'active_users': active_users,
                     'active_groups': active_groups,
-                    'command_executions': 0,  # 暂时设为0，可以后续实现
+                    'received_messages': received_messages,  # 收到的消息总量
                     'hourly_trend': hourly_trend,  # 每3小时的趋势数据
                     'message_types': message_types,  # 真实的消息类型分布
                     'top_groups': [
@@ -696,7 +716,7 @@ class WebServer:
                     'messages_change': total_messages - yesterday_messages,
                     'users_change': active_users - yesterday_users,
                     'groups_change': active_groups - yesterday_groups,
-                    'commands_change': 0  # 暂时设为0
+                    'received_change': received_messages - yesterday_received_messages  # 收到消息的变化
                 }
 
                 return jsonify(stats)

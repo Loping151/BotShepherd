@@ -74,6 +74,7 @@ class MessageSegmentType(str, Enum):
     NODE = "node"
     XML = "xml"
     JSON = "json"
+    FILE = "file"
 
 # 基础模型
 class BaseEvent(BaseModel):

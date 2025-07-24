@@ -69,10 +69,15 @@
 <!-- 群组列表 -->
 <div class="card">
     <div class="card-header">
-        <h5 class="mb-0">
-            <i class="bi bi-list"></i>
-            群组列表
-        </h5>
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="bi bi-list"></i>
+                群组列表
+            </h5>
+            <div class="col-md-3">
+                <input type="text" class="form-control" id="groupSearchInput" placeholder="按群号搜索..." onkeyup="filterGroupTable()">
+            </div>
+        </div>
     </div>
     <div class="card-body">
         <div class="table-responsive">
@@ -81,6 +86,7 @@
                     <tr>
                         <th>群组ID</th>
                         <th>描述</th>
+                        <th>最后发送时间</th>
                         <th>过期时间</th>
                         <th>过滤词</th>
                         <th>状态</th>
@@ -278,11 +284,37 @@ function updateGroupTable() {
         const expireTime = group.expire_time === -1 ? '永不过期' :
             (group.expire_time > 0 ? new Date(group.expire_time * 1000).toLocaleDateString('zh-CN', {year: '2-digit', month: '2-digit', day: '2-digit'}) : '未设置');
 
+        // 格式化最后活跃时间
+        let lastActiveTime = '从未发送';
+        if (group.last_message_time) {
+            try {
+                const lastTime = new Date(group.last_message_time);
+                const now = new Date();
+                const diffMs = now - lastTime;
+                const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                const diffMinutes = Math.floor(diffMs / (1000 * 60));
+
+                if (diffDays > 0) {
+                    lastActiveTime = `${diffDays}天前`;
+                } else if (diffHours > 0) {
+                    lastActiveTime = `${diffHours}小时前`;
+                } else if (diffMinutes > 0) {
+                    lastActiveTime = `${diffMinutes}分钟前`;
+                } else {
+                    lastActiveTime = '刚刚';
+                }
+            } catch (e) {
+                lastActiveTime = '时间格式错误';
+            }
+        }
+
         const filterCount = (group.filters?.superuser_filters?.length || 0) + (group.filters?.admin_filters?.length || 0);
 
         row.innerHTML = `
             <td><code>${groupId}</code></td>
             <td>${group.description || '未设置'}</td>
+            <td><small class="text-muted">${lastActiveTime}</small></td>
             <td>${expireTime}</td>
             <td><span class="badge bg-warning">${filterCount}个</span></td>
             <td>${statusBadge}</td>
@@ -659,6 +691,26 @@ async function toggleGroup(groupId) {
 
     } catch (error) {
         showToast(`切换群组状态失败: ${error.message}`, 'danger');
+    }
+}
+
+// 群组搜索过滤函数
+function filterGroupTable() {
+    const searchInput = document.getElementById('groupSearchInput');
+    const filter = searchInput.value.toLowerCase();
+    const table = document.getElementById('groups-table');
+    const rows = table.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
+
+    for (let i = 0; i < rows.length; i++) {
+        const groupIdCell = rows[i].getElementsByTagName('td')[0];
+        if (groupIdCell) {
+            const groupId = groupIdCell.textContent || groupIdCell.innerText;
+            if (groupId.toLowerCase().indexOf(filter) > -1) {
+                rows[i].style.display = '';
+            } else {
+                rows[i].style.display = 'none';
+            }
+        }
     }
 }
 </script>

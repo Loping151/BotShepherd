@@ -97,8 +97,8 @@
                     <i class="bi bi-chat-dots text-warning"></i>
                     收到的消息总量
                 </h5>
-                <h3 id="command-executions">0</h3>
-                <small class="text-muted" id="commands-change">与昨日对比</small>
+                <h3 id="received-messages">0</h3>
+                <small class="text-muted" id="received-change">与昨日对比</small>
             </div>
         </div>
     </div>
@@ -328,13 +328,13 @@ function updateStatsCards(stats) {
     document.getElementById('total-messages').textContent = stats.total_messages || 0;
     document.getElementById('active-users').textContent = stats.active_users || 0;
     document.getElementById('active-groups').textContent = stats.active_groups || 0;
-    document.getElementById('command-executions').textContent = stats.command_executions || 0;
-    
+    document.getElementById('received-messages').textContent = stats.received_messages || 0;
+
     // 更新变化指示器
     updateChangeIndicator('messages-change', stats.messages_change);
     updateChangeIndicator('users-change', stats.users_change);
     updateChangeIndicator('groups-change', stats.groups_change);
-    updateChangeIndicator('commands-change', stats.commands_change);
+    updateChangeIndicator('received-change', stats.received_change);
 }
 
 // 更新变化指示器
