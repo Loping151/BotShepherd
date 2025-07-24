@@ -141,6 +141,12 @@ class MessageProcessor:
             if not await self._check_private_message_allowed(event):
                 self.logger.info(f"私聊消息被拒绝: user={event.user_id}, sub_type={event.sub_type}")
                 return None
+            
+        if isinstance(message_data.get("params", {}).get("message"), str):
+            message_data["params"]["message"] = [{"type": "text", "data": {"text": message_data["params"]["message"]}}]
+            message_data["message_format"] = "array"
+        elif isinstance(message_data.get("params", {}).get("message"), list):
+            message_data["params"]["message"] = [seg if not isinstance(seg, str) else {"type": "text", "data": {"text": seg}} for seg in message_data["params"]["message"]]
         
         # 应用多级别名转换，优先级为全局->账号->群组
         message_data = await self.apply_global_aliases(message_data)
@@ -158,6 +164,12 @@ class MessageProcessor:
     async def _postprocess_message_event(self, event: Event, self_id: str,
                                        message_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """后处理消息事件"""
+        if isinstance(message_data.get("params", {}).get("message"), str):
+            message_data["params"]["message"] = [{"type": "text", "data": {"text": message_data["params"]["message"]}}]
+            message_data["message_format"] = "array"
+        elif isinstance(message_data.get("params", {}).get("message"), list):
+            message_data["params"]["message"] = [seg if not isinstance(seg, str) else {"type": "text", "data": {"text": seg}} for seg in message_data["params"]["message"]]
+            
         message_data = await self.filter_manager.filter_send_message(event, message_data)
         message_data = await self.decorate_message(event, self_id, message_data)
                 
@@ -289,7 +301,7 @@ class MessageProcessor:
                             else:
                                 text_parts.append(str(segment)[:1000])
                         # 处理MessageSegment对象
-                        elif hasattr(segment, 'type') and hasattr(segment, 'data'):
+                        elif segment.get("type") and segment.get("data"):
                             if segment.type == "text":
                                 text_parts.append(segment.data.get("text", ""))
                             else:
@@ -339,18 +351,20 @@ class MessageProcessor:
         # 处理消息段
         modified = False
         for sid, segment in enumerate(message_data["message"]):
-            if hasattr(segment, "type") and segment.get("type") == "text":
+            if segment.get("type") == "text":
                 text = segment.get("data", {}).get("text", "")
                 # 检查是否匹配别名
                 for target, alias_list in aliases.items():
                     if text.startswith(target) and target not in alias_list: # 旁路原名
-                        message_data["message"][sid]["data"]["text"] = text.replace(target, "", 1)
+                        print(message_data["message"][sid]["data"]["text"], "->", text[len(target):])
+                        message_data["message"][sid]["data"]["text"] = text[len(target):]
                         modified = True
                         break
                     for alias in alias_list:
                         if text.startswith(alias):
                             # 替换别名
                             new_text = target + text[len(alias):]
+                            print(message_data["message"][sid]["data"]["text"], "->", new_text)
                             message_data["message"][sid]["data"]["text"] = new_text
                             modified = True
                             break

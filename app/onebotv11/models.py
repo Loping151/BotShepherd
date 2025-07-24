@@ -75,6 +75,7 @@ class MessageSegmentType(str, Enum):
     XML = "xml"
     JSON = "json"
     FILE = "file"
+    MARKDOWN = "markdown"
 
 # 基础模型
 class BaseEvent(BaseModel):

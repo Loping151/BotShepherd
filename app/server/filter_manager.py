@@ -72,7 +72,9 @@ class FilterManager:
             return message_data
             
         except Exception as e:
-            self.logger.error(f"过滤发送消息失败: {e}，将拦截！")
+            import traceback
+            traceback.print_exc()
+            self.logger.error(f"过滤发送消息失败: {e}，将拦截！{message_data}")
             return None
     
     async def _apply_global_receive_filters(self, event: Event, 
