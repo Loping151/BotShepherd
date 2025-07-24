@@ -6,6 +6,7 @@
 import json
 from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime
+import uuid
 
 from ..onebotv11 import EventParser, MessageNormalizer
 from ..onebotv11.models import ApiRequest, Event, MessageEvent, MessageSegmentType, PrivateMessageEvent, GroupMessageEvent, MessageSegment
@@ -356,15 +357,13 @@ class MessageProcessor:
                 # 检查是否匹配别名
                 for target, alias_list in aliases.items():
                     if text.startswith(target) and target not in alias_list: # 旁路原名
-                        print(message_data["message"][sid]["data"]["text"], "->", text[len(target):])
-                        message_data["message"][sid]["data"]["text"] = text[len(target):]
+                        message_data["message"][sid]["data"]["text"] = uuid.uuid4().hex + text[len(target):]
                         modified = True
                         break
                     for alias in alias_list:
                         if text.startswith(alias):
                             # 替换别名
                             new_text = target + text[len(alias):]
-                            print(message_data["message"][sid]["data"]["text"], "->", new_text)
                             message_data["message"][sid]["data"]["text"] = new_text
                             modified = True
                             break
