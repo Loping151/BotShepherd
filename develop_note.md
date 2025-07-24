@@ -2,11 +2,9 @@
 
 设计思路：以开发最初使用的Napcat+Yunzai为例：
 原有连接：
-一个账号，用Napcat通过ws1连接Yunzai、用ws2连接Nonebot
+一个账号，用Napcat通过ws连接Yunzai、用ws2连接Nonebot
 现在连接：
 一个账号使用唯一一个ws进入本项目，方便统计，然后由本项目来对接所有的服务端连接。
-
-
 
 
 # 核心论断1

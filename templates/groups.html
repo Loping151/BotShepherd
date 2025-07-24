@@ -38,13 +38,13 @@
             </div>
         </div>
     </div>
-    
+
     <div class="col-md-3">
         <div class="card">
             <div class="card-body text-center">
                 <h5 class="card-title">
                     <i class="bi bi-shield-check text-info"></i>
-                    有过滤器
+                    有过滤词
                 </h5>
                 <h3 id="filtered-groups">0</h3>
                 <small class="text-muted">个群组</small>
@@ -56,10 +56,10 @@
         <div class="card">
             <div class="card-body text-center">
                 <h5 class="card-title">
-                    <i class="bi bi-person-badge text-warning"></i>
-                    有管理员
+                    <i class="bi bi-clock text-warning"></i>
+                    已过期
                 </h5>
-                <h3 id="admin-groups">0</h3>
+                <h3 id="expired-groups">0</h3>
                 <small class="text-muted">个群组</small>
             </div>
         </div>
@@ -80,9 +80,9 @@
                 <thead>
                     <tr>
                         <th>群组ID</th>
-                        <th>群组名称</th>
-                        <th>管理员</th>
-                        <th>过滤器</th>
+                        <th>描述</th>
+                        <th>过期时间</th>
+                        <th>过滤词</th>
                         <th>状态</th>
                         <th>操作</th>
                     </tr>
@@ -112,52 +112,81 @@
                     </div>
                     
                     <div class="mb-3">
-                        <label for="groupName" class="form-label">群组名称</label>
-                        <input type="text" class="form-control" id="groupName">
-                        <div class="form-text">可选，用于显示</div>
+                        <label for="groupDescription" class="form-label">群组描述</label>
+                        <input type="text" class="form-control" id="groupDescription" required>
+                        <div class="form-text">群组的描述信息</div>
                     </div>
+
+                    <div class="mb-3">
+                        <label for="groupExpireTime" class="form-label">过期时间</label>
+                        <input type="date" class="form-control" id="groupExpireTime">
+                        <div class="form-text">留空表示永不过期，格式：YY-MM-DD</div>
+                    </div>
+
+
                     
                     <div class="mb-3">
-                        <label for="groupAdmins" class="form-label">群管理员</label>
-                        <textarea class="form-control" id="groupAdmins" rows="3" 
-                                  placeholder="每行一个QQ号"></textarea>
-                        <div class="form-text">拥有群组管理权限的用户QQ号，每行一个</div>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">接收过滤器</label>
-                        <div id="receiveFiltersList">
+                        <label class="form-label">超级用户过滤词</label>
+                        <div class="alert alert-info py-2">
+                            <small><i class="bi bi-info-circle"></i> 每行一个过滤词，不支持正则表达式。包含这些词的消息将被过滤。</small>
+                        </div>
+                        <div id="superuserFiltersList">
                             <div class="input-group mb-2">
-                                <input type="text" class="form-control receive-filter" 
-                                       placeholder="过滤关键词或正则表达式">
-                                <button class="btn btn-outline-danger" type="button" onclick="removeFilter(this, 'receive')">
+                                <input type="text" class="form-control superuser-filter"
+                                       placeholder="输入过滤词">
+                                <button class="btn btn-outline-danger" type="button" onclick="removeFilter(this, 'superuser')">
                                     <i class="bi bi-trash"></i>
                                 </button>
                             </div>
                         </div>
-                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="addFilter('receive')">
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="addFilter('superuser')">
                             <i class="bi bi-plus"></i>
-                            添加接收过滤器
+                            添加超级用户过滤词
                         </button>
                     </div>
-                    
+
                     <div class="mb-3">
-                        <label class="form-label">发送过滤器</label>
-                        <div id="sendFiltersList">
+                        <label class="form-label">管理员过滤词</label>
+                        <div class="alert alert-info py-2">
+                            <small><i class="bi bi-info-circle"></i> 每行一个过滤词，不支持正则表达式。包含这些词的消息将被过滤。</small>
+                        </div>
+                        <div id="adminFiltersList">
                             <div class="input-group mb-2">
-                                <input type="text" class="form-control send-filter" 
-                                       placeholder="过滤关键词或正则表达式">
-                                <button class="btn btn-outline-danger" type="button" onclick="removeFilter(this, 'send')">
+                                <input type="text" class="form-control admin-filter"
+                                       placeholder="输入过滤词">
+                                <button class="btn btn-outline-danger" type="button" onclick="removeFilter(this, 'admin')">
                                     <i class="bi bi-trash"></i>
                                 </button>
                             </div>
                         </div>
-                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="addFilter('send')">
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="addFilter('admin')">
                             <i class="bi bi-plus"></i>
-                            添加发送过滤器
+                            添加管理员过滤词
                         </button>
                     </div>
-                    
+
+                    <!-- 别名管理 -->
+                    <div class="mb-3">
+                        <label class="form-label">指令别名</label>
+                        <div class="alert alert-info py-2">
+                            <small><i class="bi bi-info-circle"></i> 为指令设置别名，格式：别名 -> 目标指令。例如：# -> bs</small>
+                        </div>
+                        <div id="aliasesList">
+                            <div class="input-group mb-2">
+                                <input type="text" class="form-control alias-from" placeholder="别名（如：#）">
+                                <span class="input-group-text">→</span>
+                                <input type="text" class="form-control alias-to" placeholder="目标指令（如：bs）">
+                                <button class="btn btn-outline-danger" type="button" onclick="removeAlias(this)">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="addAlias()">
+                            <i class="bi bi-plus"></i>
+                            添加别名
+                        </button>
+                    </div>
+
                     <div class="mb-3">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" id="groupEnabled" checked>
@@ -171,6 +200,23 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
                 <button type="button" class="btn btn-primary" onclick="saveGroup()">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 群组详情模态框 -->
+<div class="modal fade" id="groupDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">群组详情</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="groupDetailContent">
+                    <!-- 动态加载 -->
+                </div>
             </div>
         </div>
     </div>
@@ -203,51 +249,60 @@ async function loadGroups() {
 // 更新群组统计
 function updateGroupStats() {
     const total = Object.keys(groups).length;
-    let enabled = 0, filtered = 0, admin = 0;
-    
+    let enabled = 0, filtered = 0, expired = 0;
+
     Object.values(groups).forEach(group => {
         if (group.enabled) enabled++;
-        if (group.receive_filters?.length > 0 || group.send_filters?.length > 0) filtered++;
-        if (group.admins?.length > 0) admin++;
+        if (group.filters?.superuser_filters?.length > 0 || group.filters?.admin_filters?.length > 0) filtered++;
+        if (group.expire_time > 0 && group.expire_time < Date.now() / 1000) expired++;
     });
-    
+
     document.getElementById('total-groups').textContent = total;
     document.getElementById('enabled-groups').textContent = enabled;
     document.getElementById('filtered-groups').textContent = filtered;
-    document.getElementById('admin-groups').textContent = admin;
+    document.getElementById('expired-groups').textContent = expired;
 }
 
 // 更新群组表格
 function updateGroupTable() {
     const tbody = document.querySelector('#groups-table tbody');
     tbody.innerHTML = '';
-    
+
     Object.entries(groups).forEach(([groupId, group]) => {
         const row = document.createElement('tr');
-        
-        const statusBadge = group.enabled ? 
-            '<span class="badge bg-success">启用</span>' : 
+
+        const statusBadge = group.enabled ?
+            '<span class="badge bg-success">启用</span>' :
             '<span class="badge bg-secondary">禁用</span>';
-        
-        const adminCount = group.admins?.length || 0;
-        const filterCount = (group.receive_filters?.length || 0) + (group.send_filters?.length || 0);
-        
+
+        const expireTime = group.expire_time === -1 ? '永不过期' :
+            (group.expire_time > 0 ? new Date(group.expire_time * 1000).toLocaleDateString('zh-CN', {year: '2-digit', month: '2-digit', day: '2-digit'}) : '未设置');
+
+        const filterCount = (group.filters?.superuser_filters?.length || 0) + (group.filters?.admin_filters?.length || 0);
+
         row.innerHTML = `
             <td><code>${groupId}</code></td>
-            <td>${group.name || '未设置'}</td>
-            <td><span class="badge bg-info">${adminCount}个</span></td>
+            <td>${group.description || '未设置'}</td>
+            <td>${expireTime}</td>
             <td><span class="badge bg-warning">${filterCount}个</span></td>
             <td>${statusBadge}</td>
             <td>
+                <button class="btn btn-sm btn-outline-primary" onclick="showGroupDetail('${groupId}')">
+                    <i class="bi bi-eye"></i>
+                </button>
                 <button class="btn btn-sm btn-outline-warning" onclick="editGroup('${groupId}')">
                     <i class="bi bi-pencil"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-${group.enabled ? 'warning' : 'success'}"
+                        onclick="toggleGroup('${groupId}')">
+                    <i class="bi bi-${group.enabled ? 'pause' : 'play'}"></i>
                 </button>
                 <button class="btn btn-sm btn-outline-danger" onclick="deleteGroup('${groupId}')">
                     <i class="bi bi-trash"></i>
                 </button>
             </td>
         `;
-        
+
         tbody.appendChild(row);
     });
 }
@@ -265,34 +320,49 @@ function showAddGroupModal() {
 function editGroup(groupId) {
     editingGroupId = groupId;
     const group = groups[groupId];
-    
+
     document.getElementById('groupModalTitle').textContent = '编辑群组配置';
     document.getElementById('groupId').value = groupId;
-    document.getElementById('groupName').value = group.name || '';
-    document.getElementById('groupAdmins').value = (group.admins || []).join('\n');
+    document.getElementById('groupDescription').value = group.description || '';
+
+    // 处理过期时间 - 转换为日期格式
+    if (group.expire_time && group.expire_time > 0) {
+        const expireDate = new Date(group.expire_time * 1000);
+        document.getElementById('groupExpireTime').value = expireDate.toISOString().split('T')[0];
+    } else {
+        document.getElementById('groupExpireTime').value = '';
+    }
+
+
     document.getElementById('groupEnabled').checked = group.enabled;
-    
+
     // 填充过滤器
-    fillFilterList('receive', group.receive_filters || []);
-    fillFilterList('send', group.send_filters || []);
-    
+    fillFilterList('superuser', group.filters?.superuser_filters || []);
+    fillFilterList('admin', group.filters?.admin_filters || []);
+
+    // 填充别名
+    loadAliasesToForm(group.aliases || {});
+
     new bootstrap.Modal(document.getElementById('groupModal')).show();
 }
 
 // 重置过滤器列表
 function resetFilterLists() {
-    ['receive', 'send'].forEach(type => {
+    ['superuser', 'admin'].forEach(type => {
         const list = document.getElementById(`${type}FiltersList`);
         list.innerHTML = `
             <div class="input-group mb-2">
-                <input type="text" class="form-control ${type}-filter" 
-                       placeholder="过滤关键词或正则表达式">
+                <input type="text" class="form-control ${type}-filter"
+                       placeholder="过滤关键词">
                 <button class="btn btn-outline-danger" type="button" onclick="removeFilter(this, '${type}')">
                     <i class="bi bi-trash"></i>
                 </button>
             </div>
         `;
     });
+
+    // 重置别名列表
+    resetAliasesList();
 }
 
 // 填充过滤器列表
@@ -323,8 +393,8 @@ function addFilter(type) {
     const div = document.createElement('div');
     div.className = 'input-group mb-2';
     div.innerHTML = `
-        <input type="text" class="form-control ${type}-filter" 
-               placeholder="过滤关键词或正则表达式">
+        <input type="text" class="form-control ${type}-filter"
+               placeholder="过滤关键词">
         <button class="btn btn-outline-danger" type="button" onclick="removeFilter(this, '${type}')">
             <i class="bi bi-trash"></i>
         </button>
@@ -340,37 +410,143 @@ function removeFilter(button, type) {
     }
 }
 
+// 添加别名
+function addAlias() {
+    const list = document.getElementById('aliasesList');
+    const div = document.createElement('div');
+    div.className = 'input-group mb-2';
+    div.innerHTML = `
+        <input type="text" class="form-control alias-from" placeholder="别名（如：#）">
+        <span class="input-group-text">→</span>
+        <input type="text" class="form-control alias-to" placeholder="目标指令（如：bs）">
+        <button class="btn btn-outline-danger" type="button" onclick="removeAlias(this)">
+            <i class="bi bi-trash"></i>
+        </button>
+    `;
+    list.appendChild(div);
+}
+
+// 移除别名
+function removeAlias(button) {
+    const list = document.getElementById('aliasesList');
+    if (list.children.length > 1) {
+        button.parentElement.remove();
+    }
+}
+
+// 重置别名列表
+function resetAliasesList() {
+    const list = document.getElementById('aliasesList');
+    list.innerHTML = `
+        <div class="input-group mb-2">
+            <input type="text" class="form-control alias-from" placeholder="别名（如：#）">
+            <span class="input-group-text">→</span>
+            <input type="text" class="form-control alias-to" placeholder="目标指令（如：bs）">
+            <button class="btn btn-outline-danger" type="button" onclick="removeAlias(this)">
+                <i class="bi bi-trash"></i>
+            </button>
+        </div>
+    `;
+}
+
+// 加载别名到表单
+function loadAliasesToForm(aliases) {
+    const list = document.getElementById('aliasesList');
+    list.innerHTML = '';
+
+    if (!aliases || Object.keys(aliases).length === 0) {
+        resetAliasesList();
+        return;
+    }
+
+    // 将别名对象转换为表单项
+    Object.entries(aliases).forEach(([target, aliasList]) => {
+        aliasList.forEach(alias => {
+            const div = document.createElement('div');
+            div.className = 'input-group mb-2';
+            div.innerHTML = `
+                <input type="text" class="form-control alias-from" value="${alias}">
+                <span class="input-group-text">→</span>
+                <input type="text" class="form-control alias-to" value="${target}">
+                <button class="btn btn-outline-danger" type="button" onclick="removeAlias(this)">
+                    <i class="bi bi-trash"></i>
+                </button>
+            `;
+            list.appendChild(div);
+        });
+    });
+
+    // 如果没有别名，至少显示一个空的输入框
+    if (list.children.length === 0) {
+        resetAliasesList();
+    }
+}
+
 // 保存群组
 async function saveGroup() {
     try {
         const groupId = document.getElementById('groupId').value.trim();
-        const groupName = document.getElementById('groupName').value.trim();
-        const groupAdmins = document.getElementById('groupAdmins').value.trim();
+        const groupDescription = document.getElementById('groupDescription').value.trim();
+        const groupExpireTimeStr = document.getElementById('groupExpireTime').value.trim();
+
         const enabled = document.getElementById('groupEnabled').checked;
-        
+
+        // 处理过期时间
+        let groupExpireTime = -1;
+        if (groupExpireTimeStr) {
+            groupExpireTime = Math.floor(new Date(groupExpireTimeStr).getTime() / 1000);
+        }
+
         if (!groupId) {
             showToast('请填写群组ID', 'warning');
             return;
         }
-        
+
+        if (!groupDescription) {
+            showToast('请填写群组描述', 'warning');
+            return;
+        }
+
         // 收集过滤器
-        const receiveFilters = [];
-        document.querySelectorAll('.receive-filter').forEach(input => {
+        const superuserFilters = [];
+        document.querySelectorAll('.superuser-filter').forEach(input => {
             const value = input.value.trim();
-            if (value) receiveFilters.push(value);
+            if (value) superuserFilters.push(value);
         });
-        
-        const sendFilters = [];
-        document.querySelectorAll('.send-filter').forEach(input => {
+
+        const adminFilters = [];
+        document.querySelectorAll('.admin-filter').forEach(input => {
             const value = input.value.trim();
-            if (value) sendFilters.push(value);
+            if (value) adminFilters.push(value);
         });
-        
+
+        // 收集别名
+        const aliases = {};
+        const aliasFromInputs = document.querySelectorAll('.alias-from');
+        const aliasToInputs = document.querySelectorAll('.alias-to');
+
+        for (let i = 0; i < aliasFromInputs.length; i++) {
+            const aliasFrom = aliasFromInputs[i].value.trim();
+            const aliasTo = aliasToInputs[i].value.trim();
+
+            if (aliasFrom && aliasTo) {
+                if (!aliases[aliasTo]) {
+                    aliases[aliasTo] = [];
+                }
+                aliases[aliasTo].push(aliasFrom);
+            }
+        }
+
         const groupData = {
-            name: groupName,
-            admins: groupAdmins ? groupAdmins.split('\n').map(id => id.trim()).filter(id => id) : [],
-            receive_filters: receiveFilters,
-            send_filters: sendFilters,
+            group_id: groupId,
+            description: groupDescription,
+            expire_time: groupExpireTime,
+
+            filters: {
+                superuser_filters: superuserFilters,
+                admin_filters: adminFilters
+            },
+            aliases: aliases,
             enabled
         };
         
@@ -403,6 +579,86 @@ async function deleteGroup(groupId) {
         loadGroups();
     } catch (error) {
         showToast(`删除群组失败: ${error.message}`, 'danger');
+    }
+}
+
+// 显示群组详情
+function showGroupDetail(groupId) {
+    const group = groups[groupId];
+
+    // 格式化过期时间
+    let expireTimeStr = '永不过期';
+    if (group.expire_time > 0) {
+        const expireDate = new Date(group.expire_time * 1000);
+        expireTimeStr = expireDate.toLocaleString('zh-CN');
+    } else if (group.expire_time === 0) {
+        expireTimeStr = '未设置';
+    }
+
+    // 格式化过滤词
+    const superuserFilters = group.filters?.superuser_filters || [];
+    const adminFilters = group.filters?.admin_filters || [];
+
+    // 格式化别名
+    const aliases = group.aliases || {};
+    let aliasesHtml = '无';
+    if (Object.keys(aliases).length > 0) {
+        aliasesHtml = Object.entries(aliases).map(([target, aliasList]) =>
+            aliasList.map(alias => `<code>${alias}</code> → <code>${target}</code>`).join('<br>')
+        ).join('<br>');
+    }
+
+    const content = `
+        <div class="row">
+            <div class="col-md-6">
+                <h6>基本信息</h6>
+                <table class="table table-sm">
+                    <tr><td>群组ID</td><td><code>${groupId}</code></td></tr>
+                    <tr><td>描述</td><td>${group.description || '无'}</td></tr>
+                    <tr><td>状态</td><td>${group.enabled ? '<span class="badge bg-success">启用</span>' : '<span class="badge bg-secondary">禁用</span>'}</td></tr>
+                    <tr><td>过期时间</td><td>${expireTimeStr}</td></tr>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <h6>过滤设置</h6>
+                <table class="table table-sm">
+                    <tr><td>超级用户过滤词</td><td>${superuserFilters.length > 0 ? superuserFilters.map(f => `<code>${f}</code>`).join(', ') : '无'}</td></tr>
+                    <tr><td>管理员过滤词</td><td>${adminFilters.length > 0 ? adminFilters.map(f => `<code>${f}</code>`).join(', ') : '无'}</td></tr>
+                </table>
+
+                <h6>指令别名</h6>
+                <div class="border p-2 rounded bg-light">
+                    <small>${aliasesHtml}</small>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.getElementById('groupDetailContent').innerHTML = content;
+    new bootstrap.Modal(document.getElementById('groupDetailModal')).show();
+}
+
+// 切换群组状态
+async function toggleGroup(groupId) {
+    try {
+        const group = groups[groupId];
+        const newStatus = !group.enabled;
+
+        const groupData = {
+            ...group,
+            enabled: newStatus
+        };
+
+        await apiRequest(`/api/groups/${groupId}`, {
+            method: 'PUT',
+            body: JSON.stringify(groupData)
+        });
+
+        showToast(`群组已${newStatus ? '启用' : '禁用'}`, 'success');
+        loadGroups();
+
+    } catch (error) {
+        showToast(`切换群组状态失败: ${error.message}`, 'danger');
     }
 }
 </script>

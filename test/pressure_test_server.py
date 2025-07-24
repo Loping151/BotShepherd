@@ -18,10 +18,10 @@ class PressureTestServer:
     """压力测试服务器"""
     
     def __init__(self, 
-                 server_url: str = "ws://localhost:5511",
-                 bot_qq: str = "3145443954",
-                 test_group: str = "1053786482",
-                 test_user: str = "2408736708"):
+                 server_url: str = "ws://localhost:7766",
+                 bot_qq: str = "123456",
+                 test_group: str = "345678",
+                 test_user: str = "567890"):
         self.server_url = server_url
         self.bot_qq = bot_qq
         self.test_group = test_group
@@ -309,10 +309,10 @@ class PressureTestServer:
 async def main():
     """主函数"""
     parser = argparse.ArgumentParser(description='BotShepherd 压力测试服务器')
-    parser.add_argument('--url', default='ws://localhost:5666', help='BotShepherd服务器地址')
+    parser.add_argument('--url', default='ws://localhost:7766', help='BotShepherd服务器地址')
     parser.add_argument('--bot-qq', default='666666', help='机器人QQ号')
-    parser.add_argument('--group', default='953590652', help='测试群号')
-    parser.add_argument('--user', default='953590652', help='测试用户QQ号')
+    parser.add_argument('--group', default='555555', help='测试群号')
+    parser.add_argument('--user', default='444444', help='测试用户QQ号')
     parser.add_argument('--rate', type=float, default=1.0, help='发送速率（消息/秒）')
     parser.add_argument('--duration', type=int, default=60, help='测试持续时间（秒）')
     

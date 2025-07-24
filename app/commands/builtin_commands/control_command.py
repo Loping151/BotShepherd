@@ -117,6 +117,30 @@ class SettingCommand(BaseCommand):
             return self.format_success(f"已将账号 {account_id} 设置为 {status_text}")
         except Exception as e:
             return self.format_error(f"设置账号状态失败: {e}")
+        
+class ReloadCommand(BaseCommand):
+    """重载指令"""
+    
+    def __init__(self):
+        super().__init__()
+        self.name = "重载"
+        self.description = "重载配置文件"
+        self.usage = "重载"
+        self.aliases = ["reload"]
+        self.required_permission = PermissionLevel.SUPERUSER
+    
+    def _setup_parser(self):
+        """设置参数解析器"""
+        super()._setup_parser()
+    
+    async def execute(self, event: Event, args: List[str], context: Dict[str, Any]) -> CommandResponse:
+        """执行重载指令"""
+        try:
+            config_manager = context["config_manager"]
+            await config_manager._load_all_configs()
+            return self.format_success("已重载配置文件")
+        except Exception as e:
+            return self.format_error(f"重载配置文件失败: {e}")
     
             
 def register_control_commands():

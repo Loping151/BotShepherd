@@ -8,7 +8,7 @@ from .command_handler import CommandHandler
 import os
 
 BUILTIN_PATH = os.path.join(os.path.dirname(__file__), "builtin_commands")
-PLUGIN_PATH = os.path.join(os.path.dirname(__file__), "plugins")
+PLUGIN_PATH = os.path.join(os.path.dirname(__file__), "../plugins")
 
 def initialize_builtin_commands(logger):
     """初始化所有指令"""
@@ -35,7 +35,7 @@ def load_plugins(logger):
     
     for filename in os.listdir(PLUGIN_PATH):
         if filename.endswith(".py") and not filename.startswith("__"):
-            module_name = f"app.commands.plugins.{filename[:-3]}"
+            module_name = f"app.plugins.{filename[:-3]}"
             try:
                 __import__(module_name)
                 logger.command.info(f"已加载插件: {module_name}")
@@ -44,7 +44,7 @@ def load_plugins(logger):
                 
         elif os.path.isdir(os.path.join(PLUGIN_PATH, filename)) and not filename.startswith("__"):
             try:
-                __import__(f"app.commands.plugins.{filename}")
+                __import__(f"app.plugins.{filename}")
                 logger.command.info(f"已加载插件目录: {filename}")
             except ImportError as e:
                 logger.command.error(f"加载插件目录 {filename} 失败: {e}")

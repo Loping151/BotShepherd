@@ -11,6 +11,8 @@ import argparse
 import sys
 import os
 import signal
+import subprocess
+import venv
 from pathlib import Path
 
 # 添加项目根目录到Python路径
@@ -22,6 +24,7 @@ from app.server.proxy_server import ProxyServer
 from app.web_api.web_server import WebServer
 from app.utils.logger import BSLogger
 from app.commands import initialize_builtin_commands, load_plugins
+from app import __version__, __github__, __description__
 
 
 class BotShepherd:
@@ -50,7 +53,9 @@ class BotShepherd:
             # 设置日志系统
             self.logger = BSLogger(self.config_manager.get_global_config())
             self.config_manager.set_logger(self.logger)
-            self.logger.info("BotShepherd正在启动...")
+            self.logger.info(f"BotShepherd v{__version__} 正在启动...")
+            self.logger.info(f"仓库：{__github__}")
+            self.logger.info(f"{__description__}")
 
             # 初始化数据库
             self.database_manager = DatabaseManager(self.config_manager)
@@ -72,7 +77,8 @@ class BotShepherd:
                 config_manager=self.config_manager,
                 database_manager=self.database_manager,
                 proxy_server=self.proxy_server,
-                logger=self.logger
+                logger=self.logger,
+                port=self.config_manager.get_global_config().get("web_port", 5100)
             )
 
             self.logger.info("系统组件初始化完成")
@@ -103,8 +109,6 @@ class BotShepherd:
             proxy_task = asyncio.create_task(self.proxy_server.start())
 
             self.logger.info("BotShepherd启动完成")
-            self.logger.info("Web管理界面: http://localhost:5000")
-            self.logger.info("WebSocket代理服务已就绪")
 
             # 等待关闭信号或服务异常
             done, pending = await asyncio.wait(
@@ -182,177 +186,139 @@ class BotShepherd:
         finally:
             self._shutdown_in_progress = False
 
+def check_python_version():
+    """检查Python版本"""
+    if sys.version_info < (3, 8):
+        print("❌ 错误: 需要Python 3.8或更高版本")
+        print(f"当前版本: {sys.version}")
+        return False
+
+    print(f"✅ Python版本检查通过: {sys.version}")
+    return True
+
+def create_venv_and_install():
+    """创建虚拟环境并安装依赖"""
+    venv_path = Path("./venv")
+
+    if not venv_path.exists():
+        print("📦 创建虚拟环境...")
+        try:
+            import venv
+            venv.create(venv_path, with_pip=True)
+            print("✅ 虚拟环境创建完成")
+        except Exception as e:
+            print(f"❌ 创建虚拟环境失败: {e}")
+            return False
+    else:
+        print("✅ 虚拟环境已存在")
+
+    # 确定pip路径
+    if sys.platform == "win32":
+        pip_path = venv_path / "Scripts" / "pip.exe"
+    else:
+        pip_path = venv_path / "bin" / "pip"
+
+    # 安装依赖
+    requirements_file = Path("requirements.txt")
+    if requirements_file.exists():
+        print("📥 安装项目依赖...")
+        try:
+            subprocess.check_call([str(pip_path), "install", "--upgrade", "pip"])
+            subprocess.check_call([str(pip_path), "install", "-r", str(requirements_file)])
+            print("✅ 依赖安装完成")
+            return True
+        except subprocess.CalledProcessError as e:
+            print(f"❌ 安装依赖失败: {e}")
+            return False
+    else:
+        print("❌ requirements.txt 文件不存在")
+        return False
+
+def create_directories():
+    """创建必要的目录"""
+    print("📁 创建项目目录...")
+
+    directories = [
+        "config",
+        "config/connections",
+        "config/account",
+        "config/group",
+        "data",
+        "logs",
+        "templates",
+        "static"
+    ]
+
+    for directory in directories:
+        dir_path = Path(directory)
+        dir_path.mkdir(parents=True, exist_ok=True)
+        print(f"  ✅ {directory}")
+
+    print("✅ 目录创建完成")
+
 async def setup_initial_config():
-    """初始化配置文件"""
-    print("正在初始化BotShepherd配置...")
-    
-    config_manager = ConfigManager()
-    await config_manager.setup_initial_config()
-    
-    print("配置初始化完成！")
-    print("请编辑config/目录下的配置文件，然后运行: python main.py")
+    """初始化配置和环境"""
+    print("🤖 BotShepherd 初始化程序")
+    print("=" * 50)
 
-async def run_system_tests():
-    """运行系统测试"""
-    print("🧪 开始运行系统测试...")
+    # 检查Python版本
+    if not check_python_version():
+        sys.exit(1)
 
-    test_results = {
-        "passed": 0,
-        "failed": 0,
-        "errors": []
-    }
+    # 创建虚拟环境并安装依赖
+    if not create_venv_and_install():
+        print("\n❌ 环境设置失败，请检查错误信息")
+        sys.exit(1)
 
-    # 测试1: 配置系统
-    print("\n1️⃣ 测试配置系统...")
+    # 创建目录
+    create_directories()
+
+    # 初始化配置
+    print("\n⚙️ 初始化配置文件...")
     try:
-        from app.config.config_manager import ConfigManager
         config_manager = ConfigManager()
+        await config_manager.initialize()
 
-        if config_manager.config_exists():
-            global_config = config_manager.get_global_config()
-            if global_config and "superusers" in global_config:
-                print("  ✅ 配置系统正常")
-                test_results["passed"] += 1
-            else:
-                print("  ❌ 配置格式错误")
-                test_results["failed"] += 1
-                test_results["errors"].append("配置格式错误")
+        if not config_manager.config_exists():
+            print("📝 创建初始配置...")
+            await config_manager.setup_initial_config()
         else:
-            print("  ⚠️ 配置文件不存在，请先运行 --setup")
-            test_results["failed"] += 1
-            test_results["errors"].append("配置文件不存在")
-    except Exception as e:
-        print(f"  ❌ 配置系统测试失败: {e}")
-        import traceback
-        traceback.print_exc()
-        test_results["failed"] += 1
-        test_results["errors"].append(f"配置系统错误: {e}")
+            print("✅ 配置文件已存在")
 
-    # 测试2: 数据库系统
-    print("\n2️⃣ 测试数据库系统...")
-    try:
-        from app.database.database_manager import DatabaseManager
+        # 初始化数据库
+        print("🗄️ 初始化数据库...")
         db_manager = DatabaseManager(config_manager)
         await db_manager.initialize()
-
-        # 测试数据库连接
-        db_info = await db_manager.get_database_info()
-        if db_info and "database_path" in db_info:
-            print("  ✅ 数据库系统正常")
-            test_results["passed"] += 1
-        else:
-            print("  ❌ 数据库初始化失败")
-            test_results["failed"] += 1
-            test_results["errors"].append("数据库初始化失败")
-
         await db_manager.close()
+
+        print("\n🎉 初始化完成！")
+        print("\n📋 后续步骤:")
+        print("1. 编辑配置文件:")
+        print("   - config/global_config.json (全局配置)")
+        print("   - config/connections/default.json (连接配置)")
+        print("\n2. 启动系统:")
+        if Path("./venv").exists():
+            if sys.platform == "win32":
+                print("   .\\venv\\Scripts\\python.exe main.py")
+            else:
+                print("   ./venv/bin/python main.py")
+        else:
+            print("   python main.py")
+        print("\n3. 访问Web管理界面:")
+        print("   http://localhost:5100")
+        print("   默认用户名/密码: admin/admin")
+        print("\n📖 更多信息请查看 README.md")
+
     except Exception as e:
-        print(f"  ❌ 数据库系统测试失败: {e}")
+        print(f"❌ 初始化失败: {e}")
         import traceback
         traceback.print_exc()
-        test_results["failed"] += 1
-        test_results["errors"].append(f"数据库系统错误: {e}")
+        sys.exit(1)
 
-    # 测试3: OneBot v11协议解析
-    print("\n3️⃣ 测试OneBot v11协议解析...")
-    try:
-        from app.onebotv11 import EventParser
-        from app.onebotv11.models import PrivateMessageEvent
-
-        # 测试消息解析
-        test_message = {
-            "time": 1234567890,
-            "self_id": 123456,
-            "post_type": "message",
-            "message_type": "private",
-            "sub_type": "friend",
-            "message_id": 1,
-            "user_id": 789012,
-            "message": [{"type": "text", "data": {"text": "测试消息"}}],
-            "raw_message": "测试消息",
-            "font": 0,
-            "sender": {"user_id": 789012, "nickname": "测试用户"}
-        }
-
-        event = EventParser.parse_event_data(test_message)
-        if isinstance(event, PrivateMessageEvent):
-            print("  ✅ OneBot v11协议解析正常")
-            test_results["passed"] += 1
-        else:
-            print("  ❌ 消息解析失败")
-            test_results["failed"] += 1
-            test_results["errors"].append("消息解析失败")
-    except Exception as e:
-        print(f"  ❌ OneBot v11协议测试失败: {e}")
-        test_results["failed"] += 1
-        test_results["errors"].append(f"OneBot v11协议错误: {e}")
-
-    # 测试4: 指令系统
-    print("\n4️⃣ 测试指令系统...")
-    try:
-        from app.commands import command_registry
-
-        if len(command_registry.commands) > 0:
-            help_command = command_registry.get_command("帮助")
-            if help_command:
-                print("  ✅ 指令系统正常")
-                test_results["passed"] += 1
-            else:
-                print("  ❌ 基础指令缺失")
-                test_results["failed"] += 1
-                test_results["errors"].append("基础指令缺失")
-        else:
-            print("  ❌ 指令注册失败")
-            test_results["failed"] += 1
-            test_results["errors"].append("指令注册失败")
-    except Exception as e:
-        print(f"  ❌ 指令系统测试失败: {e}")
-        test_results["failed"] += 1
-        test_results["errors"].append(f"指令系统错误: {e}")
-
-    # 测试5: Web服务器
-    print("\n5️⃣ 测试Web服务器...")
-    try:
-        from app.web_api.web_server import WebServer
-        import logging
-
-        # 创建简单的logger用于测试
-        logger = logging.getLogger("test")
-
-        # 简单测试Web服务器初始化
-        web_server = WebServer(None, None, None, logger)
-        if web_server.app:
-            print("  ✅ Web服务器初始化正常")
-            test_results["passed"] += 1
-        else:
-            print("  ❌ Web服务器初始化失败")
-            test_results["failed"] += 1
-            test_results["errors"].append("Web服务器初始化失败")
-    except Exception as e:
-        print(f"  ❌ Web服务器测试失败: {e}")
-        test_results["failed"] += 1
-        test_results["errors"].append(f"Web服务器错误: {e}")
-
-    # 输出测试结果
-    print("\n" + "="*50)
-    print("📊 测试结果汇总:")
-    print(f"✅ 通过: {test_results['passed']}")
-    print(f"❌ 失败: {test_results['failed']}")
-
-    if test_results["errors"]:
-        print("\n🔍 错误详情:")
-        for i, error in enumerate(test_results["errors"], 1):
-            print(f"  {i}. {error}")
-
-    if test_results["failed"] == 0:
-        print("\n🎉 所有测试通过！系统运行正常。")
-    else:
-        print(f"\n⚠️ 有 {test_results['failed']} 个测试失败，请检查系统配置。")
-
-    print("\n💡 提示:")
-    print("- 如果配置文件不存在，请运行: python main.py --setup")
-    print("- 如果数据库有问题，请检查 ./data 目录权限")
-    print("- 更多帮助请查看 README.md")
+def check_config_exists():
+    """检查配置文件是否存在"""
+    config_file = Path("config/global_config.json")
+    return config_file.exists()
 
 # 全局应用实例
 app_instance = None
@@ -360,18 +326,20 @@ app_instance = None
 async def main():
     """主函数"""
     parser = argparse.ArgumentParser(description='BotShepherd - 星星花与牧羊人')
-    parser.add_argument('--setup', action='store_true', help='初始化配置文件')
-    parser.add_argument('--test', action='store_true', help='运行系统测试')
-    
+    parser.add_argument('--setup', action='store_true', help='初始化配置和环境')
+
     args = parser.parse_args()
-    
+
     if args.setup:
         await setup_initial_config()
         return
-    
-    if args.test:
-        await run_system_tests()
-        return
+
+    # 检查配置文件是否存在
+    if not check_config_exists():
+        print("❌ 错误: 配置文件不存在")
+        print("请先运行初始化命令: python main.py --setup")
+        print("或者如果使用虚拟环境: ./venv/bin/python main.py --setup")
+        sys.exit(1)
 
     # 创建并启动BotShepherd
     global app_instance

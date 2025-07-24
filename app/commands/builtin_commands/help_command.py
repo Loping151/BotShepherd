@@ -184,8 +184,8 @@ class StatusCommand(BaseCommand):
             status_info += f"💻 系统状态:\n"
             # 获取当前进程和系统资源占用
             process = psutil.Process()
-            app_cpu = process.cpu_percent(interval=0.1)
-            total_cpu = psutil.cpu_percent()
+            app_cpu = process.cpu_percent(interval=3)
+            total_cpu = psutil.cpu_percent(interval=3)
             app_mem = process.memory_info().rss / (1024 * 1024)  # MB
             total_mem = psutil.virtual_memory().used / (1024 * 1024)  # MB
             total_mem_percent = psutil.virtual_memory().percent

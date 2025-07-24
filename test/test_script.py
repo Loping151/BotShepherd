@@ -16,11 +16,11 @@ class BotShepherdTestClient:
     """BotShepherd测试客户端"""
     
     # 固定的测试QQ号
-    BOT_QQ = "3145443954"  # 机器人QQ号
-    TEST_USER_QQ = "2408736708"  # 测试用户QQ号
-    TEST_GROUP = "1053786482"  # 测试群号
+    BOT_QQ = "123456"  # 机器人QQ号
+    TEST_USER_QQ = "345678"  # 测试用户QQ号
+    TEST_GROUP = "567890"  # 测试群号
     
-    def __init__(self, server_url: str = "ws://localhost:5511"):
+    def __init__(self, server_url: str = "ws://localhost:7766"):
         self.server_url = server_url
         self.websocket = None
         

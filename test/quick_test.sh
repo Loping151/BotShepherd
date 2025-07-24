@@ -48,8 +48,8 @@ case $choice in
         echo "🔧 自定义压力测试配置"
         read -p "发送速率 (消息/秒): " rate
         read -p "持续时间 (秒): " duration
-        read -p "服务器地址 [ws://localhost:5666]: " url
-        url=${url:-ws://localhost:5666}
+        read -p "服务器地址 [ws://localhost:7766]: " url
+        url=${url:-ws://localhost:7766}
         
         echo "🚀 开始自定义压力测试..."
         python test/pressure_test_server.py --rate $rate --duration $duration --url $url

@@ -1,0 +1,282 @@
+{% extends "base.html" %}
+
+{% block title %}日志查看 - BotShepherd{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="bi bi-file-text"></i> 日志查看</h1>
+    <div class="btn-group" role="group">
+        <button type="button" class="btn btn-outline-primary" onclick="refreshLogs()">
+            <i class="bi bi-arrow-clockwise"></i>
+            刷新
+        </button>
+        <button type="button" class="btn btn-outline-secondary" onclick="downloadCurrentLog()">
+            <i class="bi bi-download"></i>
+            下载当前日志
+        </button>
+    </div>
+</div>
+
+<!-- 日志文件选择 -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="bi bi-folder"></i>
+            日志文件
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <label for="logFileSelect" class="form-label">选择日志文件</label>
+                <select class="form-select" id="logFileSelect" onchange="loadLogContent()">
+                    <option value="">请选择日志文件</option>
+                </select>
+                <div class="form-text">优先显示当前日志文件，轮转文件按日期排序</div>
+            </div>
+            <div class="col-md-3">
+                <label for="logLines" class="form-label">显示行数</label>
+                <select class="form-select" id="logLines" onchange="loadLogContent()">
+                    <option value="100">最后100行</option>
+                    <option value="500">最后500行</option>
+                    <option value="1000" selected>最后1000行</option>
+                    <option value="2000">最后2000行</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">文件信息</label>
+                <div id="logFileInfo" class="form-control-plaintext text-muted">
+                    请选择日志文件
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 日志内容 -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">
+            <i class="bi bi-terminal"></i>
+            日志内容
+        </h5>
+        <div class="btn-group btn-group-sm" role="group">
+            <button type="button" class="btn btn-outline-secondary" onclick="toggleWordWrap()">
+                <i class="bi bi-text-wrap"></i>
+                自动换行
+            </button>
+            <button type="button" class="btn btn-outline-secondary" onclick="scrollToTop()">
+                <i class="bi bi-arrow-up"></i>
+                顶部
+            </button>
+            <button type="button" class="btn btn-outline-secondary" onclick="scrollToBottom()">
+                <i class="bi bi-arrow-down"></i>
+                底部
+            </button>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <!-- 加载状态 -->
+        <div id="logLoadingIndicator" class="text-center py-4" style="display: none;">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">加载中...</span>
+            </div>
+            <div class="mt-2">正在加载日志...</div>
+        </div>
+        
+        <!-- 日志内容区域 -->
+        <div id="logContentContainer" style="height: 600px; overflow-y: auto;">
+            <pre id="logContent" class="mb-0 p-3" style="background-color: #1e1e1e; color: #d4d4d4; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 12px; line-height: 1.4; white-space: pre-wrap;">请选择日志文件查看内容</pre>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentLogFile = '';
+let logFiles = [];
+let wordWrapEnabled = true;
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+    loadLogFiles();
+});
+
+// 加载日志文件列表
+async function loadLogFiles() {
+    try {
+        const response = await apiRequest('/api/logs');
+        logFiles = response.files;
+
+        const select = document.getElementById('logFileSelect');
+        select.innerHTML = '<option value="">请选择日志文件</option>';
+
+        // 按日志类型分组
+        const groupedFiles = {};
+        logFiles.forEach(file => {
+            const logType = file.log_type;
+            if (!groupedFiles[logType]) {
+                groupedFiles[logType] = [];
+            }
+            groupedFiles[logType].push(file);
+        });
+
+        // 添加分组选项
+        Object.keys(groupedFiles).sort().forEach(logType => {
+            const optgroup = document.createElement('optgroup');
+            optgroup.label = logType === 'main' ? '主日志' : `${logType} 日志`;
+
+            groupedFiles[logType].forEach(file => {
+                const option = document.createElement('option');
+                option.value = file.name;
+
+                // 构建显示文本
+                let displayText = file.display_name;
+                if (file.is_rotated) {
+                    displayText += ' (轮转)';
+                }
+                displayText += ` (${formatFileSize(file.size)})`;
+
+                option.textContent = displayText;
+                optgroup.appendChild(option);
+            });
+
+            select.appendChild(optgroup);
+        });
+
+        // 如果有日志文件，默认选择第一个非轮转文件
+        const firstNonRotated = logFiles.find(f => !f.is_rotated);
+        if (firstNonRotated) {
+            select.value = firstNonRotated.name;
+            loadLogContent();
+        } else if (logFiles.length > 0) {
+            select.value = logFiles[0].name;
+            loadLogContent();
+        }
+
+    } catch (error) {
+        console.error('加载日志文件列表失败:', error);
+        showToast('加载日志文件列表失败: ' + error.message, 'danger');
+    }
+}
+
+// 加载日志内容
+async function loadLogContent() {
+    const selectedFile = document.getElementById('logFileSelect').value;
+    const lines = document.getElementById('logLines').value;
+    
+    if (!selectedFile) {
+        document.getElementById('logContent').textContent = '请选择日志文件查看内容';
+        document.getElementById('logFileInfo').textContent = '请选择日志文件';
+        return;
+    }
+    
+    currentLogFile = selectedFile;
+    
+    // 显示加载状态
+    document.getElementById('logLoadingIndicator').style.display = 'block';
+    
+    try {
+        const response = await apiRequest(`/api/logs/${selectedFile}?lines=${lines}`);
+        
+        // 更新文件信息
+        const fileInfo = logFiles.find(f => f.name === selectedFile);
+        if (fileInfo) {
+            const modifiedTime = new Date(fileInfo.modified * 1000).toLocaleString('zh-CN');
+            const fileType = fileInfo.is_rotated ? '轮转日志' : '当前日志';
+            document.getElementById('logFileInfo').innerHTML = `
+                类型: ${fileType}<br>
+                大小: ${formatFileSize(fileInfo.size)}<br>
+                修改时间: ${modifiedTime}
+            `;
+        }
+        
+        // 显示日志内容
+        const logContent = document.getElementById('logContent');
+        logContent.textContent = response.content;
+        
+        // 自动滚动到底部
+        scrollToBottom();
+        
+    } catch (error) {
+        console.error('加载日志内容失败:', error);
+        document.getElementById('logContent').textContent = '加载日志失败: ' + error.message;
+        showToast('加载日志内容失败: ' + error.message, 'danger');
+    } finally {
+        document.getElementById('logLoadingIndicator').style.display = 'none';
+    }
+}
+
+// 刷新日志
+function refreshLogs() {
+    loadLogFiles();
+    if (currentLogFile) {
+        setTimeout(() => {
+            document.getElementById('logFileSelect').value = currentLogFile;
+            loadLogContent();
+        }, 100);
+    }
+    showToast('日志已刷新', 'success');
+}
+
+// 下载当前日志
+function downloadCurrentLog() {
+    if (!currentLogFile) {
+        showToast('请先选择日志文件', 'warning');
+        return;
+    }
+    
+    const content = document.getElementById('logContent').textContent;
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = currentLogFile;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    URL.revokeObjectURL(url);
+    showToast('日志文件已下载', 'success');
+}
+
+// 切换自动换行
+function toggleWordWrap() {
+    const logContent = document.getElementById('logContent');
+    wordWrapEnabled = !wordWrapEnabled;
+    
+    if (wordWrapEnabled) {
+        logContent.style.whiteSpace = 'pre-wrap';
+        showToast('已启用自动换行', 'info');
+    } else {
+        logContent.style.whiteSpace = 'pre';
+        showToast('已禁用自动换行', 'info');
+    }
+}
+
+// 滚动到顶部
+function scrollToTop() {
+    const container = document.getElementById('logContentContainer');
+    container.scrollTop = 0;
+}
+
+// 滚动到底部
+function scrollToBottom() {
+    const container = document.getElementById('logContentContainer');
+    container.scrollTop = container.scrollHeight;
+}
+
+// 格式化文件大小
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 B';
+    
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+</script>
+{% endblock %}

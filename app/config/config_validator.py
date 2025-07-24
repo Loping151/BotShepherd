@@ -20,7 +20,7 @@ class ConfigValidator:
             "superusers": list,
             "command_prefix": str,
             "trigger_prefix": str,
-            "command_ignore_at_other": str,
+            "command_ignore_at_other": bool,
             "global_aliases": dict,
             "blacklist": dict,
             "allow_private": bool,
@@ -30,7 +30,8 @@ class ConfigValidator:
             "logging": dict,
             "message_normalization": dict,
             "sendcount_notifications": bool,
-            "web_auth": dict
+            "web_auth": dict,
+            "web_port": int
         }
         
         for field, expected_type in required_fields.items():
@@ -348,7 +349,8 @@ class ConfigTemplate:
             "web_auth": {
                 "username": "admin",
                 "password": "admin"
-            }
+            },
+            "web_port": 5000
         }
     
     @staticmethod

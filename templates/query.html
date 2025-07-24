@@ -1,0 +1,438 @@
+{% extends "base.html" %}
+
+{% block title %}消息查询 - BotShepherd{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="bi bi-search"></i> 消息查询</h1>
+    <div class="btn-group" role="group">
+        <button type="button" class="btn btn-outline-primary" onclick="clearForm()">
+            <i class="bi bi-arrow-clockwise"></i>
+            清空条件
+        </button>
+        <button type="button" class="btn btn-outline-secondary" onclick="exportResults()">
+            <i class="bi bi-download"></i>
+            导出结果
+        </button>
+    </div>
+</div>
+
+<!-- 查询条件表单 -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="bi bi-funnel"></i>
+            查询条件
+        </h5>
+    </div>
+    <div class="card-body">
+        <form id="queryForm">
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <label for="selfId" class="form-label">机器人账号</label>
+                    <select class="form-select" id="selfId" name="self_id">
+                        <option value="">全部账号</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="userId" class="form-label">用户ID</label>
+                    <input type="text" class="form-control" id="userId" name="user_id" placeholder="输入用户QQ号">
+                </div>
+                <div class="col-md-4">
+                    <label for="groupId" class="form-label">群组ID</label>
+                    <input type="text" class="form-control" id="groupId" name="group_id" placeholder="输入群号">
+                </div>
+            </div>
+            
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="startTime" class="form-label">开始时间</label>
+                    <input type="datetime-local" class="form-control" id="startTime" name="start_time">
+                </div>
+                <div class="col-md-6">
+                    <label for="endTime" class="form-label">结束时间</label>
+                    <input type="datetime-local" class="form-control" id="endTime" name="end_time">
+                </div>
+            </div>
+            
+            <div class="row mb-3">
+                <div class="col-md-8">
+                    <label for="keywords" class="form-label">关键词</label>
+                    <input type="text" class="form-control" id="keywords" name="keywords" placeholder="多个关键词用逗号分隔">
+                    <div class="form-text">支持多个关键词搜索，用逗号分隔</div>
+                </div>
+                <div class="col-md-4">
+                    <label for="keywordType" class="form-label">关键词匹配方式</label>
+                    <select class="form-select" id="keywordType" name="keyword_type">
+                        <option value="and">全部匹配(AND)</option>
+                        <option value="or">任一匹配(OR)</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <label for="prefix" class="form-label">消息前缀</label>
+                    <input type="text" class="form-control" id="prefix" name="prefix" placeholder="如: bs, /">
+                </div>
+                <div class="col-md-4">
+                    <label for="direction" class="form-label">消息方向</label>
+                    <select class="form-select" id="direction" name="direction">
+                        <option value="">全部方向</option>
+                        <option value="SEND" selected>发送</option>
+                        <option value="RECV">接收</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="limit" class="form-label">结果数量</label>
+                    <select class="form-select" id="limit" name="limit">
+                        <option value="20" selected>20条</option>
+                        <option value="50">50条</option>
+                        <option value="100">100条</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-12">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-search"></i>
+                        查询消息
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 查询结果 -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">
+            <i class="bi bi-list-ul"></i>
+            查询结果
+        </h5>
+        <span class="badge bg-secondary" id="resultCount">0 条结果</span>
+    </div>
+    <div class="card-body">
+        <!-- 加载状态 -->
+        <div id="loadingIndicator" class="text-center py-4" style="display: none;">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">加载中...</span>
+            </div>
+            <div class="mt-2">正在查询消息...</div>
+        </div>
+        
+        <!-- 结果列表 -->
+        <div id="resultsContainer">
+            <div class="text-center text-muted py-4" id="noResults">
+                <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+                <div class="mt-2">请设置查询条件并点击查询按钮</div>
+            </div>
+        </div>
+        
+        <!-- 分页控制 -->
+        <div id="paginationContainer" class="d-flex justify-content-center mt-3" style="display: none;">
+            <nav>
+                <ul class="pagination" id="pagination">
+                    <!-- 动态生成分页 -->
+                </ul>
+            </nav>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentOffset = 0;
+let currentResults = [];
+let totalCount = 0;
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+    loadAccounts();
+    
+    // 设置默认时间范围（10天前到现在）
+    const now = new Date();
+    const tenDaysAgo = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000);
+
+    document.getElementById('endTime').value = now.toISOString().slice(0, 16);
+    document.getElementById('startTime').value = tenDaysAgo.toISOString().slice(0, 16);
+    
+    // 绑定表单提交事件（确保只绑定一次）
+    const queryForm = document.getElementById('queryForm');
+    if (queryForm && !queryForm.hasAttribute('data-event-bound')) {
+        queryForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            performQuery();
+        });
+        queryForm.setAttribute('data-event-bound', 'true');
+    }
+});
+
+// 加载账号列表
+async function loadAccounts() {
+    try {
+        const accounts = await apiRequest('/api/accounts');
+        const select = document.getElementById('selfId');
+        
+        // 清空现有选项
+        select.innerHTML = '<option value="">全部账号</option>';
+        
+        // 添加账号选项
+        Object.entries(accounts).forEach(([accountId, account]) => {
+            const option = document.createElement('option');
+            option.value = accountId;
+            option.textContent = `${account.name || accountId} (${accountId})`;
+            select.appendChild(option);
+        });
+        
+    } catch (error) {
+        console.error('加载账号列表失败:', error);
+    }
+}
+
+// 执行查询
+async function performQuery() {
+    const form = document.getElementById('queryForm');
+    const submitButton = form.querySelector('button[type="submit"]');
+
+    // 如果按钮已经被禁用，说明正在查询中，直接返回
+    if (submitButton && submitButton.disabled) {
+        return;
+    }
+
+    const formData = new FormData(form);
+    const originalText = submitButton.innerHTML;
+
+    try {
+        // 显示加载状态
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        if (loadingIndicator) {
+            loadingIndicator.style.display = 'block';
+        }
+
+        // 禁用查询按钮防止重复提交
+        submitButton.disabled = true;
+        submitButton.innerHTML = '<i class="bi bi-hourglass-split"></i> 查询中...';
+
+        // 重置状态
+        currentOffset = 0;
+        currentResults = [];
+        totalCount = 0;
+
+        // 构建查询参数
+        const params = new URLSearchParams();
+
+        for (let [key, value] of formData.entries()) {
+            const trimmedValue = value.trim();
+            if (trimmedValue) {
+                if (key === 'keywords' && trimmedValue.includes(',')) {
+                    // 处理多个关键词
+                    const keywords = trimmedValue.split(',').map(k => k.trim()).filter(k => k);
+                    keywords.forEach(keyword => params.append('keywords', keyword));
+                } else if (key === 'start_time' || key === 'end_time') {
+                    // 转换时间格式为时间戳
+                    const timestamp = Math.floor(new Date(trimmedValue).getTime() / 1000);
+                    params.append(key, timestamp);
+                } else {
+                    params.append(key, trimmedValue);
+                }
+            }
+        }
+
+        // 添加offset参数用于分页
+        params.append('offset', currentOffset);
+
+        // 发送查询请求
+        const response = await apiRequest(`/api/query_messages?${params.toString()}`);
+
+        // 更新结果
+        currentResults = response.messages || [];
+        totalCount = response.total_count || 0;
+
+        // 显示结果
+        displayResults();
+        updateResultCount();
+
+    } catch (error) {
+        console.error('查询失败:', error);
+        showToast('查询失败: ' + error.message, 'danger');
+
+        // 显示错误状态
+        const container = document.getElementById('resultsContainer');
+        if (container) {
+            container.innerHTML = `
+                <div class="text-center text-muted py-4" id="noResults">
+                    <i class="bi bi-exclamation-triangle" style="font-size: 3rem;"></i>
+                    <div class="mt-2">查询失败: ${error.message}</div>
+                </div>
+            `;
+        }
+    } finally {
+        // 隐藏加载状态
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        if (loadingIndicator) {
+            loadingIndicator.style.display = 'none';
+        }
+
+        // 恢复按钮状态
+        if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.innerHTML = originalText;
+        }
+    }
+}
+
+// 显示查询结果
+function displayResults() {
+    const container = document.getElementById('resultsContainer');
+    if (!container) {
+        console.error('查询结果容器元素未找到');
+        return;
+    }
+
+    if (currentResults.length === 0) {
+        // 显示无结果提示
+        container.innerHTML = `
+            <div class="text-center text-muted py-4" id="noResults">
+                <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+                <div class="mt-2">未找到符合条件的消息</div>
+            </div>
+        `;
+        return;
+    }
+
+    // 创建结果HTML
+    let html = '';
+    currentResults.forEach((message, index) => {
+        const time = new Date(message.timestamp * 1000).toLocaleString('zh-CN');
+        const direction = message.direction === 'SEND' ? '发送' : '接收';
+        const directionClass = message.direction === 'SEND' ? 'text-success' : 'text-info';
+
+        // 解析发送者信息
+        let senderInfo = '';
+        try {
+            const sender = JSON.parse(message.sender_info || '{}');
+            senderInfo = sender.nickname || sender.card || message.user_id || '未知';
+        } catch {
+            senderInfo = message.user_id || '未知';
+        }
+
+        html += `
+            <div class="border-bottom py-3">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <div class="d-flex align-items-center">
+                        <span class="badge bg-secondary me-2">#${index + 1}</span>
+                        <span class="badge ${directionClass === 'text-success' ? 'bg-success' : 'bg-info'} me-2">${direction}</span>
+                        <small class="text-muted">${time}</small>
+                    </div>
+                    <div class="text-end">
+                        <small class="text-muted">
+                            账号: ${message.self_id} |
+                            ${message.group_id ? `群组: ${message.group_id} | ` : ''}
+                            用户: ${senderInfo} (${message.user_id})
+                        </small>
+                    </div>
+                </div>
+                <div class="message-content">
+                    <pre class="mb-0" style="white-space: pre-wrap; font-family: inherit;">${escapeHtml(message.message_content || message.raw_message)}</pre>
+                </div>
+            </div>
+        `;
+    });
+
+    // 直接替换容器内容
+    container.innerHTML = html;
+}
+
+// 更新结果计数
+function updateResultCount() {
+    const countElement = document.getElementById('resultCount');
+    if (countElement) {
+        if (totalCount > 0) {
+            countElement.textContent = `${currentResults.length} 条结果 (共 ${totalCount} 条)`;
+        } else {
+            countElement.textContent = `${currentResults.length} 条结果`;
+        }
+    }
+}
+
+// 清空表单
+function clearForm() {
+    const form = document.getElementById('queryForm');
+    const submitButton = form.querySelector('button[type="submit"]');
+
+    form.reset();
+
+    // 确保按钮状态正常
+    if (submitButton) {
+        submitButton.disabled = false;
+        submitButton.innerHTML = '<i class="bi bi-search"></i> 查询消息';
+    }
+
+    // 重新设置默认时间（10天前到现在）
+    const now = new Date();
+    const tenDaysAgo = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000);
+
+    document.getElementById('endTime').value = now.toISOString().slice(0, 16);
+    document.getElementById('startTime').value = tenDaysAgo.toISOString().slice(0, 16);
+
+    // 清空结果
+    currentResults = [];
+    currentOffset = 0;
+    totalCount = 0;
+
+    const resultsContainer = document.getElementById('resultsContainer');
+    if (resultsContainer) {
+        resultsContainer.innerHTML = `
+            <div class="text-center text-muted py-4" id="noResults">
+                <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+                <div class="mt-2">请设置查询条件并点击查询按钮</div>
+            </div>
+        `;
+    }
+
+    updateResultCount();
+}
+
+// 导出结果
+function exportResults() {
+    if (currentResults.length === 0) {
+        showToast('暂无数据可导出', 'warning');
+        return;
+    }
+    
+    // 创建CSV内容
+    let csvContent = "data:text/csv;charset=utf-8,";
+    csvContent += "时间,方向,账号,用户ID,群组ID,消息内容\n";
+    
+    currentResults.forEach(message => {
+        const time = new Date(message.timestamp * 1000).toLocaleString('zh-CN');
+        const direction = message.direction === 'SEND' ? '发送' : '接收';
+        const content = (message.message_content || message.raw_message).replace(/"/g, '""');
+        
+        csvContent += `"${time}","${direction}","${message.self_id}","${message.user_id || ''}","${message.group_id || ''}","${content}"\n`;
+    });
+    
+    // 下载文件
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `message_query_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    showToast('查询结果已导出', 'success');
+}
+
+// HTML转义函数
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+</script>
+{% endblock %}

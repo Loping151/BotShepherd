@@ -3,9 +3,9 @@
 """
 
 from typing import Dict, Any, List
-from ...onebotv11.models import Event
-from ..permission_manager import PermissionLevel
-from ..base_command import BaseCommand, CommandResponse, CommandResult, command_registry
+from app.onebotv11.models import Event
+from app.commands.permission_manager import PermissionLevel
+from app.commands.base_command import BaseCommand, CommandResponse, CommandResult, command_registry
         
 class SamplePluginCommand(BaseCommand):
     """PING指令"""

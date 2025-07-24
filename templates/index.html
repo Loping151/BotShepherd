@@ -43,100 +43,260 @@
         <div class="card">
             <div class="card-body text-center">
                 <h5 class="card-title">
-                    <i class="bi bi-chat-dots text-info"></i>
-                    今日消息
+                    <i class="bi bi-person-gear text-info"></i>
+                    账号状态
                 </h5>
-                <h3 id="today-messages">0</h3>
-                <small class="text-muted">条消息</small>
+                <h3 id="account-status">0/0</h3>
+                <small class="text-muted">活跃/总数</small>
             </div>
         </div>
     </div>
-    
+
     <div class="col-md-3">
         <div class="card">
             <div class="card-body text-center">
                 <h5 class="card-title">
-                    <i class="bi bi-speedometer text-warning"></i>
-                    消息速率
+                    <i class="bi bi-people text-warning"></i>
+                    群组状态
                 </h5>
-                <h3 id="message-rate">0</h3>
-                <small class="text-muted">条/分钟</small>
+                <h3 id="group-status">0/0</h3>
+                <small class="text-muted">活跃/总数</small>
             </div>
         </div>
     </div>
 </div>
 
-<!-- 图表区域 -->
+<!-- 配置信息 -->
 <div class="row mb-4">
-    <div class="col-md-8">
+    <div class="col-md-6">
         <div class="card">
             <div class="card-header">
                 <h5 class="mb-0">
-                    <i class="bi bi-graph-up"></i>
-                    24小时消息趋势
+                    <i class="bi bi-gear"></i>
+                    配置信息
                 </h5>
             </div>
             <div class="card-body">
-                <canvas id="hourlyChart" height="100"></canvas>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-4">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="bi bi-pie-chart"></i>
-                    消息类型分布
-                </h5>
-            </div>
-            <div class="card-body">
-                <canvas id="messageTypeChart"></canvas>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- 7天趋势 -->
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="bi bi-calendar-week"></i>
-                    7天消息趋势
-                </h5>
-            </div>
-            <div class="card-body">
-                <canvas id="weeklyChart" height="80"></canvas>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- 实时日志 -->
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">
-                    <i class="bi bi-terminal"></i>
-                    实时系统日志
-                </h5>
-                <div>
-                    <button class="btn btn-sm btn-outline-light" onclick="clearLogs()">
-                        <i class="bi bi-trash"></i>
-                        清空
-                    </button>
-                    <button class="btn btn-sm btn-outline-light" onclick="toggleAutoScroll()">
-                        <i class="bi bi-arrow-down"></i>
-                        自动滚动
-                    </button>
+                <div class="row">
+                    <div class="col-6">
+                        <div class="text-center mb-3">
+                            <h6 class="text-muted">最新版本</h6>
+                            <h4 id="remote-version">加载中...</h4>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="text-center mb-3">
+                            <h6 class="text-muted">指令前缀</h6>
+                            <h4 id="command-prefix">bs</h4>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="text-center mb-3">
+                            <h6 class="text-muted">超级用户</h6>
+                            <h4 id="superuser-count">0</h4>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="text-center mb-3">
+                            <h6 class="text-muted">全局别名</h6>
+                            <h4 id="global-aliases">0</h4>
+                        </div>
+                    </div>
                 </div>
             </div>
-            <div class="card-body p-0">
-                <div id="log-container" style="height: 300px; overflow-y: auto; background: #f8f9fa; font-family: monospace; font-size: 12px; padding: 10px;">
-                    <div class="text-muted">等待日志数据...</div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-database"></i>
+                    数据库状态
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-6">
+                        <div class="text-center mb-3">
+                            <h6 class="text-muted">数据库大小</h6>
+                            <h4 id="db-size">0 MB</h4>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="text-center mb-3">
+                            <h6 class="text-muted">消息记录</h6>
+                            <h4 id="message-records">0</h4>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="text-center">
+                            <h6 class="text-muted">数据保留</h6>
+                            <h4 id="data-retention">30天</h4>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="text-center">
+                            <h6 class="text-muted">存储路径</h6>
+                            <h4 id="storage-path">./data</h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 系统资源 -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-cpu"></i>
+                    系统资源监控
+                </h5>
+            </div>
+            <div class="card-body">
+                <!-- CPU和内存使用率 -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="card border-primary">
+                            <div class="card-header bg-primary text-white">
+                                <h6 class="mb-0"><i class="bi bi-cpu"></i> CPU使用率</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span>系统总体（全核百分比）</span>
+                                    <span id="cpu-usage-system" class="fw-bold">0%</span>
+                                </div>
+                                <div class="progress mb-3" style="height: 8px;">
+                                    <div class="progress-bar bg-primary" id="cpu-progress" role="progressbar" style="width: 0%"></div>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <span>BotShepherd（单核百分比）</span>
+                                    <span id="cpu-usage-app" class="fw-bold text-info">0%</span>
+                                </div>
+                                <div class="row mt-2">
+                                    <div class="col-6">
+                                        <small class="text-muted">核心数: <span id="cpu-cores">0</span></small>
+                                    </div>
+                                    <div class="col-6">
+                                        <small class="text-muted">频率: <span id="cpu-freq">0 MHz</span></small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card border-info">
+                            <div class="card-header bg-info text-white">
+                                <h6 class="mb-0"><i class="bi bi-memory"></i> 内存使用</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span>系统内存</span>
+                                    <span id="memory-usage-system" class="fw-bold">0 GB / 0 GB</span>
+                                </div>
+                                <div class="progress mb-3" style="height: 8px;">
+                                    <div class="progress-bar bg-info" id="memory-progress" role="progressbar" style="width: 0%"></div>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <span>BotShepherd</span>
+                                    <span id="memory-usage-app" class="fw-bold text-primary">0 MB</span>
+                                </div>
+                                <div class="row mt-2">
+                                    <div class="col-6">
+                                        <small class="text-muted">可用: <span id="memory-available">0 GB</span></small>
+                                    </div>
+                                    <div class="col-6">
+                                        <small class="text-muted">使用率: <span id="memory-percent">0%</span></small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 磁盘和系统信息 -->
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card border-warning">
+                            <div class="card-header bg-warning text-dark">
+                                <h6 class="mb-0"><i class="bi bi-hdd"></i> 磁盘使用</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span>磁盘空间</span>
+                                    <span id="disk-usage" class="fw-bold">0 GB / 0 GB</span>
+                                </div>
+                                <div class="progress mb-3" style="height: 8px;">
+                                    <div class="progress-bar bg-warning" id="disk-progress" role="progressbar" style="width: 0%"></div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-6">
+                                        <small class="text-muted">可用: <span id="disk-free">0 GB</span></small>
+                                    </div>
+                                    <div class="col-6">
+                                        <small class="text-muted">使用率: <span id="disk-percent">0%</span></small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card border-success">
+                            <div class="card-header bg-success text-white">
+                                <h6 class="mb-0"><i class="bi bi-info-circle"></i> 系统信息</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-12 mb-2">
+                                        <small class="text-muted">BotShepherd版本</small>
+                                        <div id="bs-version" class="fw-bold text-primary">v0.1.0</div>
+                                    </div>
+                                    <div class="col-12 mb-2">
+                                        <small class="text-muted">操作系统</small>
+                                        <div id="system-info" class="fw-bold">Unknown</div>
+                                    </div>
+                                    <div class="col-12 mb-2">
+                                        <small class="text-muted">Python版本</small>
+                                        <div id="python-version" class="fw-bold">Unknown</div>
+                                    </div>
+                                    <div class="col-6">
+                                        <small class="text-muted">系统运行</small>
+                                        <div id="system-uptime" class="fw-bold text-success">0天</div>
+                                    </div>
+                                    <div class="col-6">
+                                        <small class="text-muted">应用运行</small>
+                                        <div id="app-uptime" class="fw-bold text-info">0小时</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 仪表盘内容展示 -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-info-circle"></i>
+                    使用说明
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="dashboard-content" style="max-height: 400px; overflow-y: auto;">
+                    <div class="text-center text-muted">
+                        <i class="bi bi-hourglass-split"></i>
+                        <div>加载中...</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -146,89 +306,162 @@
 
 {% block extra_js %}
 <script>
-let hourlyChart, messageTypeChart, weeklyChart;
 let autoScroll = true;
+let systemStartTime = Date.now();
 
-// 初始化图表
-function initCharts() {
-    // 24小时趋势图
-    const hourlyCtx = document.getElementById('hourlyChart').getContext('2d');
-    hourlyChart = new Chart(hourlyCtx, {
-        type: 'line',
-        data: {
-            labels: Array.from({length: 24}, (_, i) => `${i}:00`),
-            datasets: [{
-                label: '消息数量',
-                data: Array(24).fill(0),
-                borderColor: '#6c757d',
-                backgroundColor: 'rgba(108, 117, 125, 0.1)',
-                tension: 0.4
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: {
-                    beginAtZero: true
-                }
-            }
-        }
-    });
-    
-    // 消息类型分布图
-    const messageTypeCtx = document.getElementById('messageTypeChart').getContext('2d');
-    messageTypeChart = new Chart(messageTypeCtx, {
-        type: 'doughnut',
-        data: {
-            labels: ['群聊消息', '私聊消息', '系统通知', 'API调用'],
-            datasets: [{
-                data: [0, 0, 0, 0],
-                backgroundColor: [
-                    '#6c757d',
-                    '#495057',
-                    '#28a745',
-                    '#17a2b8'
-                ]
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false
-        }
-    });
-    
-    // 7天趋势图
-    const weeklyCtx = document.getElementById('weeklyChart').getContext('2d');
-    const weekDays = [];
-    for (let i = 6; i >= 0; i--) {
-        const date = new Date();
-        date.setDate(date.getDate() - i);
-        weekDays.push(date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' }));
+// 加载系统状态
+async function loadSystemStatus() {
+    try {
+        // 获取基本状态
+        const statusResponse = await apiRequest('/api/status');
+        document.getElementById('active-connections').textContent = statusResponse.active_connections || 0;
+
+        // 获取版本信息
+        const versionResponse = await apiRequest('/api/version');
+        document.getElementById('system-version').textContent = `v${versionResponse.version || '0.1.0'}`;
+
+        // 获取全局配置
+        const configResponse = await apiRequest('/api/global-config');
+        document.getElementById('command-prefix').textContent = configResponse.command_prefix || 'bs';
+        document.getElementById('superuser-count').textContent = (configResponse.superusers || []).length;
+        document.getElementById('global-aliases').textContent = Object.keys(configResponse.global_aliases || {}).length;
+
+        // 计算过滤规则数量
+        const globalFilters = configResponse.global_filters || {};
+        const filterCount = (globalFilters.receive_filters || []).length +
+                           (globalFilters.send_filters || []).length +
+                           (globalFilters.prefix_protections || []).length;
+        document.getElementById('filter-rules').textContent = filterCount;
+
+        // 数据库配置
+        const dbConfig = configResponse.database || {};
+        document.getElementById('data-retention').textContent = `${dbConfig.auto_expire_days || 30}天`;
+        document.getElementById('storage-path').textContent = dbConfig.data_path || './data';
+
+    } catch (error) {
+        console.error('加载系统状态失败:', error);
     }
-    
-    weeklyChart = new Chart(weeklyCtx, {
-        type: 'bar',
-        data: {
-            labels: weekDays,
-            datasets: [{
-                label: '消息数量',
-                data: Array(7).fill(0),
-                backgroundColor: 'rgba(108, 117, 125, 0.8)',
-                borderColor: '#6c757d',
-                borderWidth: 1
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: {
-                    beginAtZero: true
-                }
+}
+
+// 加载账号和群组状态
+async function loadAccountGroupStatus() {
+    try {
+        // 获取账号配置
+        const accountsResponse = await apiRequest('/api/accounts');
+        const totalAccounts = Object.keys(accountsResponse).length;
+
+        // 获取群组配置
+        const groupsResponse = await apiRequest('/api/groups');
+        const totalGroups = Object.keys(groupsResponse).length;
+
+        // 获取今日活跃账号和群组
+        const recentlyActiveAccountsResponse = await apiRequest('/api/recently-active-accounts');
+        const recentlyActiveGroupsResponse = await apiRequest('/api/recently-active-groups');
+
+        const todayActiveAccounts = recentlyActiveAccountsResponse.length || 0;
+        const todayActiveGroups = recentlyActiveGroupsResponse.length || 0;
+
+        // 更新显示（改为今日活跃）
+        document.getElementById('account-status').textContent = `${todayActiveAccounts}/${totalAccounts}`;
+        document.getElementById('group-status').textContent = `${todayActiveGroups}/${totalGroups}`;
+
+    } catch (error) {
+        console.error('加载账号群组状态失败:', error);
+        // 显示错误信息
+        document.getElementById('account-status').textContent = '获取失败';
+        document.getElementById('group-status').textContent = '获取失败';
+    }
+}
+
+// 加载数据库状态
+async function loadDatabaseStatus() {
+    try {
+        const dbResponse = await apiRequest('/api/database-status');
+
+        // 更新数据库状态信息
+        document.getElementById('db-size').textContent = `${dbResponse.db_size_mb} MB`;
+        document.getElementById('message-records').textContent = dbResponse.message_count.toLocaleString();
+        document.getElementById('data-retention').textContent = `${dbResponse.retention_days}天`;
+        document.getElementById('storage-path').textContent = dbResponse.storage_path;
+
+    } catch (error) {
+        console.error('加载数据库状态失败:', error);
+        // 显示错误信息
+        document.getElementById('db-size').textContent = '获取失败';
+        document.getElementById('message-records').textContent = '获取失败';
+        document.getElementById('data-retention').textContent = '获取失败';
+        document.getElementById('storage-path').textContent = '获取失败';
+    }
+}
+
+// 更新系统资源信息
+async function updateSystemResources() {
+    try {
+        const response = await apiRequest('/api/system-resources');
+
+        // 更新CPU使用率
+        document.getElementById('cpu-usage-system').textContent = `${response.total_cpu}%`;
+        document.getElementById('cpu-usage-app').textContent = `${response.app_cpu}%`;
+        document.getElementById('cpu-progress').style.width = `${response.total_cpu}%`;
+        document.getElementById('cpu-cores').textContent = response.cpu_cores;
+        document.getElementById('cpu-freq').textContent = response.cpu_freq_current > 0 ?
+            `${response.cpu_freq_current} MHz` : '未知';
+
+        // 更新内存使用
+        document.getElementById('memory-usage-system').textContent =
+            `${response.used_memory_gb} GB / ${response.total_memory_gb} GB`;
+        document.getElementById('memory-usage-app').textContent = `${response.app_memory} MB`;
+        document.getElementById('memory-progress').style.width = `${response.memory_percent}%`;
+        document.getElementById('memory-available').textContent = `${response.available_memory_gb} GB`;
+        document.getElementById('memory-percent').textContent = `${response.memory_percent}%`;
+
+        // 更新磁盘使用
+        document.getElementById('disk-usage').textContent =
+            `${response.disk_used_gb} GB / ${response.disk_total_gb} GB`;
+        document.getElementById('disk-progress').style.width = `${response.disk_percent}%`;
+        document.getElementById('disk-free').textContent = `${response.disk_free_gb} GB`;
+        document.getElementById('disk-percent').textContent = `${response.disk_percent}%`;
+
+        // 更新系统信息
+        document.getElementById('system-info').textContent = response.system_info;
+        document.getElementById('python-version').textContent = response.python_version;
+
+        // 获取并更新版本信息（如果还没有加载）
+        if (document.getElementById('bs-version').textContent === 'v0.1.0') {
+            try {
+                const versionResponse = await apiRequest('/api/version');
+                document.getElementById('bs-version').textContent = `v${versionResponse.version || '0.1.0'}`;
+            } catch (error) {
+                console.error('获取版本信息失败:', error);
             }
         }
-    });
+
+        // 格式化系统运行时间
+        const systemUptimeText = response.system_uptime_days > 0 ?
+            `${response.system_uptime_days}天${response.system_uptime_hours}小时` :
+            `${response.system_uptime_hours}小时`;
+        document.getElementById('system-uptime').textContent = systemUptimeText;
+
+        // 格式化应用运行时间
+        const appUptimeText = response.app_uptime_hours > 0 ?
+            `${response.app_uptime_hours}小时${response.app_uptime_minutes}分钟` :
+            `${response.app_uptime_minutes}分钟`;
+        document.getElementById('app-uptime').textContent = appUptimeText;
+
+    } catch (error) {
+        console.error('获取系统资源信息失败:', error);
+        // 如果获取失败，显示错误信息
+        const errorElements = [
+            'cpu-usage-system', 'cpu-usage-app', 'cpu-cores', 'cpu-freq',
+            'memory-usage-system', 'memory-usage-app', 'memory-available', 'memory-percent',
+            'disk-usage', 'disk-free', 'disk-percent',
+            'system-info', 'python-version', 'system-uptime', 'app-uptime'
+        ];
+        errorElements.forEach(id => {
+            const element = document.getElementById(id);
+            if (element) element.textContent = '获取失败';
+        });
+    }
 }
 
 // 更新时间显示
@@ -237,112 +470,55 @@ function updateTime() {
     document.getElementById('current-time').textContent = now.toLocaleString('zh-CN');
 }
 
-// 加载系统状态
-async function loadSystemStatus() {
+
+
+// 加载仪表盘内容
+async function loadDashboardContent() {
     try {
-        const status = await apiRequest('/api/status');
-        document.getElementById('active-connections').textContent = status.active_connections;
+        const response = await apiRequest('/api/dashboard-content');
+        const container = document.getElementById('dashboard-content');
+
+        if (response.content) {
+            // 使用marked.js解析markdown
+            const htmlContent = marked.parse(response.content);
+            container.innerHTML = htmlContent;
+        } else {
+            container.innerHTML = '<div class="text-muted">无法加载仪表盘内容</div>';
+        }
     } catch (error) {
-        console.error('加载系统状态失败:', error);
+        console.error('加载仪表盘内容失败:', error);
+        document.getElementById('dashboard-content').innerHTML =
+            '<div class="text-danger">加载仪表盘内容失败</div>';
     }
 }
 
-// 加载统计数据
-async function loadStatistics() {
+// 加载远程版本信息（仅在页面刷新时执行）
+async function loadRemoteVersion() {
     try {
-        const stats = await apiRequest('/api/statistics?date=today');
-        document.getElementById('today-messages').textContent = stats.total_messages;
-        
-        // 更新图表数据（这里是示例数据）
-        // 实际应用中需要从API获取真实数据
-        updateChartData();
+        const remoteVersionResponse = await apiRequest('/api/github-version');
+        document.getElementById('remote-version').textContent = `v${remoteVersionResponse.version || '0.1.0'}`;
     } catch (error) {
-        console.error('加载统计数据失败:', error);
-    }
-}
-
-// 更新图表数据
-function updateChartData() {
-    // 生成示例数据
-    const hourlyData = Array.from({length: 24}, () => Math.floor(Math.random() * 100));
-    const messageTypeData = [60, 25, 10, 5];
-    const weeklyData = Array.from({length: 7}, () => Math.floor(Math.random() * 500));
-    
-    hourlyChart.data.datasets[0].data = hourlyData;
-    hourlyChart.update();
-    
-    messageTypeChart.data.datasets[0].data = messageTypeData;
-    messageTypeChart.update();
-    
-    weeklyChart.data.datasets[0].data = weeklyData;
-    weeklyChart.update();
-}
-
-// 日志相关函数
-function clearLogs() {
-    document.getElementById('log-container').innerHTML = '<div class="text-muted">日志已清空</div>';
-}
-
-function toggleAutoScroll() {
-    autoScroll = !autoScroll;
-    const button = event.target.closest('button');
-    const icon = button.querySelector('i');
-    
-    if (autoScroll) {
-        icon.className = 'bi bi-arrow-down';
-        button.title = '关闭自动滚动';
-    } else {
-        icon.className = 'bi bi-pause';
-        button.title = '开启自动滚动';
-    }
-}
-
-function addLogEntry(message, type = 'info') {
-    const container = document.getElementById('log-container');
-    const timestamp = new Date().toLocaleTimeString('zh-CN');
-    
-    const logEntry = document.createElement('div');
-    logEntry.className = `log-entry text-${type}`;
-    logEntry.innerHTML = `<span class="text-muted">[${timestamp}]</span> ${message}`;
-    
-    container.appendChild(logEntry);
-    
-    // 保持最多100条日志
-    const entries = container.querySelectorAll('.log-entry');
-    if (entries.length > 100) {
-        entries[0].remove();
-    }
-    
-    // 自动滚动到底部
-    if (autoScroll) {
-        container.scrollTop = container.scrollHeight;
+        console.error('获取远程版本失败:', error);
+        document.getElementById('remote-version').textContent = '获取失败';
     }
 }
 
 // 页面加载完成后初始化
 document.addEventListener('DOMContentLoaded', function() {
-    initCharts();
     updateTime();
     loadSystemStatus();
-    loadStatistics();
-    
+    loadAccountGroupStatus();
+    loadDatabaseStatus();
+    updateSystemResources();
+    loadDashboardContent();
+    loadRemoteVersion(); // 只在页面加载时执行一次
+
     // 定时更新
     setInterval(updateTime, 1000);
     setInterval(loadSystemStatus, 5000);
-    setInterval(loadStatistics, 30000);
-    
-    // 模拟日志更新
-    setInterval(() => {
-        const messages = [
-            '收到新消息',
-            '处理指令请求',
-            '更新用户状态',
-            '执行定时任务',
-            '连接状态检查'
-        ];
-        const message = messages[Math.floor(Math.random() * messages.length)];
-        addLogEntry(message);
-    }, 3000);
+    setInterval(loadAccountGroupStatus, 30000);
+    setInterval(loadDatabaseStatus, 60000);
+    setInterval(updateSystemResources, 10000);
 });
 </script>
 {% endblock %}

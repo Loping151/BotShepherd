@@ -65,9 +65,14 @@
         <h5 class="mb-0">
             <i class="bi bi-database"></i>
             数据库设置
+            <span class="badge bg-warning ms-2">需要重启</span>
         </h5>
     </div>
     <div class="card-body">
+        <div class="alert alert-warning" role="alert">
+            <i class="bi bi-exclamation-triangle"></i>
+            <strong>注意：</strong>数据库设置修改后需要重启系统才能生效。
+        </div>
         <div class="row">
             <div class="col-md-6">
                 <div class="mb-3">
@@ -76,7 +81,7 @@
                     <div class="form-text">数据库文件存储路径</div>
                 </div>
             </div>
-            
+
             <div class="col-md-6">
                 <div class="mb-3">
                     <label for="autoExpireDays" class="form-label">自动过期天数</label>
@@ -94,9 +99,14 @@
         <h5 class="mb-0">
             <i class="bi bi-file-text"></i>
             日志设置
+            <span class="badge bg-warning ms-2">需要重启</span>
         </h5>
     </div>
     <div class="card-body">
+        <div class="alert alert-warning" role="alert">
+            <i class="bi bi-exclamation-triangle"></i>
+            <strong>注意：</strong>日志设置修改后需要重启系统才能生效。
+        </div>
         <div class="row">
             <div class="col-md-4">
                 <div class="mb-3">
@@ -109,7 +119,7 @@
                     </select>
                 </div>
             </div>
-            
+
             <div class="col-md-4">
                 <div class="mb-3">
                     <label for="keepDays" class="form-label">保留天数</label>
@@ -117,7 +127,7 @@
                     <div class="form-text">日志文件保留天数</div>
                 </div>
             </div>
-            
+
             <div class="col-md-4">
                 <div class="mb-3">
                     <div class="form-check mt-4">
@@ -161,7 +171,7 @@
                         <label class="form-check-label" for="normalizeNapcatSent">
                             规范化NapCat发送消息
                         </label>
-                        <div class="form-text">对NapCat发送的消息进行规范化</div>
+                        <div class="form-text">对NapCat发送的消息进行规范化，将message_sent类型重新转为message类型</div>
                     </div>
                 </div>
             </div>
@@ -169,54 +179,7 @@
     </div>
 </div>
 
-<!-- 通知设置 -->
-<div class="card mb-4">
-    <div class="card-header">
-        <h5 class="mb-0">
-            <i class="bi bi-bell"></i>
-            通知设置
-        </h5>
-    </div>
-    <div class="card-body">
-        <div class="row">
-            <div class="col-md-3">
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" id="friendRequests">
-                    <label class="form-check-label" for="friendRequests">
-                        好友请求通知
-                    </label>
-                </div>
-            </div>
-            
-            <div class="col-md-3">
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" id="groupInvites">
-                    <label class="form-check-label" for="groupInvites">
-                        群邀请通知
-                    </label>
-                </div>
-            </div>
-            
-            <div class="col-md-3">
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" id="groupKicks">
-                    <label class="form-check-label" for="groupKicks">
-                        群踢出通知
-                    </label>
-                </div>
-            </div>
-            
-            <div class="col-md-3">
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" id="muteNotifications">
-                    <label class="form-check-label" for="muteNotifications">
-                        静音通知
-                    </label>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+
 
 <!-- Web认证设置 -->
 <div class="card mb-4">
@@ -313,12 +276,7 @@ function updateSettingsForm() {
     document.getElementById('normalizationEnabled').checked = normalization.enabled || false;
     document.getElementById('normalizeNapcatSent').checked = normalization.normalize_napcat_sent || false;
     
-    // 通知设置
-    const notifications = globalConfig.notifications || {};
-    document.getElementById('friendRequests').checked = notifications.friend_requests || false;
-    document.getElementById('groupInvites').checked = notifications.group_invites || false;
-    document.getElementById('groupKicks').checked = notifications.group_kicks || false;
-    document.getElementById('muteNotifications').checked = notifications.mute_notifications || false;
+
     
     // Web认证设置
     const webAuth = globalConfig.web_auth || {};
@@ -434,12 +392,7 @@ async function saveAllSettings() {
                 enabled: document.getElementById('normalizationEnabled').checked,
                 normalize_napcat_sent: document.getElementById('normalizeNapcatSent').checked
             },
-            notifications: {
-                friend_requests: document.getElementById('friendRequests').checked,
-                group_invites: document.getElementById('groupInvites').checked,
-                group_kicks: document.getElementById('groupKicks').checked,
-                mute_notifications: document.getElementById('muteNotifications').checked
-            },
+
             web_auth: {
                 username: document.getElementById('webUsername').value.trim(),
                 password: document.getElementById('webPassword').value.trim()

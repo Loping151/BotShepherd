@@ -241,15 +241,20 @@ function updateConnectionTable() {
             <td>${statusBadge}</td>
             <td>0</td>
             <td>
-                <button class="btn btn-sm btn-outline-primary" onclick="showConnectionDetail('${connectionId}')">
-                    <i class="bi bi-eye"></i>
-                </button>
-                <button class="btn btn-sm btn-outline-warning" onclick="editConnection('${connectionId}')">
-                    <i class="bi bi-pencil"></i>
-                </button>
-                <button class="btn btn-sm btn-outline-danger" onclick="deleteConnection('${connectionId}')">
-                    <i class="bi bi-trash"></i>
-                </button>
+                <div class="btn-group" role="group">
+                    <button class="btn btn-sm btn-outline-primary" onclick="showConnectionDetail('${connectionId}')" title="查看详情">
+                        <i class="bi bi-eye"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-warning" onclick="editConnection('${connectionId}')" title="编辑">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="copyConnection('${connectionId}')" title="复制">
+                        <i class="bi bi-clipboard"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteConnection('${connectionId}')" title="删除">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
             </td>
         `;
         
@@ -394,6 +399,34 @@ async function deleteConnection(connectionId) {
         loadConnections();
     } catch (error) {
         showToast(`删除连接失败: ${error.message}`, 'danger');
+    }
+}
+
+// 复制连接
+async function copyConnection(connectionId) {
+    const newId = prompt('请输入新连接的ID:', connectionId + '_copy');
+    if (!newId || newId.trim() === '') {
+        return;
+    }
+
+    if (connections[newId.trim()]) {
+        showToast('连接ID已存在', 'warning');
+        return;
+    }
+
+    try {
+        await apiRequest(`/api/connections/${connectionId}/copy`, {
+            method: 'POST',
+            body: JSON.stringify({
+                new_id: newId.trim()
+            })
+        });
+
+        showToast('连接已复制', 'success');
+        loadConnections();
+    } catch (error) {
+        console.error('复制连接失败:', error);
+        showToast('复制连接失败: ' + error.message, 'danger');
     }
 }
 

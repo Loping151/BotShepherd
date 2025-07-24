@@ -285,22 +285,29 @@ class ConfigManager:
     async def get_recently_active_accounts(self, hours: int = 24) -> List[Dict[str, Any]]:
         """获取最近活跃的账号"""
         cutoff_time = datetime.now() - timedelta(hours=hours)
-        
+
         active_accounts = []
         for account_id, config in self._account_configs.items():
             last_receive_time = config.get("last_receive_time", "1970-01-01T00:00:00")
             last_send_time = config.get("last_send_time", "1970-01-01T00:00:00")
             if not last_receive_time or not last_send_time:
                 continue
-            
+
             if datetime.fromisoformat(last_send_time) >= cutoff_time:
                 active_accounts.append({
                     "account_id": account_id,
                     "last_receive_time": last_receive_time,
-                    "last_send_time": last_send_time
+                    "last_send_time": last_send_time,
+                    "send_count": config.get("send_count", {}),
+                    "enabled": config.get("enabled", True),
+                    "name": config.get("name", account_id)
                 })
-        
+
         return active_accounts
+
+
+
+
     
     async def set_account_enabled(self, account_id: str, enabled: bool):
         """设置账号启用状态"""

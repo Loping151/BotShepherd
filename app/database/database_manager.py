@@ -430,6 +430,124 @@ class DatabaseManager:
                 print(f"按 user_id 统计消息数量失败: {e}")
                 return {}
 
+    async def count_messages_by_time_intervals(self,
+                                             self_id: str = None,
+                                             start_time: int = None,
+                                             end_time: int = None,
+                                             interval_hours: int = 3,
+                                             direction: str = "SEND") -> List[Dict[str, Any]]:
+        """按时间间隔统计消息数量"""
+        async with self.session_factory() as session:
+            try:
+                if not start_time or not end_time:
+                    return []
+
+                # 计算时间间隔（秒）
+                interval_seconds = interval_hours * 3600
+
+                # 构建基础条件
+                conditions = []
+                if self_id:
+                    conditions.append(Message.self_id == self_id)
+                if direction:
+                    conditions.append(Message.direction == direction)
+                if start_time:
+                    conditions.append(Message.timestamp >= start_time)
+                if end_time:
+                    conditions.append(Message.timestamp <= end_time)
+
+                # 使用SQL计算时间间隔分组
+                # 将时间戳按间隔分组
+                time_group_expr = func.floor((Message.timestamp - start_time) / interval_seconds) * interval_seconds + start_time
+
+                stmt = select(
+                    time_group_expr.label('time_group'),
+                    func.count(Message.id).label('message_count')
+                ).group_by(time_group_expr).order_by(time_group_expr)
+
+                if conditions:
+                    stmt = stmt.where(and_(*conditions))
+
+                result = await session.execute(stmt)
+                rows = result.fetchall()
+
+                # 格式化结果
+                time_stats = []
+                for row in rows:
+                    time_group = int(row.time_group)
+                    message_count = row.message_count
+
+                    # 转换为可读的时间格式
+                    from datetime import datetime
+                    dt = datetime.fromtimestamp(time_group)
+                    time_label = dt.strftime('%H:%M')
+
+                    time_stats.append({
+                        'timestamp': time_group,
+                        'time_label': time_label,
+                        'message_count': message_count
+                    })
+
+                return time_stats
+
+            except Exception as e:
+                print(f"按时间间隔统计消息数量失败: {e}")
+                return []
+
+    async def count_messages_by_type(self,
+                                   self_id: str = None,
+                                   start_time: int = None,
+                                   end_time: int = None,
+                                   direction: str = "SEND") -> Dict[str, int]:
+        """按消息类型统计消息数量"""
+        async with self.session_factory() as session:
+            try:
+                conditions = []
+                if self_id:
+                    conditions.append(Message.self_id == self_id)
+                if direction:
+                    conditions.append(Message.direction == direction)
+                if start_time:
+                    conditions.append(Message.timestamp >= start_time)
+                if end_time:
+                    conditions.append(Message.timestamp <= end_time)
+
+                # 按消息类型分组统计
+                stmt = select(
+                    Message.message_type,
+                    func.count(Message.id).label('count')
+                ).group_by(Message.message_type)
+
+                if conditions:
+                    stmt = stmt.where(and_(*conditions))
+
+                result = await session.execute(stmt)
+                rows = result.fetchall()
+
+                # 格式化结果，将消息类型转换为中文
+                type_mapping = {
+                    'group': '群聊',
+                    'private': '私聊',
+                    'notice': '通知',
+                    'request': '请求',
+                    'meta_event': '元事件'
+                }
+
+                type_stats = {}
+                for row in rows:
+                    message_type = row.message_type
+                    count = row.count
+
+                    # 转换为中文名称
+                    chinese_type = type_mapping.get(message_type, message_type)
+                    type_stats[chinese_type] = count
+
+                return type_stats
+
+            except Exception as e:
+                print(f"按消息类型统计消息数量失败: {e}")
+                return {}
+
 
     async def _start_cleanup_task(self):
         """启动数据清理任务"""

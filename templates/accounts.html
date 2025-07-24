@@ -31,7 +31,7 @@
             <div class="card-body text-center">
                 <h5 class="card-title">
                     <i class="bi bi-check-circle text-success"></i>
-                    活跃账号
+                    启用账号
                 </h5>
                 <h3 id="active-accounts">0</h3>
                 <small class="text-muted">个账号</small>
@@ -98,7 +98,7 @@
 
 <!-- 添加/编辑账号模态框 -->
 <div class="modal fade" id="accountModal" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="accountModalTitle">添加账号</h5>
@@ -120,11 +120,40 @@
                     </div>
                     
                     <div class="mb-3">
+                        <label for="accountAlias" class="form-label">账号别名</label>
+                        <input type="text" class="form-control" id="accountAlias"
+                               placeholder="账号的别名或昵称">
+                        <div class="form-text">用于在日志和统计中显示的友好名称</div>
+                    </div>
+
+                    <div class="mb-3">
                         <label for="accountDescription" class="form-label">描述</label>
                         <textarea class="form-control" id="accountDescription" rows="2"
                                   placeholder="账号描述信息"></textarea>
                     </div>
-                    
+
+                    <!-- 指令别名管理 -->
+                    <div class="mb-3">
+                        <label class="form-label">指令别名</label>
+                        <div class="alert alert-info py-2">
+                            <small><i class="bi bi-info-circle"></i> 为指令设置别名，格式：别名 -> 目标指令。例如：# -> bs</small>
+                        </div>
+                        <div id="accountAliasesList">
+                            <div class="input-group mb-2">
+                                <input type="text" class="form-control account-alias-from" placeholder="别名（如：#）">
+                                <span class="input-group-text">→</span>
+                                <input type="text" class="form-control account-alias-to" placeholder="目标指令（如：bs）">
+                                <button class="btn btn-outline-danger" type="button" onclick="removeAccountAlias(this)">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="addAccountAlias()">
+                            <i class="bi bi-plus"></i>
+                            添加别名
+                        </button>
+                    </div>
+
                     <div class="mb-3">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" id="accountEnabled" checked>
@@ -187,25 +216,25 @@ async function loadAccounts() {
 // 更新账号统计
 function updateAccountStats() {
     const total = Object.keys(accounts).length;
-    let active = 0, disabled = 0, todayActive = 0;
-    
+    let enabled = 0, disabled = 0, todayActive = 0;
+
     const today = new Date().toISOString().split('T')[0];
-    
+
     Object.values(accounts).forEach(account => {
         if (account.enabled) {
-            active++;
+            enabled++;
         } else {
             disabled++;
         }
-        
-        // 检查今日是否活跃
-        if (account.last_receive_time && account.last_receive_time.startsWith(today)) {
+
+        // 检查今日是否活跃（基于last_send_time）
+        if (account.last_send_time && account.last_send_time.startsWith(today)) {
             todayActive++;
         }
     });
-    
+
     document.getElementById('total-accounts').textContent = total;
-    document.getElementById('active-accounts').textContent = active;
+    document.getElementById('active-accounts').textContent = enabled;
     document.getElementById('disabled-accounts').textContent = disabled;
     document.getElementById('today-active').textContent = todayActive;
 }
@@ -280,7 +309,8 @@ function showAddAccountModal() {
     document.getElementById('accountModalTitle').textContent = '添加账号';
     document.getElementById('accountForm').reset();
     document.getElementById('accountEnabled').checked = true;
-    
+    resetAccountAliasesList();
+
     new bootstrap.Modal(document.getElementById('accountModal')).show();
 }
 
@@ -288,14 +318,18 @@ function showAddAccountModal() {
 function editAccount(accountId) {
     editingAccountId = accountId;
     const account = accounts[accountId];
-    
+
     document.getElementById('accountModalTitle').textContent = '编辑账号';
     document.getElementById('accountId').value = accountId;
     document.getElementById('accountId').disabled = true;
     document.getElementById('accountName').value = account.name;
+    document.getElementById('accountAlias').value = account.alias || '';
     document.getElementById('accountDescription').value = account.description || '';
     document.getElementById('accountEnabled').checked = account.enabled;
-    
+
+    // 加载指令别名
+    loadAccountAliasesToForm(account.aliases || {});
+
     new bootstrap.Modal(document.getElementById('accountModal')).show();
 }
 
@@ -304,6 +338,7 @@ async function saveAccount() {
     try {
         const accountId = document.getElementById('accountId').value.trim();
         const name = document.getElementById('accountName').value.trim();
+        const alias = document.getElementById('accountAlias').value.trim();
         const description = document.getElementById('accountDescription').value.trim();
         const enabled = document.getElementById('accountEnabled').checked;
         
@@ -316,11 +351,30 @@ async function saveAccount() {
             showToast('账号ID必须是数字', 'warning');
             return;
         }
-        
+
+        // 收集指令别名
+        const aliases = {};
+        const aliasFromInputs = document.querySelectorAll('.account-alias-from');
+        const aliasToInputs = document.querySelectorAll('.account-alias-to');
+
+        for (let i = 0; i < aliasFromInputs.length; i++) {
+            const aliasFrom = aliasFromInputs[i].value.trim();
+            const aliasTo = aliasToInputs[i].value.trim();
+
+            if (aliasFrom && aliasTo) {
+                if (!aliases[aliasTo]) {
+                    aliases[aliasTo] = [];
+                }
+                aliases[aliasTo].push(aliasFrom);
+            }
+        }
+
         const accountData = {
             account_id: accountId,
             name,
+            alias,
             description,
+            aliases: aliases,
             enabled
         };
         
@@ -395,6 +449,7 @@ function showAccountDetail(accountId) {
                 <table class="table table-sm">
                     <tr><td>账号ID</td><td><code>${accountId}</code></td></tr>
                     <tr><td>名称</td><td>${account.name}</td></tr>
+                    <tr><td>别名</td><td>${account.alias || '无'}</td></tr>
                     <tr><td>描述</td><td>${account.description || '无'}</td></tr>
                     <tr><td>状态</td><td>${account.enabled ? '启用' : '禁用'}</td></tr>
                 </table>
@@ -411,6 +466,78 @@ function showAccountDetail(accountId) {
     
     document.getElementById('accountDetailContent').innerHTML = content;
     new bootstrap.Modal(document.getElementById('accountDetailModal')).show();
+}
+
+// 添加账号别名
+function addAccountAlias() {
+    const list = document.getElementById('accountAliasesList');
+    const div = document.createElement('div');
+    div.className = 'input-group mb-2';
+    div.innerHTML = `
+        <input type="text" class="form-control account-alias-from" placeholder="别名（如：#）">
+        <span class="input-group-text">→</span>
+        <input type="text" class="form-control account-alias-to" placeholder="目标指令（如：bs）">
+        <button class="btn btn-outline-danger" type="button" onclick="removeAccountAlias(this)">
+            <i class="bi bi-trash"></i>
+        </button>
+    `;
+    list.appendChild(div);
+}
+
+// 移除账号别名
+function removeAccountAlias(button) {
+    const list = document.getElementById('accountAliasesList');
+    if (list.children.length > 1) {
+        button.parentElement.remove();
+    }
+}
+
+// 重置账号别名列表
+function resetAccountAliasesList() {
+    const list = document.getElementById('accountAliasesList');
+    list.innerHTML = `
+        <div class="input-group mb-2">
+            <input type="text" class="form-control account-alias-from" placeholder="别名（如：#）">
+            <span class="input-group-text">→</span>
+            <input type="text" class="form-control account-alias-to" placeholder="目标指令（如：bs）">
+            <button class="btn btn-outline-danger" type="button" onclick="removeAccountAlias(this)">
+                <i class="bi bi-trash"></i>
+            </button>
+        </div>
+    `;
+}
+
+// 加载账号别名到表单
+function loadAccountAliasesToForm(aliases) {
+    const list = document.getElementById('accountAliasesList');
+    list.innerHTML = '';
+
+    if (!aliases || Object.keys(aliases).length === 0) {
+        resetAccountAliasesList();
+        return;
+    }
+
+    // 将别名对象转换为表单项
+    Object.entries(aliases).forEach(([target, aliasList]) => {
+        aliasList.forEach(alias => {
+            const div = document.createElement('div');
+            div.className = 'input-group mb-2';
+            div.innerHTML = `
+                <input type="text" class="form-control account-alias-from" value="${alias}">
+                <span class="input-group-text">→</span>
+                <input type="text" class="form-control account-alias-to" value="${target}">
+                <button class="btn btn-outline-danger" type="button" onclick="removeAccountAlias(this)">
+                    <i class="bi bi-trash"></i>
+                </button>
+            `;
+            list.appendChild(div);
+        });
+    });
+
+    // 如果没有别名，至少显示一个空的输入框
+    if (list.children.length === 0) {
+        resetAccountAliasesList();
+    }
 }
 </script>
 {% endblock %}

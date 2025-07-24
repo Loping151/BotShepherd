@@ -107,81 +107,53 @@
 <!-- 图表区域 -->
 <div class="row mb-4">
     <div class="col-md-8">
-        <div class="card">
+        <div class="card h-100">
             <div class="card-header">
                 <h5 class="mb-0">
                     <i class="bi bi-graph-up"></i>
                     消息趋势图
                 </h5>
             </div>
-            <div class="card-body">
-                <canvas id="messagesTrendChart" height="100"></canvas>
+            <div class="card-body" style="height: 400px;">
+                <canvas id="messagesTrendChart"></canvas>
             </div>
         </div>
     </div>
-    
+
     <div class="col-md-4">
-        <div class="card">
+        <div class="card h-100">
             <div class="card-header">
                 <h5 class="mb-0">
                     <i class="bi bi-pie-chart"></i>
                     消息类型分布
                 </h5>
             </div>
-            <div class="card-body">
+            <div class="card-body" style="height: 400px;">
                 <canvas id="messageTypeChart"></canvas>
             </div>
         </div>
     </div>
 </div>
 
-<!-- 热门指令和活跃群组 -->
+<!-- 群组活跃度TOP5 -->
 <div class="row mb-4">
-    <div class="col-md-6">
+    <div class="col-12">
         <div class="card">
             <div class="card-header">
                 <h5 class="mb-0">
                     <i class="bi bi-trophy"></i>
-                    热门指令 TOP 10
+                    群组活跃度 TOP 5
                 </h5>
             </div>
             <div class="card-body">
                 <div class="table-responsive">
-                    <table class="table table-sm" id="top-commands-table">
-                        <thead>
-                            <tr>
-                                <th>排名</th>
-                                <th>指令</th>
-                                <th>使用次数</th>
-                                <th>用户数</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <!-- 动态加载 -->
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="bi bi-fire"></i>
-                    活跃群组 TOP 10
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-sm" id="top-groups-table">
+                    <table class="table table-hover" id="top-groups-table">
                         <thead>
                             <tr>
                                 <th>排名</th>
                                 <th>群组ID</th>
-                                <th>消息数</th>
-                                <th>活跃用户</th>
+                                <th>消息数量</th>
+                                <th>活跃度</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -194,34 +166,11 @@
     </div>
 </div>
 
-<!-- 详细统计表格 -->
-<div class="card">
-    <div class="card-header">
-        <h5 class="mb-0">
-            <i class="bi bi-table"></i>
-            详细统计数据
-        </h5>
-    </div>
-    <div class="card-body">
-        <div class="table-responsive">
-            <table class="table table-hover" id="detailed-stats-table">
-                <thead>
-                    <tr>
-                        <th>日期</th>
-                        <th>消息数</th>
-                        <th>用户数</th>
-                        <th>群组数</th>
-                        <th>指令数</th>
-                        <th>平均响应时间</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <!-- 动态加载 -->
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
+
+
+
+
+
 {% endblock %}
 
 {% block extra_js %}
@@ -234,21 +183,23 @@ document.addEventListener('DOMContentLoaded', function() {
     initCharts();
     loadAccounts();
     loadStatistics();
-    
+
     // 定时刷新
-    setInterval(loadStatistics, 60000); // 每分钟刷新
+    setInterval(() => {
+        loadStatistics();
+    }, 60000); // 每分钟刷新
 });
 
 // 初始化图表
 function initCharts() {
-    // 消息趋势图
+    // 消息趋势图（每3小时）
     const trendCtx = document.getElementById('messagesTrendChart').getContext('2d');
     messagesTrendChart = new Chart(trendCtx, {
         type: 'line',
         data: {
             labels: [],
             datasets: [{
-                label: '消息数量',
+                label: '每3小时发送量',
                 data: [],
                 borderColor: '#6c757d',
                 backgroundColor: 'rgba(108, 117, 125, 0.1)',
@@ -261,12 +212,22 @@ function initCharts() {
             maintainAspectRatio: false,
             scales: {
                 y: {
-                    beginAtZero: true
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: '消息数量'
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: '时间（每3小时）'
+                    }
                 }
             },
             plugins: {
                 legend: {
-                    display: false
+                    display: true
                 }
             }
         }
@@ -277,14 +238,18 @@ function initCharts() {
     messageTypeChart = new Chart(typeCtx, {
         type: 'doughnut',
         data: {
-            labels: ['群聊消息', '私聊消息', '系统通知', 'API调用'],
+            labels: [],
             datasets: [{
-                data: [0, 0, 0, 0],
+                data: [],
                 backgroundColor: [
                     '#6c757d',
                     '#495057',
                     '#28a745',
-                    '#17a2b8'
+                    '#17a2b8',
+                    '#ffc107',
+                    '#dc3545',
+                    '#fd7e14',
+                    '#e83e8c'
                 ]
             }]
         },
@@ -298,6 +263,7 @@ function initCharts() {
             }
         }
     });
+
 }
 
 // 加载账号列表
@@ -350,7 +316,6 @@ async function loadStatistics() {
         updateStatsCards(stats);
         updateCharts(stats);
         updateTopTables(stats);
-        updateDetailedTable(stats);
         
     } catch (error) {
         console.error('加载统计数据失败:', error);
@@ -375,97 +340,146 @@ function updateStatsCards(stats) {
 // 更新变化指示器
 function updateChangeIndicator(elementId, change) {
     const element = document.getElementById(elementId);
-    if (!change) {
-        element.textContent = '暂无对比数据';
+    if (change === undefined || change === null) {
+        element.textContent = '与昨日对比';
+        element.className = 'text-muted';
         return;
     }
-    
+
     const isPositive = change > 0;
     const icon = isPositive ? '↗' : '↘';
     const color = isPositive ? 'text-success' : 'text-danger';
-    
+
     element.className = `text-muted ${color}`;
     element.textContent = `${icon} ${Math.abs(change)}`;
 }
 
 // 更新图表
 function updateCharts(stats) {
-    // 更新趋势图
-    if (stats.daily_trend) {
-        messagesTrendChart.data.labels = stats.daily_trend.map(item => item.date);
-        messagesTrendChart.data.datasets[0].data = stats.daily_trend.map(item => item.messages);
+    // 更新趋势图（每3小时）
+    if (stats.hourly_trend && stats.hourly_trend.length > 0) {
+        messagesTrendChart.data.labels = stats.hourly_trend.map(item => item.time_label);
+        messagesTrendChart.data.datasets[0].data = stats.hourly_trend.map(item => item.message_count);
         messagesTrendChart.update();
     }
-    
-    // 更新类型分布图
-    if (stats.message_types) {
-        messageTypeChart.data.datasets[0].data = [
-            stats.message_types.group || 0,
-            stats.message_types.private || 0,
-            stats.message_types.notice || 0,
-            stats.message_types.api || 0
-        ];
+
+    // 更新消息类型分布图 - 包含TOP5群组
+    if (stats.message_types && stats.top_groups) {
+        // 过滤掉unknown类型
+        const filteredTypes = Object.entries(stats.message_types)
+            .filter(([type, count]) => type !== 'unknown' && type !== 'Unknown')
+            .sort(([,a], [,b]) => b - a); // 按数量排序
+
+        // 获取前5名群组
+        const top5Groups = stats.top_groups.slice(0, 5);
+
+        // 计算TOP5群组的总消息数
+        const top5TotalCount = top5Groups.reduce((sum, group) => sum + group.message_count, 0);
+
+        // 合并消息类型和TOP5群组
+        const labels = [];
+        const data = [];
+        const colors = [];
+
+        // 添加消息类型，特殊处理"群聊"类型
+        let hasGroupChat = false;
+        filteredTypes.forEach(([type, count], index) => {
+            if (type === '群聊') {
+                // 将"群聊"改为"其他群组"，数量减去TOP5群组的数量
+                const otherGroupsCount = Math.max(0, count - top5TotalCount);
+                labels.push('其他群组');
+                data.push(otherGroupsCount);
+                colors.push('#6c757d');
+                hasGroupChat = true;
+            } else {
+                labels.push(type);
+                data.push(count);
+                colors.push(['#495057', '#28a745', '#17a2b8', '#ffc107', '#dc3545', '#fd7e14', '#e83e8c'][index % 7]);
+            }
+        });
+
+        // 如果没有群聊类型，也要添加"其他群组"（数量为0）
+        if (!hasGroupChat) {
+            labels.push('其他群组');
+            data.push(0);
+            colors.push('#6c757d');
+        }
+
+        // 添加TOP5群组
+        top5Groups.forEach((group, index) => {
+            labels.push(`群组 ${group.group_id}`);
+            data.push(group.message_count);
+            colors.push(['#20c997', '#6f42c1', '#fd7e14', '#e83e8c', '#6610f2'][index % 5]);
+        });
+
+        messageTypeChart.data.labels = labels;
+        messageTypeChart.data.datasets[0].data = data;
+        messageTypeChart.data.datasets[0].backgroundColor = colors;
         messageTypeChart.update();
     }
+
+    // 更新群组TOP5表格
+    updateTopGroupsTable(stats);
 }
 
-// 更新排行榜表格
-function updateTopTables(stats) {
-    // 更新热门指令表格
-    const commandsTable = document.querySelector('#top-commands-table tbody');
-    commandsTable.innerHTML = '';
-    
-    if (stats.top_commands) {
-        stats.top_commands.forEach((command, index) => {
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${index + 1}</td>
-                <td><code>${command.command}</code></td>
-                <td>${command.usage_count}</td>
-                <td>${command.unique_users}</td>
-            `;
-            commandsTable.appendChild(row);
-        });
-    }
-    
-    // 更新活跃群组表格
-    const groupsTable = document.querySelector('#top-groups-table tbody');
-    groupsTable.innerHTML = '';
-    
-    if (stats.top_groups) {
-        stats.top_groups.forEach((group, index) => {
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${index + 1}</td>
-                <td><code>${group.group_id}</code></td>
-                <td>${group.message_count}</td>
-                <td>${group.active_users}</td>
-            `;
-            groupsTable.appendChild(row);
-        });
-    }
-}
-
-// 更新详细统计表格
-function updateDetailedTable(stats) {
-    const table = document.querySelector('#detailed-stats-table tbody');
+// 更新群组TOP5表格
+function updateTopGroupsTable(stats) {
+    const table = document.querySelector('#top-groups-table tbody');
     table.innerHTML = '';
-    
-    if (stats.daily_details) {
-        stats.daily_details.forEach(day => {
+
+    if (stats.top_groups && stats.top_groups.length > 0) {
+        const top5Groups = stats.top_groups.slice(0, 5);
+
+        top5Groups.forEach((group, index) => {
             const row = document.createElement('tr');
+
+            // 计算活跃度百分比（相对于第一名）
+            const activityPercent = top5Groups.length > 0 ?
+                Math.round((group.message_count / top5Groups[0].message_count) * 100) : 0;
+
+            // 活跃度进度条颜色
+            const progressColor = index === 0 ? 'bg-success' :
+                                 index === 1 ? 'bg-info' :
+                                 index === 2 ? 'bg-warning' : 'bg-secondary';
+
             row.innerHTML = `
-                <td>${day.date}</td>
-                <td>${day.messages}</td>
-                <td>${day.users}</td>
-                <td>${day.groups}</td>
-                <td>${day.commands}</td>
-                <td>${day.avg_response_time ? day.avg_response_time.toFixed(2) + 'ms' : 'N/A'}</td>
+                <td>
+                    <span class="badge ${index === 0 ? 'bg-warning' : 'bg-secondary'}">#${index + 1}</span>
+                </td>
+                <td><code>${group.group_id}</code></td>
+                <td><strong>${group.message_count}</strong></td>
+                <td>
+                    <div class="progress" style="height: 20px;">
+                        <div class="progress-bar ${progressColor}" role="progressbar"
+                             style="width: ${activityPercent}%"
+                             aria-valuenow="${activityPercent}" aria-valuemin="0" aria-valuemax="100">
+                            ${activityPercent}%
+                        </div>
+                    </div>
+                </td>
             `;
+
             table.appendChild(row);
         });
+    } else {
+        // 没有数据时显示提示
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td colspan="4" class="text-center text-muted">
+                <i class="bi bi-inbox"></i> 暂无群组活跃数据
+            </td>
+        `;
+        table.appendChild(row);
     }
 }
+
+// 更新排行榜表格（保留原有功能，但现在主要用于其他统计）
+function updateTopTables(stats) {
+    // 这个函数现在主要用于其他统计数据的显示
+    // 账号和群组的表格已经由专门的函数处理
+}
+
+
 
 // 更新日期范围
 function updateDateRange() {
