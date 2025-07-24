@@ -14,15 +14,18 @@ from waitress import serve
 import threading
 from typing import Dict, Any
 
+from app.utils.reboot import reboot
+
 class WebServer:
     """Web服务器"""
     
-    def __init__(self, config_manager, database_manager, proxy_server, logger, port=5100):
+    def __init__(self, config_manager, database_manager, proxy_server, logger, port=5100, loop=None):
         self.config_manager = config_manager
         self.database_manager = database_manager
         self.proxy_server = proxy_server
         self.logger = logger
         self.port = port
+        self.loop = loop
         
         # 创建Flask应用
         self.app = Flask(__name__, 
@@ -363,15 +366,19 @@ class WebServer:
                     if new_enabled:
                         # 启用连接：启动新的连接代理
                         self.logger.web.info(f"启用连接 {connection_id}，正在启动连接代理...")
-                        asyncio.create_task(
-                            self.proxy_server._start_connection_proxy(connection_id, config)
-                        )
+                        # asyncio.create_task(
+                        #     self.proxy_server._start_connection_proxy(connection_id, config)
+                        # )
+                        if self.loop:
+                            self.loop.call_soon_threadsafe(lambda: asyncio.create_task(
+                                self.proxy_server._start_connection_proxy(connection_id, config)
+                            ))
+                        else:
+                            asyncio.run(self.proxy_server._start_connection_proxy(connection_id, config))
                     else:
                         # 禁用连接：停止现有连接
-                        self.logger.web.info(f"禁用连接 {connection_id}，正在停止连接代理...")
-                        if connection_id in self.proxy_server.active_connections:
-                            proxy_connection = self.proxy_server.active_connections[connection_id]
-                            asyncio.create_task(proxy_connection.stop())
+                        self.logger.web.info(f"禁用连接 {connection_id}，正在重启")
+                        asyncio.run(reboot())
 
                 return jsonify({'success': True})
             except ValueError as e:

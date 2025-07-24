@@ -9,10 +9,11 @@ Powered by PPT. TODO
 
 ## 📝 更新记录
 
-### v1.2.0 (2024-06-01)
+### 2025-07-24 v0.1.0 完成基本功能
 
 <details>
 <summary>点此展开</summary>
+2025-07-15 v0.0.0 画饼
 </details>
 
 ## 🌟 核心特性

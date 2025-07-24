@@ -78,7 +78,8 @@ class BotShepherd:
                 database_manager=self.database_manager,
                 proxy_server=self.proxy_server,
                 logger=self.logger,
-                port=self.config_manager.get_global_config().get("web_port", 5100)
+                port=self.config_manager.get_global_config().get("web_port", 5100),
+                loop=asyncio.get_event_loop()
             )
 
             self.logger.info("系统组件初始化完成")
