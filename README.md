@@ -118,13 +118,12 @@ tmux send-keys -t botshepherd "python main.py" Enter
 
 ### 指令系统
 
-BotShepherd内置了丰富的指令系统，默认前缀为 `bs`：
+BotShepherd内置了简单的指令系统，默认前缀为 `bs`：
 
 - `bs帮助` - 显示帮助信息
 - `bs统计 -d today` - 查看今日统计
 - `bs统计 -k 关键词` - 搜索关键词
 - `bs黑名单 add 123456` - 添加黑名单
-- `bs群管理 expire 群号 30` - 设置群组30天后到期
 - `bs触发 账号 指令` - 模拟用户发送指令
 
 ### 权限系统
@@ -153,7 +152,7 @@ BotShepherd内置了丰富的指令系统，默认前缀为 `bs`：
 - **优先级**：先执行superuser过滤，再执行群管过滤
 - **灵活配置**：每个群组独立的过滤词列表
 
-## 🔧 配置说明
+## 🔧 具体配置参数说明
 
 写在webui里了
 
@@ -180,14 +179,9 @@ BotShepherd/
 
 ### 添加自定义指令
 
-1. 在 `app/commands/` 目录下创建新的指令文件
-2. 继承 `Command` 基类
-3. 实现 `execute` 方法
-4. 注册到指令系统
+仅支持单次回复，支持图文。具体示例见 `app/plugins`。
 
 ```python
-from app.commands.base import Command
-
 class MyCommand(Command):
     def __init__(self):
         super().__init__(
