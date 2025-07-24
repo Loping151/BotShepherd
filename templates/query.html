@@ -230,7 +230,7 @@ async function performQuery() {
             if (trimmedValue) {
                 if (key === 'keywords' && trimmedValue.includes(',')) {
                     // 处理多个关键词
-                    const keywords = trimmedValue.split(',').map(k => k.trim()).filter(k => k);
+                    const keywords = trimmedValue.split(/[,，]/).map(k => k.trim()).filter(k => k);
                     keywords.forEach(keyword => params.append('keywords', keyword));
                 } else if (key === 'start_time' || key === 'end_time') {
                     // 转换时间格式为时间戳
@@ -314,7 +314,7 @@ function displayResults() {
         // 解析发送者信息
         let senderInfo = '';
         try {
-            const sender = JSON.parse(message.sender_info || '{}');
+            const sender = message.sender_info || {};
             senderInfo = sender.nickname || sender.card || message.user_id || '未知';
         } catch {
             senderInfo = message.user_id || '未知';

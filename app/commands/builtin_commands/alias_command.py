@@ -192,7 +192,7 @@ class AliasCommand(BaseCommand):
                 aliases = account_config.get("aliases", {})
                 result = f"账号 {entity_id} 的别名:\n"
             elif alias_type == "群聊":
-                group_config = config_manager.get_group_config(entity_id)
+                group_config = await config_manager.get_group_config(entity_id)
                 if not group_config:
                     return self.format_error(f"群组 {entity_id} 未找到。")
                 aliases = group_config.get("aliases", {})

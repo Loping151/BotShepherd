@@ -140,7 +140,7 @@ class BSLogger:
         logger.addHandler(handler)
         return logger
 
-    def log_message(self, direction, message_type, content_summary, extra_info=None):
+    def log_message(self, direction, message_type, content_summary, extra_info=None, level="info"):
         """
         记录一条格式化的、扁平的消息日志。
         这是一个便捷方法，底层调用 self.message.info()。
@@ -156,7 +156,16 @@ class BSLogger:
             log_line += f" | {extra_info}"
         
         # 使用配置好的 message 日志记录器
-        self.message.info(log_line)
+        if level == "info":
+            self.message.info(log_line)
+        elif level == "debug":
+            self.message.debug(log_line)
+        elif level == "warning":
+            self.message.warning(log_line)
+        elif level == "error":
+            self.message.error(log_line)
+        else:
+            raise ValueError(f"Invalid log level: {level}")
 
     @staticmethod
     def _parse_size(size_str):
@@ -170,54 +179,3 @@ class BSLogger:
             return int(size_str[:-2]) * 1024 * 1024 * 1024
         else:
             return int(size_str)
-
-# --- 使用示例 ---
-
-if __name__ == '__main__':
-    # 模拟一个全局配置文件
-    mock_global_config = {
-        "some_other_setting": "value",
-        "logging": {
-            "level": "DEBUG",         # 设置日志级别为 DEBUG
-            "file_rotation": True,    # True: 按时间(midnight)轮转, False: 按大小轮转
-            "keep_days": 3,           # 日志文件保留3天
-            "max_file_size": "1MB"    # 如果按大小轮转，每个文件最大1MB
-        }
-    }
-
-    print("--- 初始化日志系统 ---")
-    logger = BSLogger(mock_global_config)
-    print("日志系统初始化完成。日志将输出到控制台和 'logs/' 目录中。\n")
-
-    # 1. 使用主日志记录器 (通过 __getattr__ 代理)
-    print("--- 测试主日志 ---")
-    logger.debug("这是一条 DEBUG 信息，用于详细诊断。")
-    logger.info("程序启动成功。")
-    logger.warning("一个非关键配置项缺失，使用默认值。")
-    logger.error("无法连接到数据库。")
-    try:
-        1 / 0
-    except ZeroDivisionError:
-        logger.exception("发生了一个预期之外的错误！")
-    print("主日志测试完成。请检查 logs/botshepherd.log 文件。\n")
-
-    # 2. 使用 WebSocket 日志记录器
-    print("--- 测试 WebSocket 日志 ---")
-    logger.ws.info("WebSocket 客户端 192.168.1.100 连接。")
-    logger.ws.warning("来自 192.168.1.100 的消息格式不正确。")
-    print("WebSocket 日志测试完成。请检查 logs/websocket/websocket.log 文件.\n")
-
-    # 3. 使用消息日志记录器 (通过便捷方法)
-    print("--- 测试消息日志 ---")
-    logger.log_message(direction="RECV", message_type="TEXT", content_summary="你好，在吗？", extra_info="from_user:1001, to_user:2002")
-    logger.log_message(direction="SENT", message_type="TEXT", content_summary="在的，有什么事吗？", extra_info="from_user:2002, to_user:1001")
-    # 也可以直接调用
-    # logger.message.info("原始消息日志条目")
-    print("消息日志测试完成。请检查 logs/message/message.log 文件。\n")
-
-    # 4. 使用操作日志记录器
-    print("--- 测试操作日志 ---")
-    logger.op.info("管理员 'admin' 登录系统。")
-    logger.op.info("管理员 'admin' 重启了服务 'service_A'。")
-    logger.op.warning("管理员 'admin' 尝试删除受保护的用户 'root'。")
-    print("操作日志测试完成。请检查 logs/operation/operation.log 文件。\n")

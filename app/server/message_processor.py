@@ -57,7 +57,7 @@ class MessageProcessor:
                 normalized_data = processed_data
             
             # 记录处理后的消息
-            self._log_message(normalized_data, "RECV", "PROCESSED")
+            self._log_message(normalized_data, "RECV", "PROCESSED", "debug")
             
             # 重新解析事件，事件也受到预处理的影响，会作用到本体指令集
             event = self.event_parser.parse_event_data(normalized_data)
@@ -88,7 +88,7 @@ class MessageProcessor:
                     message_data = processed_data
                     
                     # 记录处理后的消息
-                    self._log_message(message_data, "SEND", "PROCESSED")
+                    self._log_message(message_data, "SEND", "PROCESSED", "debug")
             
             return message_data
             
@@ -121,13 +121,13 @@ class MessageProcessor:
         
         # 检查群组是否启用和过期
         if isinstance(event, GroupMessageEvent):
-            group_config = self.config_manager.get_group_config(str(event.group_id))
+            group_config = await self.config_manager.get_group_config(str(event.group_id))
             if group_config and is_su:
                 if not group_config.get("enabled", True):
                     self.logger.info(f"群组 {event.group_id} 已禁用，跳过消息处理")
                     return None
                 
-                if self.config_manager.is_group_expired(str(event.group_id)):
+                if await self.config_manager.is_group_expired(str(event.group_id)):
                     self.logger.info(f"群组 {event.group_id} 已过期，跳过消息处理")
                     return None
 
@@ -252,7 +252,7 @@ class MessageProcessor:
         
         return True
     
-    def _log_message(self, message_data: Dict[str, Any], direction: str, stage: str):
+    def _log_message(self, message_data: Dict[str, Any], direction: str, stage: str, level: str="info"):
         """记录消息日志"""
         try:
             # 确定消息类型
@@ -318,7 +318,8 @@ class MessageProcessor:
                 direction=f"{direction}_{stage}",
                 message_type=msg_type,
                 content_summary=content_summary,
-                extra_info=extra_str
+                extra_info=extra_str,
+                level=level
             )
             
         except Exception as e:
@@ -338,7 +339,7 @@ class MessageProcessor:
         # 处理消息段
         modified = False
         for sid, segment in enumerate(message_data["message"]):
-            if segment.get("type") == "text":
+            if hasattr(segment, "type") and segment.get("type") == "text":
                 text = segment.get("data", {}).get("text", "")
                 # 检查是否匹配别名
                 for target, alias_list in aliases.items():
@@ -404,7 +405,7 @@ class MessageProcessor:
             if "message" not in message_data or not isinstance(message_data["message"], list):
                 return message_data
             
-            group_config = self.config_manager.get_group_config(str(message_data["group_id"]))
+            group_config = await self.config_manager.get_group_config(str(message_data["group_id"]))
             aliases = group_config.get("aliases", {})
             
             if not aliases:
@@ -413,5 +414,5 @@ class MessageProcessor:
             return await self._apply_aliases(message_data, aliases)
             
         except Exception as e:
-            self.logger.error(f"应用群组别名失败: {e}")
+            self.logger.error(f"应用群组别名失败: {e}，{message_data}")
             return message_data

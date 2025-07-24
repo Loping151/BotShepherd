@@ -304,10 +304,6 @@ class ConfigManager:
                 })
 
         return active_accounts
-
-
-
-
     
     async def set_account_enabled(self, account_id: str, enabled: bool):
         """设置账号启用状态"""
@@ -325,9 +321,14 @@ class ConfigManager:
         """获取所有群组配置"""
         return self._group_configs.copy()
     
-    def get_group_config(self, group_id: str) -> Optional[Dict[str, Any]]:
+    async def get_group_config(self, group_id: str) -> Optional[Dict[str, Any]]:
         """获取群组配置"""
-        return self._group_configs.get(group_id)
+        config = self._group_configs.get(group_id)
+        if not config:
+            config = ConfigTemplate.get_default_group_config(group_id)
+            self._group_configs[group_id] = config
+            await self.save_group_config(group_id, config)
+        return config
     
     async def save_group_config(self, group_id: str, config: Dict[str, Any]):
         """保存群组配置"""
@@ -362,10 +363,7 @@ class ConfigManager:
 
     async def update_group_last_message_time(self, group_id: str):
         """更新群组最后消息时间"""
-        config = self.get_group_config(group_id)
-        if not config:
-            # 创建新的群组配置
-            config = ConfigTemplate.get_default_group_config(group_id)
+        config = await self.get_group_config(group_id)
 
         # 更新最后消息时间
         config["last_message_time"] = datetime.now().isoformat()
@@ -391,7 +389,7 @@ class ConfigManager:
 
     async def set_group_expire_time(self, group_id: str, expire_days: int):
         """设置群组到期时间"""
-        config = self.get_group_config(group_id)
+        config = await self.get_group_config(group_id)
         if not config:
             config = {
                 "group_id": group_id,
@@ -419,9 +417,9 @@ class ConfigManager:
         # 记录操作日志
         self.logger.op.info(f"群组到期时间修改 - 群号: {group_id}, 原到期时间: {old_expire_time}, 新到期时间: {new_expire_time}")
 
-    def is_group_expired(self, group_id: str) -> bool:
+    async def is_group_expired(self, group_id: str) -> bool:
         """检查群组是否已过期"""
-        config = self.get_group_config(group_id)
+        config = await self.get_group_config(group_id)
         if not config:
             return False
 
@@ -437,7 +435,7 @@ class ConfigManager:
         
     async def set_group_enabled(self, group_id: str, enabled: bool):
         """设置群组启用状态"""
-        config = self.get_group_config(group_id)
+        config = await self.get_group_config(group_id)
         if not config:
             raise ValueError(f"群组 {group_id} 未找到")
         elif config["enabled"] == enabled:
@@ -583,7 +581,7 @@ class ConfigManager:
             
     async def add_group_alias(self, group_id: str, alias: str, target: str):
         """添加群组别名"""
-        group_config = self.get_group_config(group_id)
+        group_config = await self.get_group_config(group_id)
         if not group_config:
             raise ValueError(f"群组 {group_id} 未找到")
         aliases = group_config.get("aliases", {})
@@ -594,7 +592,7 @@ class ConfigManager:
             
     async def remove_group_alias(self, group_id: str, alias: str, target: str):
         """移除群组别名"""
-        group_config = self.get_group_config(group_id)
+        group_config = await self.get_group_config(group_id)
         if not group_config:
             raise ValueError(f"群组 {group_id} 未找到")
         aliases = group_config.get("aliases", {})
@@ -639,9 +637,7 @@ class ConfigManager:
         if filter_level not in ["superuser_filters", "admin_filters"]:
             raise ValueError("filter_level must be 'superuser_filters' or 'admin_filters'")
 
-        config = self.get_group_config(group_id)
-        if not config:
-            config = ConfigTemplate.get_default_group_config()
+        config = await self.get_group_config(group_id)
 
         filters = config.get("filters", {})
         if filter_level not in filters:
@@ -657,7 +653,7 @@ class ConfigManager:
         if filter_level not in ["superuser_filters", "admin_filters"]:
             raise ValueError("filter_level must be 'superuser_filters' or 'admin_filters'")
 
-        config = self.get_group_config(group_id)
+        config = await self.get_group_config(group_id)
         if not config:
             return
 
@@ -669,7 +665,7 @@ class ConfigManager:
             
     async def list_group_filters(self, group_id: str) -> Dict[str, List[str]]:
         """列出群组过滤词"""
-        config = self.get_group_config(group_id)
+        config = await self.get_group_config(group_id)
         if not config:
             return {}
 

@@ -153,7 +153,7 @@ class FilterManager:
     async def _apply_group_filters(self, event: GroupMessageEvent, 
                                  message_data: Dict[str, Any]) -> bool:
         """应用群组过滤词，具有额外规则：可以设为QQ号，实现群内机器人的开关或不响应单个群员"""
-        group_config = self.config_manager.get_group_config(str(event.group_id))
+        group_config = await self.config_manager.get_group_config(str(event.group_id))
         if not group_config:
             return False
         

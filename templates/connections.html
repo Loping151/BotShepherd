@@ -84,7 +84,6 @@
                         <th>客户端端点</th>
                         <th>目标端点</th>
                         <th>状态</th>
-                        <th>消息数</th>
                         <th>操作</th>
                     </tr>
                 </thead>
@@ -106,6 +105,12 @@
             </div>
             <div class="modal-body">
                 <form id="connectionForm">
+                    <div class="mb-3">
+                        <label for="connectionId" class="form-label">连接ID</label>
+                        <input type="text" class="form-control" id="connectionId" placeholder="留空自动生成">
+                        <div class="form-text">连接的唯一标识符，留空将自动生成</div>
+                    </div>
+
                     <div class="mb-3">
                         <label for="connectionName" class="form-label">连接名称</label>
                         <input type="text" class="form-control" id="connectionName" required>
@@ -239,7 +244,6 @@ function updateConnectionTable() {
             <td><code>${connection.client_endpoint}</code></td>
             <td><small>${targetEndpoints}</small></td>
             <td>${statusBadge}</td>
-            <td>0</td>
             <td>
                 <div class="btn-group" role="group">
                     <button class="btn btn-sm btn-outline-primary" onclick="showConnectionDetail('${connectionId}')" title="查看详情">
@@ -267,19 +271,20 @@ function showAddConnectionModal() {
     editingConnectionId = null;
     document.getElementById('connectionModalTitle').textContent = '添加连接';
     document.getElementById('connectionForm').reset();
-    
+    document.getElementById('connectionId').disabled = false; // 新建时启用ID输入
+
     // 重置目标端点列表
     const targetList = document.getElementById('targetEndpointsList');
     targetList.innerHTML = `
         <div class="input-group mb-2">
-            <input type="text" class="form-control target-endpoint" 
+            <input type="text" class="form-control target-endpoint"
                    placeholder="ws://localhost:2536/OneBotv11">
             <button class="btn btn-outline-danger" type="button" onclick="removeTargetEndpoint(this)">
                 <i class="bi bi-trash"></i>
             </button>
         </div>
     `;
-    
+
     new bootstrap.Modal(document.getElementById('connectionModal')).show();
 }
 
@@ -287,8 +292,10 @@ function showAddConnectionModal() {
 function editConnection(connectionId) {
     editingConnectionId = connectionId;
     const connection = connections[connectionId];
-    
+
     document.getElementById('connectionModalTitle').textContent = '编辑连接';
+    document.getElementById('connectionId').value = connectionId;
+    document.getElementById('connectionId').disabled = true; // 编辑时禁用ID修改
     document.getElementById('connectionName').value = connection.name;
     document.getElementById('connectionDescription').value = connection.description || '';
     document.getElementById('clientEndpoint').value = connection.client_endpoint;
@@ -341,11 +348,12 @@ function removeTargetEndpoint(button) {
 // 保存连接
 async function saveConnection() {
     try {
+        const customConnectionId = document.getElementById('connectionId').value.trim();
         const name = document.getElementById('connectionName').value.trim();
         const description = document.getElementById('connectionDescription').value.trim();
         const clientEndpoint = document.getElementById('clientEndpoint').value.trim();
         const enabled = document.getElementById('connectionEnabled').checked;
-        
+
         // 收集目标端点
         const targetEndpoints = [];
         document.querySelectorAll('.target-endpoint').forEach(input => {
@@ -354,12 +362,18 @@ async function saveConnection() {
                 targetEndpoints.push(value);
             }
         });
-        
+
         if (!name || !clientEndpoint || targetEndpoints.length === 0) {
             showToast('请填写所有必需字段', 'warning');
             return;
         }
-        
+
+        // 如果是新建连接且提供了自定义ID，检查是否已存在
+        if (!editingConnectionId && customConnectionId && connections[customConnectionId]) {
+            showToast('连接ID已存在，请使用其他ID', 'warning');
+            return;
+        }
+
         const connectionData = {
             name,
             description,
@@ -367,18 +381,29 @@ async function saveConnection() {
             target_endpoints: targetEndpoints,
             enabled
         };
-        
-        const connectionId = editingConnectionId || `conn_${Date.now()}`;
-        
-        await apiRequest(`/api/connections/${connectionId}`, {
+
+        // 确定最终使用的connectionId
+        let finalConnectionId;
+        if (editingConnectionId) {
+            // 编辑模式，使用原有ID
+            finalConnectionId = editingConnectionId;
+        } else if (customConnectionId) {
+            // 新建模式，使用自定义ID
+            finalConnectionId = customConnectionId;
+        } else {
+            // 新建模式，自动生成ID
+            finalConnectionId = `conn_${Date.now()}`;
+        }
+
+        await apiRequest(`/api/connections/${finalConnectionId}`, {
             method: 'PUT',
             body: JSON.stringify(connectionData)
         });
-        
+
         showToast(editingConnectionId ? '连接更新成功' : '连接添加成功', 'success');
         bootstrap.Modal.getInstance(document.getElementById('connectionModal')).hide();
         loadConnections();
-        
+
     } catch (error) {
         showToast(`保存连接失败: ${error.message}`, 'danger');
     }
