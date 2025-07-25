@@ -152,91 +152,6 @@ class DatabaseManager:
                 await session.rollback()
                 print(f"保存消息失败: {e}")
                 raise
-    
-    # async def query_messages_by_self_id(self, self_id: str, limit: int = 100, offset: int = 0) -> List[MessageRecord]:
-    #     """按self_id查询消息"""
-    #     async with self.session_factory() as session:
-    #         try:
-    #             stmt = select(Message).where(Message.self_id == self_id).order_by(desc(Message.timestamp)).limit(limit).offset(offset)
-    #             result = await session.execute(stmt)
-    #             messages = result.scalars().all()
-    #             return [MessageRecord.from_db_row(msg) for msg in messages]
-    #         except Exception as e:
-    #             print(f"按self_id查询消息失败: {e}")
-    #             return []
-
-    # async def query_messages_by_time_range(self, start_time: datetime, end_time: datetime,
-    #                                      limit: int = 100, offset: int = 0) -> List[MessageRecord]:
-    #     """按时间段查询消息"""
-    #     async with self.session_factory() as session:
-    #         try:
-    #             stmt = select(Message).where(
-    #                 and_(Message.timestamp >= start_time, Message.timestamp <= end_time)
-    #             ).order_by(desc(Message.timestamp)).limit(limit).offset(offset)
-    #             result = await session.execute(stmt)
-    #             messages = result.scalars().all()
-    #             return [MessageRecord.from_db_row(msg) for msg in messages]
-    #         except Exception as e:
-    #             print(f"按时间段查询消息失败: {e}")
-    #             return []
-
-    # async def query_messages_by_user_id(self, user_id: str, limit: int = 100, offset: int = 0) -> List[MessageRecord]:
-    #     """按用户ID查询消息"""
-    #     async with self.session_factory() as session:
-    #         try:
-    #             stmt = select(Message).where(Message.user_id == user_id).order_by(desc(Message.timestamp)).limit(limit).offset(offset)
-    #             result = await session.execute(stmt)
-    #             messages = result.scalars().all()
-    #             return [MessageRecord.from_db_row(msg) for msg in messages]
-    #         except Exception as e:
-    #             print(f"按用户ID查询消息失败: {e}")
-    #             return []
-
-    # async def query_messages_by_group_id(self, group_id: str, limit: int = 100, offset: int = 0) -> List[MessageRecord]:
-    #     """按群聊ID查询消息"""
-    #     async with self.session_factory() as session:
-    #         try:
-    #             stmt = select(Message).where(Message.group_id == group_id).order_by(desc(Message.timestamp)).limit(limit).offset(offset)
-    #             result = await session.execute(stmt)
-    #             messages = result.scalars().all()
-    #             return [MessageRecord.from_db_row(msg) for msg in messages]
-    #         except Exception as e:
-    #             print(f"按群聊ID查询消息失败: {e}")
-    #             return []
-
-    # async def query_messages_by_keyword(self, keyword: str, limit: int = 100, offset: int = 0) -> List[MessageRecord]:
-    #     """查询包含关键字的消息（从raw_message中搜索）"""
-    #     async with self.session_factory() as session:
-    #         try:
-    #             stmt = select(Message).where(
-    #                 or_(
-    #                     Message.raw_message.contains(keyword),
-    #                     Message.message_content.contains(keyword)
-    #                 )
-    #             ).order_by(desc(Message.timestamp)).limit(limit).offset(offset)
-    #             result = await session.execute(stmt)
-    #             messages = result.scalars().all()
-    #             return [MessageRecord.from_db_row(msg) for msg in messages]
-    #         except Exception as e:
-    #             print(f"按关键字查询消息失败: {e}")
-    #             return []
-
-    # async def query_messages_by_startswith(self, prefix: str, limit: int = 100, offset: int = 0) -> List[MessageRecord]:
-    #     """查询以指定词开头的消息"""
-    #     async with self.session_factory() as session:
-    #         try:
-    #             stmt = select(Message).where(
-    #                 or_(
-    #                     Message.raw_message.startswith(prefix),
-    #                     Message.message_content.startswith(prefix)
-    #                 )
-    #             ).order_by(desc(Message.timestamp)).limit(limit).offset(offset)
-    #             result = await session.execute(stmt)
-    #             messages = result.scalars().all()
-    #             return [MessageRecord.from_db_row(msg) for msg in messages]
-    #         except Exception as e:
-    #             print(f"按开头词查询消息失败: {e}")
-    #             return []
             
     def _build_message_conditions(self,
                                 self_id: Optional[str] = None,
@@ -567,6 +482,8 @@ class DatabaseManager:
     async def _cleanup_expired_data(self):
         """清理过期数据"""
         expire_days = self.db_config.get("auto_expire_days", 30)
+        if int(expire_days) <= 1:
+            return
         cutoff_date = int((datetime.now() - timedelta(days=expire_days)).timestamp())
 
         async with self.session_factory() as session:

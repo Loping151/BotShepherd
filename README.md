@@ -1,6 +1,6 @@
 # 🐑 BotShepherd
 
-**BotShepherd** 是一个基于OneBot v11协议WebSocket代理和管理系统。就像牧羊人管理羊群一样，BotShepherd帮助您统一管理和协调多个Bot实例，实现一对多的连接管理、消息过滤、统计分析和权限控制。
+**BotShepherd** 是一个基于OneBot v11协议WebSocket代理和管理系统。就像牧羊人管理羊群一样，BotShepherd帮助您统一管理和协调多个Bot实例，实现一对多的连接管理、消息统计、跨框架黑名单、全框架分群组功能开关和别名防冲突。
 
 **人话：一个账号只需要一个ws连接接入本系统，就可以自由的连接到下游框架。本系统可以方便的统计单个账号消息量，管理黑名单，进行指令转化等。你不再需要为每个账号创建一个Nonebot或配置 账号数量x框架数量 个ws连接**
 
@@ -9,10 +9,11 @@ Powered by PPT. TODO
 
 ## 📝 更新记录
 
-### 2025-07-24 v0.1.0 完成基本功能
+### 2025-07-25 v0.2.1 根据实际部署情况进行修复
 
 <details>
 <summary>点此展开</summary>
+2025-07-24 v0.1.0 完成基本功能
 2025-07-15 v0.0.0 画饼
 
 碎碎念：虽然有些地方看上去有点ai，但实际上试了几次以后就放弃用AI写了，虽然一开始AI构建了基本框架，但后面除了webui几乎没有用上AI。框架其实也还行，就是指令框架写的比较烂。
@@ -150,7 +151,7 @@ BotShepherd内置了简单的指令系统，默认前缀为 `bs`：
 #### 群组过滤
 - **双层控制**：superuser设置 + 群管设置
 - **优先级**：先执行superuser过滤，再执行群管过滤
-- **灵活配置**：每个群组独立的过滤词列表
+- **灵活配置**：每个群组独立的过滤词列表，过滤也匹配id，可以实现不响应群员和Bot在群内的开关
 
 ## 🔧 具体配置参数说明
 
@@ -161,19 +162,20 @@ BotShepherd内置了简单的指令系统，默认前缀为 `bs`：
 ### 项目结构
 ```
 BotShepherd/
-├── app/                    # 核心应用代码
+├── app/                   # 核心应用代码
 │   ├── onebotv11/         # OneBot协议解析
 │   ├── config/            # 配置管理
 │   ├── database/          # 数据库操作
 │   ├── server/            # WebSocket代理
 │   ├── web_api/           # Web API接口
 │   ├── commands/          # 指令系统
+│   ├── plugins/           # 插件系统
 │   └── utils/             # 工具类
 ├── config/                # 配置文件目录
 ├── data/                  # 数据库文件目录
 ├── logs/                  # 日志文件目录
 ├── templates/             # HTML模板
-├── static/                # 静态资源
+├── static/                # 没放东西
 └── main.py               # 主程序入口
 ```
 
@@ -202,8 +204,11 @@ class MyCommand(Command):
 
 - [OneBot](https://onebot.dev/) - 聊天机器人应用接口标准
 - [NapCat](https://github.com/NapNeko/NapCatQQ) - Napcat
-- [Yunzai-Bot](https://github.com/yoimiya-kokomi/Yunzai-Bot) - Yunzai框架
-- TODO
+- [Lagrange.Onebot](https://github.com/LagrangeDev/Lagrange.Core) - Lagrange.Onebot
+- [TRSS-Yunzai](https://github.com/TimeRainStarSky/Yunzai) - TRSS-Yunzai
+- [Nonebot](https://github.com/nonebot/nonebot2) - Nonebot框架
+- [AstrBot](https://github.com/AstrBotDevs/AstrBot) - AstrBot框架
+- [Bootstrap](https://getbootstrap.com/) - UI框架，这个是AI自己加的，前端不会写喵
 ---
 
 **BotShepherd** - 让Bot管理变得简单而强大 🐑✨
