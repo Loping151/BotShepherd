@@ -12,11 +12,15 @@ from dataclasses import dataclass
 from sqlalchemy import select, and_, or_, func, desc
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
-
+from sqlalchemy import text
 from .models import Base, Message, MessageRecord
+from sqlalchemy.exc import OperationalError
+
 
 class DatabaseManager:
     """数据库管理器"""
+    MAX_RETRY = 3
+    RETRY_DELAY = 0.1
 
     def __init__(self, config_manager):
         self.config_manager = config_manager
@@ -41,6 +45,9 @@ class DatabaseManager:
         # 创建异步数据库引擎
         db_url = f"sqlite+aiosqlite:///{self.db_path}"
         self.engine = create_async_engine(db_url, echo=False)
+        
+        async with self.engine.begin() as conn:
+            await conn.execute(text("PRAGMA journal_mode=WAL"))
 
         # 创建会话工厂
         self.session_factory = sessionmaker(
@@ -89,70 +96,81 @@ class DatabaseManager:
         if post_type not in ["message", "message_sent"]:
             return
 
-        async with self.session_factory() as session:
-            try:
-                message_id = message_data.get("message_id")
-                self_id = str(message_data.get("self_id", ""))
-                user_id = str(message_data.get("user_id", "")) if message_data.get("user_id") else None
-                if direction == "RECV":
-                    # 提取消息信息
-                    if user_id == self_id:
-                        return # 不纪录自身上报的消息
-                group_id = str(message_data.get("group_id", "")) if message_data.get("group_id") else None
-                message_type = message_data.get("message_type", "unknown")
-                sub_type = message_data.get("sub_type")
-                post_type = message_data.get("post_type", "message")
-                raw_message = message_data.get("raw_message", "")
+        message_id = message_data.get("message_id")
+        self_id = str(message_data.get("self_id", ""))
+        user_id = str(message_data.get("user_id", "")) if message_data.get("user_id") else None
+        if direction == "RECV":
+            # 提取消息信息
+            if user_id == self_id:
+                return # 不纪录自身上报的消息
+        group_id = str(message_data.get("group_id", "")) if message_data.get("group_id") else None
+        message_type = message_data.get("message_type", "unknown")
+        sub_type = message_data.get("sub_type")
+        post_type = message_data.get("post_type", "message")
+        raw_message = message_data.get("raw_message", "")
 
-                # 处理消息内容
-                message_content = ""
-                if "message" in message_data:
-                    if isinstance(message_data["message"], list):
-                        # 提取文本内容
-                        text_parts = []
-                        for msg_part in message_data["message"]:
-                            if msg_part.get("type") == "text":
-                                text_parts.append(msg_part.get("data", {}).get("text", ""))
-                            elif msg_part.get("type") == "at":
-                                text_parts.append(f"@{msg_part.get('data', {}).get('qq', '')}")
-                                if str(msg_part.get("data", {}).get("qq")) == self_id:
-                                    text_parts.append(f"[at BS Bot]")
-                        message_content = "".join(text_parts)
+        # 处理消息内容
+        message_content = ""
+        if "message" in message_data:
+            if isinstance(message_data["message"], list):
+                # 提取文本内容
+                text_parts = []
+                for msg_part in message_data["message"]:
+                    if msg_part.get("type") == "text":
+                        text_parts.append(msg_part.get("data", {}).get("text", ""))
+                    elif msg_part.get("type") == "at":
+                        text_parts.append(f"@{msg_part.get('data', {}).get('qq', '')}")
+                        if str(msg_part.get("data", {}).get("qq")) == self_id:
+                            text_parts.append(f"[at BS Bot]")
+                message_content = "".join(text_parts)
+            else:
+                message_content = str(message_data["message"])
+
+        # 发送者信息
+        sender_info = json.dumps(message_data.get("sender", {}), ensure_ascii=False)
+
+        # 时间戳
+        timestamp = int(message_data.get("time", datetime.now().timestamp()))
+
+        # 创建消息记录
+        message_record = Message(
+            message_id=str(message_id) if message_id else None,
+            self_id=self_id,
+            user_id=user_id,
+            group_id=group_id,
+            message_type=message_type,
+            sub_type=sub_type,
+            post_type=post_type,
+            raw_message=raw_message,
+            message_content=message_content,
+            sender_info=sender_info,
+            timestamp=timestamp,
+            direction=direction,
+            connection_id=connection_id,
+            processed=False
+        )
+
+        for attempt in range(self.MAX_RETRY):
+            async with self.session_factory() as session:
+                try:
+                    session.add(message_record)
+                    await session.commit()
+                    return
+
+                except OperationalError as e:
+                    if "database is locked" in str(e):
+                        print(f"[警告] 数据库被锁定，尝试重试 {attempt + 1}/{self.MAX_RETRY}")
+                        await session.rollback()
+                        await asyncio.sleep(self.RETRY_DELAY * (attempt + 1))
                     else:
-                        message_content = str(message_data["message"])
-
-                # 发送者信息
-                sender_info = json.dumps(message_data.get("sender", {}), ensure_ascii=False)
-
-                # 时间戳
-                timestamp = int(message_data.get("time", datetime.now().timestamp()))
-
-                # 创建消息记录
-                message_record = Message(
-                    message_id=str(message_id) if message_id else None,
-                    self_id=self_id,
-                    user_id=user_id,
-                    group_id=group_id,
-                    message_type=message_type,
-                    sub_type=sub_type,
-                    post_type=post_type,
-                    raw_message=raw_message,
-                    message_content=message_content,
-                    sender_info=sender_info,
-                    timestamp=timestamp,
-                    direction=direction,
-                    connection_id=connection_id,
-                    processed=False
-                )
-
-                session.add(message_record)
-                await session.commit()
-
-            except Exception as e:
-                await session.rollback()
-                print(f"保存消息失败: {e}")
-                raise
-            
+                        await session.rollback()
+                        print(f"[错误] 数据库写入失败: {e}")
+                        raise
+                except Exception as e:
+                    await session.rollback()
+                    print(f"[错误] 保存消息失败: {e}")
+                    raise
+                
     def _build_message_conditions(self,
                                 self_id: Optional[str] = None,
                                 user_id: Optional[str] = None,

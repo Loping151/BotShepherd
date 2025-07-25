@@ -63,7 +63,6 @@ class CommandHandler:
                         message_data["sender"]["role"] = "member"
                     message_data["message"] = [{"type": "text", "data": {"text": command}}]
                     message_data["raw_message"] = command
-                    break
             
             return message_data
             

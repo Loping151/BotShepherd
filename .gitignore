@@ -1,5 +1,6 @@
 logs
 *.db
+*.db-*
 __pycache__
 *.json
 devnote.md

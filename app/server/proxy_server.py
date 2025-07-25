@@ -358,6 +358,20 @@ class ProxyConnection:
                             await self._forward_target_to_client(target_ws, target_index)
                         except Exception as e:
                             self.logger.ws.warning(f"[{self.connection_id}] 尝试重连目标 {target_index} 失败: {e}")
+                    while True:
+                        await asyncio.sleep(600)
+                        try:
+                            target_ws = await self._connect_to_target(self.config.get("target_endpoints", [])[self.target_index2list_index(target_index)], target_index)
+                            await self._process_client_message(self.first_message)
+                            self.logger.ws.info(f"[{self.connection_id}] 目标连接 {target_index} 恢复成功，5秒后重新开始转发。")
+                            await asyncio.sleep(5)
+                            await self._forward_target_to_client(target_ws, target_index)
+                        except Exception as e:
+                            pass
+        except TypeError as e:
+            if not target_ws:
+                pass
+            self.logger.ws.error(f"[{self.connection_id}] 目标消息转发错误 {target_index}: {e}")
         except Exception as e:
             self.logger.ws.error(f"[{self.connection_id}] 目标消息转发错误 {target_index}: {e}")
     
@@ -405,18 +419,25 @@ class ProxyConnection:
                 if message_data.get("echo"):
                     # api请求内容，尽可能保证各框架的发送api都使用了echo。
                     target_index = self.echo_cache.pop(str(message_data["echo"]), {}).get("target_index")
-                    if target_index is not None and target_index > 0:
+                    if target_index is not None and target_index > 0 and self.target_connections[self.target_index2list_index(target_index)]:
                         self.logger.ws.debug(f"[{self.connection_id}] 发送API请求到目标 {target_index}: {processed_json[:1000]}")
                         try:
                             await self.target_connections[self.target_index2list_index(target_index)].send(processed_json)
+                        except websockets.exceptions.ConnectionClosed:
+                            self.logger.ws.warning(f"[{self.connection_id}] 目标连接 {target_index} 已关闭，无法发送API请求")
+                            self.target_connections[self.target_index2list_index(target_index)] = None
                         except Exception as e:
                             self.logger.ws.error(f"[{self.connection_id}] 发送到目标失败: {e}")
                 else:
-                    for target_ws in self.target_connections:
-                        try:
-                            await target_ws.send(processed_json)
-                        except Exception as e:
-                            self.logger.ws.error(f"[{self.connection_id}] 发送到目标失败: {e}")
+                    for target_index, target_ws in enumerate(self.target_connections):
+                        if target_ws:
+                            try:
+                                await target_ws.send(processed_json)
+                            except websockets.exceptions.ConnectionClosed:
+                                self.logger.ws.warning(f"[{self.connection_id}] 目标连接 {target_index} 已关闭，无法发送API请求")
+                                self.target_connections[self.target_index2list_index(target_index)] = None
+                            except Exception as e:
+                                self.logger.ws.error(f"[{self.connection_id}] 发送到目标失败: {e}")
             
         except json.JSONDecodeError:
             self.logger.ws.warning(f"[{self.connection_id}] 收到非JSON消息: {message[:1000]}")
