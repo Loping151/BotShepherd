@@ -132,6 +132,8 @@ class FilterManager:
         """应用前缀保护"""
         global_config = self.config_manager.get_global_config()
         prefix_protections = global_config.get("global_filters", {}).get("prefix_protections", [])
+        if global_config.get("trigger_prefix"):
+            prefix_protections.append(global_config.get("trigger_prefix"))
         
         if not prefix_protections or not message_data.get("params", {}).get("message"):
             return message_data

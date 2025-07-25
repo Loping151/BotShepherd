@@ -26,13 +26,13 @@ class CommandHandler:
     async def preprocesser(self, message_data: dict) -> dict:
         """预处理消息数据"""
         try:
-            # 仅超级用户允许执行
-            if not "user_id" in message_data or not self.config_manager.is_superuser(message_data.get("user_id")):
+            # 仅超级用户和自己（人机合一）允许执行
+            if not "user_id" in message_data or (not self.config_manager.is_superuser(message_data.get("user_id")) and message_data.get("user_id") != message_data.get("self_id")):
                 return message_data
             
             global_config = self.config_manager.get_global_config()
             trigger_prefix = global_config.get("trigger_prefix", "")
-            if not trigger_prefix:
+            if not trigger_prefix: # 长度不得为 0
                 return message_data
             
             at_id = None

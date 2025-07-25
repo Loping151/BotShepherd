@@ -113,6 +113,10 @@ class DatabaseManager:
                         for msg_part in message_data["message"]:
                             if msg_part.get("type") == "text":
                                 text_parts.append(msg_part.get("data", {}).get("text", ""))
+                            elif msg_part.get("type") == "at":
+                                text_parts.append(f"@{msg_part.get('data', {}).get('qq', '')}")
+                                if str(msg_part.get("data", {}).get("qq")) == self_id:
+                                    text_parts.append(f"[at BS Bot]")
                         message_content = "".join(text_parts)
                     else:
                         message_content = str(message_data["message"])

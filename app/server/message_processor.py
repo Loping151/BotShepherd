@@ -299,12 +299,16 @@ class MessageProcessor:
                         if isinstance(segment, dict):
                             if segment.get("type") == "text":
                                 text_parts.append(segment.get("data", {}).get("text", ""))
+                            elif segment.get("type") == "at":
+                                text_parts.append(f"@{segment.get('data', {}).get('qq', '')}")
                             else:
                                 text_parts.append(str(segment)[:1000])
                         # 处理MessageSegment对象
                         elif segment.get("type") and segment.get("data"):
                             if segment.type == "text":
                                 text_parts.append(segment.data.get("text", ""))
+                            elif segment.type == "at":
+                                text_parts.append(f"@{segment.data.get('qq', '')}")
                             else:
                                 text_parts.append(str(segment)[:1000])
                     content_summary = "".join(text_parts)[:100]
