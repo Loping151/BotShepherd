@@ -131,7 +131,7 @@ class FilterManager:
                                      message_data: Dict[str, Any]) -> Dict[str, Any]:
         """应用前缀保护"""
         global_config = self.config_manager.get_global_config()
-        prefix_protections = global_config.get("global_filters", {}).get("prefix_protections", [])
+        prefix_protections = global_config.get("global_filters", {}).get("prefix_protections", []).copy()
         if global_config.get("trigger_prefix"):
             prefix_protections.append(global_config.get("trigger_prefix"))
         
