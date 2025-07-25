@@ -316,28 +316,22 @@ async function loadSystemStatus() {
         const statusResponse = await apiRequest('/api/status');
         document.getElementById('active-connections').textContent = statusResponse.active_connections || 0;
 
-        // 获取版本信息
-        const versionResponse = await apiRequest('/api/version');
-        document.getElementById('system-version').textContent = `v${versionResponse.version || '0.1.0'}`;
-
         // 获取全局配置
         const configResponse = await apiRequest('/api/global-config');
+        console.log(configResponse); 
         document.getElementById('command-prefix').textContent = configResponse.command_prefix || 'bs';
         document.getElementById('superuser-count').textContent = (configResponse.superusers || []).length;
         document.getElementById('global-aliases').textContent = Object.keys(configResponse.global_aliases || {}).length;
-
-        // 计算过滤规则数量
-        const globalFilters = configResponse.global_filters || {};
-        const filterCount = (globalFilters.receive_filters || []).length +
-                           (globalFilters.send_filters || []).length +
-                           (globalFilters.prefix_protections || []).length;
-        document.getElementById('filter-rules').textContent = filterCount;
 
         // 数据库配置
         const dbConfig = configResponse.database || {};
         document.getElementById('data-retention').textContent = `${dbConfig.auto_expire_days || 30}天`;
         document.getElementById('storage-path').textContent = dbConfig.data_path || './data';
 
+        // 获取版本信息
+        const versionResponse = await apiRequest('/api/version');
+        document.getElementById('system-version').textContent = `v${versionResponse.version || '0.1.0'}`;
+        
     } catch (error) {
         console.error('加载系统状态失败:', error);
     }
@@ -515,7 +509,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 定时更新
     setInterval(updateTime, 1000);
-    setInterval(loadSystemStatus, 5000);
+    setInterval(loadSystemStatus, 60000);
     setInterval(loadAccountGroupStatus, 30000);
     setInterval(loadDatabaseStatus, 60000);
     setInterval(updateSystemResources, 10000);

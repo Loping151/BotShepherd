@@ -395,8 +395,6 @@ class WebServer:
                 return jsonify({'error': '未授权'}), 401
 
             try:
-                # 重新加载全局配置以获取最新数据
-                asyncio.run(self.config_manager._load_global_config())
                 config = self.config_manager.get_global_config()
                 return jsonify(config)
             except Exception as e:
