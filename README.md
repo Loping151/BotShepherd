@@ -54,8 +54,12 @@ Powered by PPT. TODO
 
 |                | Nonebot | Yunzai/TRSS | AstrBot | Koishi |
 |----------------|:-------:|:-----------:|:-------:|:------:|
-| Lagrange.Onebot|   ✔️    |     ✔️      |   ✔️    |   ❌   |
-| Napcat         |   ✔️    |     ✔️      |   ✔️    |   ❌   |
+| Lagrange.Onebot|   ✔️    |     ✔️      |   ✔️   |   ✔️   |
+| Napcat         |   ✔️    |     ✔️      |   ✔️   |   ✔️   |
+| LLOneBot       |   ✔️    |     ✔️      |   ✔️   |   ✔️   |
+| LLTwoBot       |   ✔️    |     ✔️      |   ✔️   |   ✔️   |
+
+PS：Koishi似乎仍然需要每id配置一份配置文件，所以没啥大用（指统一管理）。然后LLOneBot和LLTwoBot怎么好像是一个东西。。
 
 ## 🚀 快速开始
 
