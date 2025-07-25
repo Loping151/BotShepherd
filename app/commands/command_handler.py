@@ -130,7 +130,7 @@ class CommandHandler:
         global_config = self.config_manager.get_global_config()
         if global_config.get("command_ignore_at_other", True):
             for message_seg in event.message:
-                if message_seg.type == MessageSegmentType.AT and message_seg.data["qq"] != str(event.self_id):
+                if message_seg.type == MessageSegmentType.AT and str(message_seg.data["qq"]) != str(event.self_id):
                     return True
         return False
     
