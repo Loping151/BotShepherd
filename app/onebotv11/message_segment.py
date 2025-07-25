@@ -294,15 +294,19 @@ class MessageSegmentParser:
     def extract_text(segments: List[MessageSegment]) -> str:
         """提取消息中的纯文本内容"""
         text_parts = []
+        # at_list = []
+        # 暂时去掉 at
         for segment in segments:
             if segment.type == MessageSegmentType.TEXT:
                 text_parts.append(segment.data.get("text", ""))
-            elif segment.type == MessageSegmentType.AT:
-                qq = segment.data.get("qq", "")
-                if qq == "all":
-                    text_parts.append("@全体成员")
-                else:
-                    text_parts.append(f"@{qq}")
+            # elif segment.type == MessageSegmentType.AT:
+            #     qq = segment.data.get("qq", "")
+            #     if qq == "all":
+            #         at_list.append("@全体成员")
+            #     else:
+            #         at_list.append(f"@{qq}")
+                    
+        # return " ".join(text_parts + at_list)
         return " ".join(text_parts)
     
     @staticmethod
