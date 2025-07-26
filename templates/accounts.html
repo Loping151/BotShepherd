@@ -118,13 +118,6 @@
                         <input type="text" class="form-control" id="accountName" 
                                placeholder="Bot_123456789" required>
                     </div>
-                    
-                    <div class="mb-3">
-                        <label for="accountAlias" class="form-label">账号别名</label>
-                        <input type="text" class="form-control" id="accountAlias"
-                               placeholder="账号的别名或昵称">
-                        <div class="form-text">用于在日志和统计中显示的友好名称</div>
-                    </div>
 
                     <div class="mb-3">
                         <label for="accountDescription" class="form-label">描述</label>
@@ -323,7 +316,6 @@ function editAccount(accountId) {
     document.getElementById('accountId').value = accountId;
     document.getElementById('accountId').disabled = true;
     document.getElementById('accountName').value = account.name;
-    document.getElementById('accountAlias').value = account.alias || '';
     document.getElementById('accountDescription').value = account.description || '';
     document.getElementById('accountEnabled').checked = account.enabled;
 
@@ -338,7 +330,6 @@ async function saveAccount() {
     try {
         const accountId = document.getElementById('accountId').value.trim();
         const name = document.getElementById('accountName').value.trim();
-        const alias = document.getElementById('accountAlias').value.trim();
         const description = document.getElementById('accountDescription').value.trim();
         const enabled = document.getElementById('accountEnabled').checked;
         
@@ -372,7 +363,6 @@ async function saveAccount() {
         const accountData = {
             account_id: accountId,
             name,
-            alias,
             description,
             aliases: aliases,
             enabled

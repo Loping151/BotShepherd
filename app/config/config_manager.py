@@ -321,6 +321,7 @@ class ConfigManager:
         """获取所有群组配置"""
         return self._group_configs.copy()
     
+    # ?? 为啥group我写的是sync。。好像确实是我写的
     async def get_group_config(self, group_id: str) -> Optional[Dict[str, Any]]:
         """获取群组配置"""
         config = self._group_configs.get(group_id)

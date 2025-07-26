@@ -915,21 +915,16 @@ class WebServer:
 
             try:
                 config = request.get_json()
-
-                # 确保必需字段存在
-                if 'account_id' not in config:
-                    config['account_id'] = account_id
-                if 'name' not in config:
-                    config['name'] = f"Bot_{account_id}"
-                if 'description' not in config:
-                    config['description'] = "自动创建的账号配置"
-                if 'enabled' not in config:
-                    config['enabled'] = True
-                if 'aliases' not in config:
-                    config['aliases'] = {}
+                
+                original_config = self.config_manager.get_account_config(account_id)
+                
+                # 只允许更新现有的字段
+                for k, v in config.items():
+                    if k in original_config:
+                        original_config[k] = v
 
                 asyncio.run(
-                    self.config_manager.save_account_config(account_id, config)
+                    self.config_manager.save_account_config(account_id, original_config)
                 )
                 return jsonify({'success': True})
             except ValueError as e:
@@ -962,26 +957,16 @@ class WebServer:
             try:
                 config = request.get_json()
 
-                # 确保必需字段存在
-                if 'group_id' not in config:
-                    config['group_id'] = group_id
-                if 'description' not in config:
-                    config['description'] = f"群组_{group_id}"
-                if 'expire_time' not in config:
-                    config['expire_time'] = -1
-                if 'aliases' not in config:
-                    config['aliases'] = {}
-                if 'filters' not in config:
-                    config['filters'] = {
-                        "superuser_filters": [],
-                        "admin_filters": []
-                    }
-                if 'enabled' not in config:
-                    config['enabled'] = True
+                original_config = asyncio.run(self.config_manager.get_group_config(group_id))
+                
+                # 只允许更新现有的字段
+                for k, v in config.items():
+                    if k in original_config:
+                        original_config[k] = v
 
                 # 运行异步操作
                 asyncio.run(
-                    self.config_manager.save_group_config(group_id, config)
+                    self.config_manager.save_group_config(group_id, original_config)
                 )
                 return jsonify({'success': True})
             except ValueError as e:
