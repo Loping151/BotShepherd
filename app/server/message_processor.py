@@ -66,8 +66,6 @@ class MessageProcessor:
             return normalized_data, event
             
         except Exception as e:
-            import traceback
-            traceback.print_exc()
             self.logger.error(f"预处理客户端消息失败: {e}")
             return None, None
     
@@ -117,7 +115,7 @@ class MessageProcessor:
         is_su = self.config_manager.is_superuser(event.user_id)
         account_config = self.config_manager.get_account_config(str(event.self_id))
         if account_config and not account_config.get("enabled", True) and not is_su:
-            self.logger.info(f"账号 {event.self_id} 已禁用，跳过消息处理")
+            self.logger.message.info(f"账号 {event.self_id} 已禁用，跳过消息处理")
             return None
         
         # 检查群组是否启用和过期
@@ -125,22 +123,22 @@ class MessageProcessor:
             group_config = await self.config_manager.get_group_config(str(event.group_id))
             if group_config and is_su:
                 if not group_config.get("enabled", True):
-                    self.logger.info(f"群组 {event.group_id} 已禁用，跳过消息处理")
+                    self.logger.message.info(f"群组 {event.group_id} 已禁用，跳过消息处理")
                     return None
                 
                 if await self.config_manager.is_group_expired(str(event.group_id)):
-                    self.logger.info(f"群组 {event.group_id} 已过期，跳过消息处理")
+                    self.logger.message.info(f"群组 {event.group_id} 已过期，跳过消息处理")
                     return None
 
         # 检查黑名单
         if self._is_in_blacklist(event) and not is_su:
-            self.logger.info(f"消息来自黑名单，跳过处理: user={event.user_id}, group={getattr(event, 'group_id', None)}")
+            self.logger.message.info(f"消息来自黑名单，跳过处理: user={event.user_id}, group={getattr(event, 'group_id', None)}")
             return None
         
         # 检查私聊设置
         if isinstance(event, PrivateMessageEvent) and not is_su:
             if not await self._check_private_message_allowed(event):
-                self.logger.info(f"私聊消息被拒绝: user={event.user_id}, sub_type={event.sub_type}")
+                self.logger.message.info(f"私聊消息被拒绝: user={event.user_id}, sub_type={event.sub_type}")
                 return None
             
         if isinstance(message_data.get("params", {}).get("message"), str):

@@ -86,8 +86,6 @@ class BotShepherd:
             return True
 
         except Exception as e:
-            import traceback
-            traceback.print_exc()
             if self.logger:
                 self.logger.error(f"系统初始化失败: {e}")
             else:

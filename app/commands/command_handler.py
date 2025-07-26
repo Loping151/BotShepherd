@@ -67,8 +67,6 @@ class CommandHandler:
             return message_data
             
         except Exception as e:
-            import traceback
-            traceback.print_exc()
             self.logger.command.error(f"预处理器配置错误: {e}")
             return message_data
         

@@ -332,9 +332,10 @@ class ProxyConnection:
         """转发客户端消息到目标"""
         try:
             async for message in self.client_ws:
-                await self._process_client_message(message)
-        except websockets.exceptions.ConnectionClosed:
-            self.logger.ws.info(f"[{self.connection_id}] 客户端连接已关闭")
+                try:
+                    await self._process_client_message(message)
+                except websockets.exceptions.ConnectionClosed:
+                    continue
         except Exception as e:
             self.logger.ws.error(f"[{self.connection_id}] 客户端消息转发错误: {e}")
     
@@ -344,37 +345,38 @@ class ProxyConnection:
             async for message in target_ws:
                 await self._process_target_message(message, target_index)
         except websockets.exceptions.ConnectionClosed:
-            self.logger.ws.info(f"[{self.connection_id}] 目标连接 {target_index} 已关闭。将在120秒内持续尝试重新连接。")
-            lock = self.reconnect_locks[self.target_index2list_index(target_index)]
-            if not lock.locked():
-                async with lock:
-                    for _ in range(120):
-                        await asyncio.sleep(1)
-                        try:
-                            target_ws = await self._connect_to_target(self.config.get("target_endpoints", [])[self.target_index2list_index(target_index)], target_index)
-                            await self._process_client_message(self.first_message) # 比如yunzai需要使用first Message重新注册
-                            self.logger.ws.info(f"[{self.connection_id}] 目标连接 {target_index} 恢复成功，5秒后重新开始转发。")
-                            await asyncio.sleep(5)
-                            await self._forward_target_to_client(target_ws, target_index)
-                        except Exception as e:
-                            self.logger.ws.warning(f"[{self.connection_id}] 尝试重连目标 {target_index} 失败: {e}")
-                    while True:
-                        await asyncio.sleep(600)
-                        try:
-                            target_ws = await self._connect_to_target(self.config.get("target_endpoints", [])[self.target_index2list_index(target_index)], target_index)
-                            await self._process_client_message(self.first_message)
-                            self.logger.ws.info(f"[{self.connection_id}] 目标连接 {target_index} 恢复成功，5秒后重新开始转发。")
-                            await asyncio.sleep(5)
-                            await self._forward_target_to_client(target_ws, target_index)
-                        except Exception as e:
-                            pass
+            await self._reconnect_target(target_index)
         except TypeError as e:
-            if not target_ws:
-                pass
-            self.logger.ws.error(f"[{self.connection_id}] 目标消息转发错误 {target_index}: {e}")
+            pass
         except Exception as e:
             self.logger.ws.error(f"[{self.connection_id}] 目标消息转发错误 {target_index}: {e}")
-    
+            
+    async def _reconnect_target(self, target_index: int):
+        self.logger.ws.info(f"[{self.connection_id}] 目标连接 {target_index} 已关闭。将在120秒内持续尝试重新连接。")
+        lock = self.reconnect_locks[self.target_index2list_index(target_index)]
+        if not lock.locked():
+            async with lock:
+                for _ in range(40):
+                    await asyncio.sleep(3)
+                    try:
+                        target_ws = await self._connect_to_target(self.config.get("target_endpoints", [])[self.target_index2list_index(target_index)], target_index)
+                        await self._process_client_message(self.first_message) # 比如yunzai需要使用first Message重新注册
+                        self.logger.ws.info(f"[{self.connection_id}] 目标连接 {target_index} 恢复成功，5秒后重新开始转发。")
+                        await asyncio.sleep(5)
+                        await self._forward_target_to_client(target_ws, target_index)
+                    except Exception as e:
+                        self.logger.ws.warning(f"[{self.connection_id}] 尝试重连目标 {target_index} 失败: {e}")
+                while True:
+                    await asyncio.sleep(600)
+                    try:
+                        target_ws = await self._connect_to_target(self.config.get("target_endpoints", [])[self.target_index2list_index(target_index)], target_index)
+                        await self._process_client_message(self.first_message)
+                        self.logger.ws.info(f"[{self.connection_id}] 目标连接 {target_index} 恢复成功，5秒后重新开始转发。")
+                        await asyncio.sleep(5)
+                        await self._forward_target_to_client(target_ws, target_index)
+                    except Exception as e:
+                        pass
+                        
     async def _process_client_message(self, message: str):
         """处理客户端消息"""
         try:
@@ -424,26 +426,26 @@ class ProxyConnection:
                         try:
                             await self.target_connections[self.target_index2list_index(target_index)].send(processed_json)
                         except websockets.exceptions.ConnectionClosed:
-                            self.logger.ws.warning(f"[{self.connection_id}] 目标连接 {target_index} 已关闭，无法发送API请求")
-                            self.target_connections[self.target_index2list_index(target_index)] = None
+                            return
                         except Exception as e:
                             self.logger.ws.error(f"[{self.connection_id}] 发送到目标失败: {e}")
+                            raise
                 else:
                     for target_index, target_ws in enumerate(self.target_connections):
                         if target_ws:
                             try:
                                 await target_ws.send(processed_json)
                             except websockets.exceptions.ConnectionClosed:
-                                self.logger.ws.warning(f"[{self.connection_id}] 目标连接 {target_index} 已关闭，无法发送API请求")
-                                self.target_connections[self.target_index2list_index(target_index)] = None
+                                continue # 发送时不再捕捉
                             except Exception as e:
                                 self.logger.ws.error(f"[{self.connection_id}] 发送到目标失败: {e}")
+                                raise
             
         except json.JSONDecodeError:
             self.logger.ws.warning(f"[{self.connection_id}] 收到非JSON消息: {message[:1000]}")
+        except websockets.exceptions.ConnectionClosed:
+            raise
         except Exception as e:
-            import traceback
-            traceback.print_exc()
             self.logger.ws.error(f"[{self.connection_id}] 处理客户端消息失败: {e}")
     
     async def _process_target_message(self, message: str | dict, target_index: int):
@@ -475,8 +477,6 @@ class ProxyConnection:
         except json.JSONDecodeError:
             self.logger.ws.warning(f"[{self.connection_id}] 目标 {target_index} 发送非JSON消息: {message[:1000]}")
         except Exception as e:
-            import traceback
-            traceback.print_exc()
             self.logger.ws.error(f"[{self.connection_id}] 处理目标消息 {message} 失败: {e}")
     
     async def _preprocess_message(self, message_data: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], Optional[Event]]:

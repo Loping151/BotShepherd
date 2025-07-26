@@ -198,8 +198,6 @@ class StatusCommand(BaseCommand):
             return self.format_response(status_info, use_forward=True)
             
         except Exception as e:
-            import traceback
-            traceback.print_exc()
             return self.format_error(f"获取状态信息失败: {e}")
         
 class PINGCommand(BaseCommand):
