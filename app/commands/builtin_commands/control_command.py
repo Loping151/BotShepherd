@@ -3,7 +3,7 @@ import os
 import sys
 from typing import Dict, Any, List
 from ...onebotv11.models import Event
-from ...utils.reboot import reboot
+from ...utils.reboot import reboot, is_rebooting
 from ..permission_manager import PermissionLevel
 from ..base_command import BaseCommand, CommandResponse, CommandResult, command_registry
 
@@ -25,12 +25,13 @@ class RestartCommand(BaseCommand):
     async def execute(self, event: Event, args: List[str], context: Dict[str, Any]) -> CommandResponse:
         """执行重启指令"""
         try:
-            # 创建一个后台任务来执行重启逻辑，这样不会阻塞当前响应
-            loop = asyncio.get_event_loop()
-            loop.create_task(reboot(event, wait_seconds = 3))
-            
-            # 立即返回一个消息，告知用户重启指令已收到
-            return self.format_info("将在3秒后重启...")
+            if not is_rebooting():
+                # 创建一个后台任务来执行重启逻辑，这样不会阻塞当前响应
+                loop = asyncio.get_event_loop()
+                loop.create_task(reboot(event, wait_seconds = 3))
+                
+                # 立即返回一个消息，告知用户重启指令已收到
+                return self.format_info("将在3秒后重启...")
 
         except Exception as e:
             return self.format_error(f"执行重启指令失败: {e}")

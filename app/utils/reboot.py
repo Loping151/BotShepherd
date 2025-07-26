@@ -7,6 +7,10 @@ from ..onebotv11.api_handler import ApiHandler
 
 REBOOT_RECORD = "data/.reboot"
 
+def is_rebooting():
+    """检查是否正在重启"""
+    return os.path.exists(REBOOT_RECORD)
+
 async def reboot(event = None, wait_seconds: int = 3):
     """重启程序"""
     if event:
@@ -14,7 +18,7 @@ async def reboot(event = None, wait_seconds: int = 3):
             self_id = event.self_id
             user_id = event.user_id
             group_id = event.group_id if hasattr(event, "group_id") else None
-            if not os.path.exists(REBOOT_RECORD):
+            if not is_rebooting():
                 with open(REBOOT_RECORD, "w", encoding="utf-8") as f:
                     f.write(f"{self_id}\n{user_id}\n{group_id}")
         except Exception as e:
