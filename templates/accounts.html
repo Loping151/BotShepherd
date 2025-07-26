@@ -5,10 +5,6 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1><i class="bi bi-person-gear"></i> 账号管理</h1>
-    <button class="btn btn-primary" onclick="showAddAccountModal()">
-        <i class="bi bi-plus-circle"></i>
-        添加账号
-    </button>
 </div>
 
 <!-- 账号状态卡片 -->
@@ -294,17 +290,6 @@ function formatDateTime(dateTimeStr) {
     if (diffDays < 7) return `${diffDays}天前`;
     
     return date.toLocaleDateString('zh-CN');
-}
-
-// 显示添加账号模态框
-function showAddAccountModal() {
-    editingAccountId = null;
-    document.getElementById('accountModalTitle').textContent = '添加账号';
-    document.getElementById('accountForm').reset();
-    document.getElementById('accountEnabled').checked = true;
-    resetAccountAliasesList();
-
-    new bootstrap.Modal(document.getElementById('accountModal')).show();
 }
 
 // 编辑账号
