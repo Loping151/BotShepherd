@@ -202,7 +202,7 @@ class MessageProcessor:
             group_count = send_info["group"].get(str(event.params.get("group_id")), 0)
             group_deco_template = f"\n📈 今日已发送{total_count + 1}/4000，本群 {group_count + 1}，超出将被限制发言"
             if total_count < 3000:
-                if group_count + 1 % 100 == 0:
+                if total_count + 1 % 100 == 0:
                     decorate_info = group_deco_template
             elif total_count < 4000:
                 if total_count + 1 % 25 == 0 or group_count + 1 % 10 == 0:

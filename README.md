@@ -1,8 +1,13 @@
 # 🐑 BotShepherd
 
-**BotShepherd** 是一个基于OneBot v11协议WebSocket代理和管理系统。就像牧羊人管理羊群一样，BotShepherd帮助您统一管理和协调多个Bot实例，实现一对多的连接管理、消息统计、跨框架黑名单、全框架分群组功能开关和别名防冲突。
+**BotShepherd** 是一个基于OneBot v11协议WebSocket代理和管理系统，统一管理和协调多个Bot实例，实现一对多的连接管理、消息统计、跨框架黑名单、全框架分群组功能开关和别名防冲突。
 
 **人话：一个账号只需要一个ws连接接入本系统，就可以自由的连接到下游框架。本系统可以方便的统计单个账号消息量，管理黑名单，进行指令转化等。你不再需要为每个账号创建一个Nonebot或配置 账号数量x框架数量 个ws连接**
+
+#### 核心Feature
+
+- 每账号消息量，跨框架黑名单，每Bot、每群、全局可以将原有指令别名，不同名称的Bot不再需要为了一个指令名称单开框架
+- 触发指令：自己上号或主人在群里，通过指令帮助其他用户执行任何指令（bs触发 123456 some_command），避免红温
 
 ![static/imgs/pipeline.png](static/imgs/pipeline.png)
 Powered by PPT. TODO
