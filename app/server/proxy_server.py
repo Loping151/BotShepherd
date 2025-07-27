@@ -372,10 +372,11 @@ class ProxyConnection:
                     await asyncio.sleep(600) # 10分钟后再试
                     try:
                         target_ws = await self._connect_to_target(self.config.get("target_endpoints", [])[self.target_index2list_index(target_index)], target_index)
-                        await self._process_client_message(self.first_message)
-                        self.logger.ws.info(f"[{self.connection_id}] 目标连接 {target_index} 恢复成功，5秒后重新开始转发。")
-                        await asyncio.sleep(5)
-                        await self._forward_target_to_client(target_ws, target_index)
+                        if target_ws:
+                            await self._process_client_message(self.first_message)
+                            self.logger.ws.info(f"[{self.connection_id}] 目标连接 {target_index} 恢复成功，5秒后重新开始转发。")
+                            await asyncio.sleep(5)
+                            await self._forward_target_to_client(target_ws, target_index)
                     except Exception as e:
                         pass
                         
