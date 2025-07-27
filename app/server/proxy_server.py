@@ -265,6 +265,10 @@ class ProxyConnection:
 
     async def _connect_to_target(self, endpoint: str, target_index: int):
          try:
+            
+            if target_index > len(self.target_connections) + 1 or target_index == 0:
+                raise Exception(f"[{self.connection_id}] 目标ID {target_index} 超出范围!")
+            
             # 使用客户端请求头连接目标
             extra_headers = {}
             if self.client_headers:
@@ -303,16 +307,14 @@ class ProxyConnection:
                 except Exception as e:
                     # 其他错误，直接抛出
                     raise e
-
+            
+            if target_index == len(self.target_connections) + 1: # next one to append
+                self.target_connections.append(target_ws) # 保证index正确，即使是None也添加
+            else:
+                self.target_connections[self.target_index2list_index(target_index)] = target_ws
             if target_ws is None:
                 raise Exception(f"[{self.connection_id}] 所有连接方式都失败")
             
-            if target_index > len(self.target_connections) + 1 or target_index == 0:
-                raise Exception(f"[{self.connection_id}] 目标ID {target_index} 超出范围!")
-            if target_index == len(self.target_connections) + 1: # next one to append
-                self.target_connections.append(target_ws)
-            else:
-                self.target_connections[self.target_index2list_index(target_index)] = target_ws
             self.logger.ws.info(f"[{self.connection_id}] 已连接到目标: {endpoint}")
             return target_ws
             
@@ -347,7 +349,7 @@ class ProxyConnection:
         except websockets.exceptions.ConnectionClosed:
             await self._reconnect_target(target_index)
         except TypeError as e:
-            pass
+            await self._reconnect_target(target_index) # 如果是None，也挂一个后台重连
         except Exception as e:
             self.logger.ws.error(f"[{self.connection_id}] 目标消息转发错误 {target_index}: {e}")
             
@@ -367,7 +369,7 @@ class ProxyConnection:
                     except Exception as e:
                         self.logger.ws.warning(f"[{self.connection_id}] 尝试重连目标 {target_index} 失败: {e}")
                 while True:
-                    await asyncio.sleep(600)
+                    await asyncio.sleep(600) # 10分钟后再试
                     try:
                         target_ws = await self._connect_to_target(self.config.get("target_endpoints", [])[self.target_index2list_index(target_index)], target_index)
                         await self._process_client_message(self.first_message)
@@ -476,6 +478,8 @@ class ProxyConnection:
             
         except json.JSONDecodeError:
             self.logger.ws.warning(f"[{self.connection_id}] 目标 {target_index} 发送非JSON消息: {message[:1000]}")
+        except websockets.exceptions.ConnectionClosed:
+            raise
         except Exception as e:
             self.logger.ws.error(f"[{self.connection_id}] 处理目标消息 {message} 失败: {e}")
     
@@ -592,7 +596,8 @@ class ProxyConnection:
     async def _close_websocket(self, ws):
         """安全关闭WebSocket连接"""
         try:
-            await ws.close()
+            if ws:
+                await ws.close()
         except Exception as e:
             self.logger.ws.error(f"[{self.connection_id}] 关闭WebSocket连接时出错: {e}")
             
