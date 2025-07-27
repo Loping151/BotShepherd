@@ -78,8 +78,8 @@
                 <div class="col-md-4">
                     <label for="direction" class="form-label">消息方向</label>
                     <select class="form-select" id="direction" name="direction">
-                        <option value=null>全部方向</option>
-                        <option value="SEND" selected>发送</option>
+                        <option value="" cselected>全部方向</option>
+                        <option value="SEND">发送</option>
                         <option value="RECV">接收</option>
                     </select>
                 </div>
@@ -155,9 +155,10 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 设置默认时间范围（10天前到现在）
     const now = new Date();
+    const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
     const tenDaysAgo = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000);
 
-    document.getElementById('endTime').value = now.toISOString().slice(0, 16);
+    document.getElementById('endTime').value = tomorrow.toISOString().slice(0, 16);
     document.getElementById('startTime').value = tenDaysAgo.toISOString().slice(0, 16);
     
     // 绑定表单提交事件（确保只绑定一次）

@@ -738,7 +738,7 @@ class WebServer:
                 keywords = request.args.getlist('keywords')
                 keyword_type = request.args.get('keyword_type', 'and')
                 prefix = request.args.get('prefix') or None
-                direction = request.args.get('direction') or 'ALL'
+                direction = request.args.get('direction') or None
                 limit = int(request.args.get('limit', 20))
                 offset = int(request.args.get('offset', 0))
 
