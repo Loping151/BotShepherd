@@ -933,6 +933,26 @@ class WebServer:
             except Exception as e:
                 self.logger.web.error(f"更新账号配置失败: {e}")
                 return jsonify({'error': f'更新账号配置失败: {str(e)}'}), 500
+            
+        @self.app.route('/api/accounts/<account_id>', methods=['DELETE'])
+        def api_delete_account(account_id):
+            """删除账号配置"""
+            if not self._check_auth():
+                return jsonify({'error': '未授权'}), 401
+
+            try:
+                # 在新的事件循环中运行异步操作
+                try:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    loop.run_until_complete(
+                        self.config_manager.delete_account_config(account_id)
+                    )
+                finally:
+                    loop.close()
+                return jsonify({'success': True})
+            except Exception as e:
+                return jsonify({'error': str(e)}), 500
 
         @self.app.route('/api/groups')
         def api_groups():

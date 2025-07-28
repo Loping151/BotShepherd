@@ -315,6 +315,15 @@ class ConfigManager:
         
         config["enabled"] = enabled
         await self.save_account_config(account_id, config)
+        
+    async def delete_account_config(self, account_id: str):
+        """删除账号配置"""
+        if account_id in self._account_configs:
+            del self._account_configs[account_id]
+        
+        config_file = self.account_dir / f"{account_id}.json"
+        if config_file.exists():
+            config_file.unlink()
     
     # 群组配置相关方法
     def get_all_group_configs(self) -> Dict[str, Dict[str, Any]]:
