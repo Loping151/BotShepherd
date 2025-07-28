@@ -10,7 +10,6 @@
 - 触发指令：自己上号或主人在群里，通过指令帮助其他用户执行任何指令（bs触发 123456 some_command），避免红温
 
 ![static/imgs/pipeline.png](static/imgs/pipeline.png)
-Powered by PPT. TODO
 
 ## 📝 更新记录
 
@@ -106,6 +105,15 @@ http://localhost:5100
 默认用户名/密码: admin/admin
 ```
 端口可在初始化完成后于`config/global_config.json`中修改。
+
+5. **配置连接**
+如图所示
+
+![static/imgs/pipeline.png](static/imgs/example.png)
+
+注意多个客户端不能公用一个入口（客户端端点），因为需要拿这个ws连接头去连接下游框架。按照标准，self_id，如QQ号，就在连接头中，一号一头。
+
+创建完第一个连接配置后，可以点击复制快速创建多个连接头。
 
 ### 后台运行
 示例：使用Tmux(Linux)
