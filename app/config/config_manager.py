@@ -4,14 +4,11 @@
 """
 
 import json
-import os
-import asyncio
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta, timezone
 
 from .config_validator import ConfigValidator, ConfigTemplate
-# from .config_watcher import ConfigWatcher
 
 class ConfigManager:
     """配置管理器"""
@@ -129,7 +126,7 @@ class ConfigManager:
                     self._account_configs[account_id] = config
             except Exception as e:
                 self.log(f"加载账号配置失败 {config_file}: {e}", "error")
-    
+
     async def _load_group_configs(self):
         """加载群组配置"""
         self._group_configs = {}
@@ -145,17 +142,7 @@ class ConfigManager:
                     self._group_configs[group_id] = config
             except Exception as e:
                 self.log(f"加载群组配置失败 {config_file}: {e}", "error")
-    
-    # async def _start_config_watchers(self):
-    #     """启动配置文件监控"""
-    #     self._config_watcher = ConfigWatcher(self)
-    #     await self._config_watcher.start()
 
-    # async def stop_config_watchers(self):
-    #     """停止配置文件监控"""
-    #     if self._config_watcher:
-    #         await self._config_watcher.stop()
-    #         self._config_watcher = None
             
     def config_exists(self) -> bool:
         """检查配置文件是否存在"""

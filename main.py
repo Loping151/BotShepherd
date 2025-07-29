@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-BotShepherd - Bot牧羊人
-一个强大的OneBot v11协议WebSocket代理和管理系统
+BotShepherd
+一个OneBot v11协议WebSocket代理和管理系统
 
 主程序入口文件
 """

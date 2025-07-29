@@ -8,6 +8,7 @@
 
 - 每账号消息量，跨框架黑名单，每Bot、每群、全局可以将原有指令别名，不同名称的Bot不再需要为了一个指令名称单开框架
 - 触发指令：自己上号或主人在群里，通过指令帮助其他用户执行任何指令（bs触发 123456 some_command），避免红温
+- 对接付费系统，自动化更新群组到期时间 [API文档](./README_API.md)
 
 ![static/imgs/pipeline.png](static/imgs/pipeline.png)
 
@@ -17,6 +18,7 @@
 
 <details>
 <summary>点此展开</summary>
+
 2025-07-29 v0.2.4 优化了自动初始化环境，已在windows和root环境的vps下测试
 
 2025-07-26 v0.2.3 修复了重连问题
