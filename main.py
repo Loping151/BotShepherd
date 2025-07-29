@@ -267,9 +267,7 @@ def create_directories():
         "config/account",
         "config/group",
         "data",
-        "logs",
-        "templates",
-        "static"
+        "logs"
     ]
 
     for directory in directories:
@@ -364,7 +362,6 @@ async def main():
     if not check_config_exists():
         print("❌ 错误: 配置文件不存在")
         print("请先运行初始化命令: python main.py --setup")
-        print("或者如果使用虚拟环境: ./venv/bin/python main.py --setup")
         sys.exit(1)
 
     # 创建并启动BotShepherd
