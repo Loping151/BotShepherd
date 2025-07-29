@@ -175,13 +175,13 @@
                     <div class="mb-3">
                         <label class="form-label">指令别名</label>
                         <div class="alert alert-info py-2">
-                            <small><i class="bi bi-info-circle"></i> 为指令设置别名，格式：别名 -> 目标指令。例如：# -> bs</small>
+                            <small><i class="bi bi-info-circle"></i> 为指令设置别名，支持多个别名用逗号分隔。格式：别名1,别名2,别名3 -> 目标指令。例如：#,yun -> #</small>
                         </div>
                         <div id="aliasesList">
-                            <div class="input-group mb-2">
-                                <input type="text" class="form-control alias-from" placeholder="别名（如：#）">
+                            <div class="alias-row input-group mb-2">
+                                <input type="text" class="form-control alias-values" placeholder="别名（如：#, yun）">
                                 <span class="input-group-text">→</span>
-                                <input type="text" class="form-control alias-to" placeholder="目标指令（如：bs）">
+                                <input type="text" class="form-control alias-key" placeholder="目标指令（如：#）">
                                 <button class="btn btn-outline-danger" type="button" onclick="removeAlias(this)">
                                     <i class="bi bi-trash"></i>
                                 </button>
@@ -446,11 +446,11 @@ function removeFilter(button, type) {
 function addAlias() {
     const list = document.getElementById('aliasesList');
     const div = document.createElement('div');
-    div.className = 'input-group mb-2';
+    div.className = 'alias-row input-group mb-2';
     div.innerHTML = `
-        <input type="text" class="form-control alias-from" placeholder="别名（如：#）">
+        <input type="text" class="form-control alias-values" placeholder="别名（如：#, yz）">
         <span class="input-group-text">→</span>
-        <input type="text" class="form-control alias-to" placeholder="目标指令（如：bs）">
+        <input type="text" class="form-control alias-key" placeholder="目标指令（如：#）">
         <button class="btn btn-outline-danger" type="button" onclick="removeAlias(this)">
             <i class="bi bi-trash"></i>
         </button>
@@ -470,10 +470,10 @@ function removeAlias(button) {
 function resetAliasesList() {
     const list = document.getElementById('aliasesList');
     list.innerHTML = `
-        <div class="input-group mb-2">
-            <input type="text" class="form-control alias-from" placeholder="别名（如：#）">
+        <div class="alias-row input-group mb-2">
+            <input type="text" class="form-control alias-values" placeholder="别名（如：#, yz）">
             <span class="input-group-text">→</span>
-            <input type="text" class="form-control alias-to" placeholder="目标指令（如：bs）">
+            <input type="text" class="form-control alias-key" placeholder="目标指令（如：#）">
             <button class="btn btn-outline-danger" type="button" onclick="removeAlias(this)">
                 <i class="bi bi-trash"></i>
             </button>
@@ -491,21 +491,19 @@ function loadAliasesToForm(aliases) {
         return;
     }
 
-    // 将别名对象转换为表单项
+    // 将别名对象转换为表单项 - 每个target一行
     Object.entries(aliases).forEach(([target, aliasList]) => {
-        aliasList.forEach(alias => {
-            const div = document.createElement('div');
-            div.className = 'input-group mb-2';
-            div.innerHTML = `
-                <input type="text" class="form-control alias-from" value="${alias}">
-                <span class="input-group-text">→</span>
-                <input type="text" class="form-control alias-to" value="${target}">
-                <button class="btn btn-outline-danger" type="button" onclick="removeAlias(this)">
-                    <i class="bi bi-trash"></i>
-                </button>
-            `;
-            list.appendChild(div);
-        });
+        const div = document.createElement('div');
+        div.className = 'alias-row input-group mb-2';
+        div.innerHTML = `
+            <input type="text" class="form-control alias-values" value="${aliasList.join(', ')}">
+            <span class="input-group-text">→</span>
+            <input type="text" class="form-control alias-key" value="${target}">
+            <button class="btn btn-outline-danger" type="button" onclick="removeAlias(this)">
+                <i class="bi bi-trash"></i>
+            </button>
+        `;
+        list.appendChild(div);
     });
 
     // 如果没有别名，至少显示一个空的输入框
@@ -554,20 +552,18 @@ async function saveGroup() {
 
         // 收集别名
         const aliases = {};
-        const aliasFromInputs = document.querySelectorAll('.alias-from');
-        const aliasToInputs = document.querySelectorAll('.alias-to');
-
-        for (let i = 0; i < aliasFromInputs.length; i++) {
-            const aliasFrom = aliasFromInputs[i].value.trim();
-            const aliasTo = aliasToInputs[i].value.trim();
-
-            if (aliasFrom && aliasTo) {
-                if (!aliases[aliasTo]) {
-                    aliases[aliasTo] = [];
+        document.querySelectorAll('.alias-row').forEach(row => {
+            const aliasValues = row.querySelector('.alias-values').value.trim();
+            const target = row.querySelector('.alias-key').value.trim();
+            
+            if (target && aliasValues) {
+                // 使用中英文逗号分割别名，并过滤空值
+                const aliasList = aliasValues.split(/[,，]/).map(v => v.trim()).filter(v => v);
+                if (aliasList.length > 0) {
+                    aliases[target] = aliasList;
                 }
-                aliases[aliasTo].push(aliasFrom);
             }
-        }
+        });
 
         const groupData = {
             group_id: groupId,
