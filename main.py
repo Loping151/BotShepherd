@@ -202,8 +202,8 @@ class BotShepherd:
 
 def check_python_version():
     """检查Python版本"""
-    if sys.version_info < (3, 8):
-        print("❌ 错误: 需要Python 3.8或更高版本")
+    if sys.version_info < (3, 12):
+        print("❌ 错误: 需要Python 3.12或更高版本")
         print(f"当前版本: {sys.version}")
         return False
 
@@ -254,7 +254,6 @@ def create_venv_and_install():
     if requirements_file.exists():
         print("📥 安装项目依赖...")
         try:
-            subprocess.check_call([str(pip_path), "install", "--upgrade", "pip"])
             subprocess.check_call([str(pip_path), "install", "-r", str(requirements_file)])
             print("✅ 依赖安装完成")
             print("准备重启以切换到虚拟环境！")
