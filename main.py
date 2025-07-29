@@ -238,6 +238,17 @@ def create_venv_and_install():
         venv_python = venv_path / "bin" / "python"
         pip_path = venv_path / "bin" / "pip"
 
+    # 检查pip是否存在，如果不存在则安装
+    if not pip_path.exists():
+        print("📥 pip不存在，正在安装pip...")
+        try:
+            # 使用ensurepip安装pip到虚拟环境
+            subprocess.check_call([str(venv_python), "-m", "ensurepip", "--upgrade"])
+            print("✅ pip安装完成")
+        except subprocess.CalledProcessError as e:
+            print(f"❌ ensurepip安装pip失败: {e}")
+            return False
+        
     # 安装依赖
     requirements_file = Path("requirements.txt")
     if requirements_file.exists():
