@@ -36,6 +36,10 @@ except ImportError as e:
     print(f"❌ 导入模块失败: {e}")
     print("请先运行初始化命令: python main.py --setup")
     print("如已指定 --setup 请忽略")
+    if sys.platform == "win32":
+        print("如已经完成初始化，请使用 ./venv/Scripts/python.exe main.py")
+    else:
+        print("如已经完成初始化，请使用 ./venv/bin/python main.py")
     import_err = e
 
 class BotShepherd:
@@ -228,8 +232,10 @@ def create_venv_and_install():
 
     # 确定pip路径
     if sys.platform == "win32":
+        venv_python = venv_path / "Scripts" / "python.exe"
         pip_path = venv_path / "Scripts" / "pip.exe"
     else:
+        venv_python = venv_path / "bin" / "python"
         pip_path = venv_path / "bin" / "pip"
 
     # 安装依赖
@@ -240,6 +246,8 @@ def create_venv_and_install():
             subprocess.check_call([str(pip_path), "install", "--upgrade", "pip"])
             subprocess.check_call([str(pip_path), "install", "-r", str(requirements_file)])
             print("✅ 依赖安装完成")
+            print("准备重启以切换到虚拟环境！")
+            os.execv(venv_python, [venv_python] + sys.argv)
             return True
         except subprocess.CalledProcessError as e:
             print(f"❌ 安装依赖失败: {e}")
@@ -247,6 +255,7 @@ def create_venv_and_install():
     else:
         print("❌ requirements.txt 文件不存在")
         return False
+    
 
 def create_directories():
     """创建必要的目录"""
