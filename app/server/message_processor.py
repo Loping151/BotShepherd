@@ -113,7 +113,7 @@ class MessageProcessor:
         """预处理消息事件"""
         # 检查账号是否启用
         is_su = self.config_manager.is_superuser(event.user_id)
-        account_config = self.config_manager.get_account_config(str(event.self_id))
+        account_config = await self.config_manager.get_account_config(str(event.self_id))
         if account_config and not account_config.get("enabled", True) and not is_su:
             self.logger.message.info(f"账号 {event.self_id} 已禁用，跳过消息处理")
             return None
@@ -192,7 +192,7 @@ class MessageProcessor:
         if not global_config.get("sendcount_notifications", True):
             return message_data
         
-        account_config = self.config_manager.get_account_config(str(self_id))
+        account_config = await self.config_manager.get_account_config(str(self_id))
         send_info = account_config.get("send_count", {"date": None, "group": {"total": 0}, "private": 0})
         
         decorate_info = None
@@ -402,7 +402,7 @@ class MessageProcessor:
             if "message" not in message_data or not isinstance(message_data["message"], list):
                 return message_data
             
-            account_config = self.config_manager.get_account_config(str(message_data["self_id"]))
+            account_config = await self.config_manager.get_account_config(str(message_data["self_id"]))
             aliases = account_config.get("aliases", {})
             
             if not aliases:

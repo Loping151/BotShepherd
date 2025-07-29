@@ -186,7 +186,7 @@ class AliasCommand(BaseCommand):
                 aliases = config_manager._global_config.get("global_aliases", {})
                 result = "全局别名:\n"
             elif alias_type == "账号":
-                account_config = config_manager.get_account_config(entity_id)
+                account_config = await config_manager.get_account_config(entity_id)
                 if not account_config:
                     return self.format_error(f"账号 {entity_id} 未找到。")
                 aliases = account_config.get("aliases", {})

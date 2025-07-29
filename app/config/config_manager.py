@@ -143,7 +143,6 @@ class ConfigManager:
             except Exception as e:
                 self.log(f"加载群组配置失败 {config_file}: {e}", "error")
 
-            
     def config_exists(self) -> bool:
         """检查配置文件是否存在"""
         global_config_file = self.config_dir / "global_config.json"
@@ -221,9 +220,15 @@ class ConfigManager:
         """获取所有账号配置"""
         return self._account_configs.copy()
     
-    def get_account_config(self, account_id: str) -> Optional[Dict[str, Any]]:
+    async def get_account_config(self, account_id: str) -> Optional[Dict[str, Any]]:
         """获取账号配置"""
-        return self._account_configs.get(account_id)
+        config = self._account_configs.get(account_id)
+        if not config:
+            # 创建新的账号配置
+            config = ConfigTemplate.get_default_account_config(account_id)
+            self._account_configs[account_id] = config
+            await self.save_config()
+        return config
     
     async def save_account_config(self, account_id: str, config: Dict[str, Any]):
         """保存账号配置"""
@@ -238,10 +243,7 @@ class ConfigManager:
     
     async def update_account_last_activity(self, account_id: str, group_id: Optional[str], activity_type: str):
         """更新账号最后活动时间"""
-        config = self.get_account_config(account_id)
-        if not config:
-            # 创建新的账号配置
-            config = ConfigTemplate.get_default_account_config(account_id)
+        config = await self.get_account_config(account_id)
         
         # 更新时间
         current_time = datetime.now().isoformat()
@@ -294,7 +296,7 @@ class ConfigManager:
     
     async def set_account_enabled(self, account_id: str, enabled: bool):
         """设置账号启用状态"""
-        config = self.get_account_config(account_id)
+        config = await self.get_account_config(account_id)
         if not config:
             raise ValueError(f"账号 {account_id} 未找到")
         elif config["enabled"] == enabled:
@@ -556,7 +558,7 @@ class ConfigManager:
             
     async def add_account_alias(self, account_id: str, alias: str, target: str):
         """添加账号别名"""
-        account_config = self.get_account_config(account_id)
+        account_config = await self.get_account_config(account_id)
         if not account_config:
             raise ValueError(f"账号 {account_id} 未找到")
         aliases = account_config.get("aliases", {})
@@ -567,7 +569,7 @@ class ConfigManager:
             
     async def remove_account_alias(self, account_id: str, alias: str, target: str):
         """移除账号别名"""
-        account_config = self.get_account_config(account_id)
+        account_config = await self.get_account_config(account_id)
         if not account_config:
             raise ValueError(f"账号 {account_id} 未找到")
         aliases = account_config.get("aliases", {})

@@ -916,7 +916,9 @@ class WebServer:
             try:
                 config = request.get_json()
                 
-                original_config = self.config_manager.get_account_config(account_id)
+                original_config = asyncio.run(self.config_manager.get_account_config(account_id))
+                if not original_config:
+                    return jsonify({'error': '账号不存在'}), 404
                 
                 # 只允许更新现有的字段
                 for k, v in config.items():
