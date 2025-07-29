@@ -142,7 +142,7 @@ class SumCommand(BaseCommand):
     async def basic_query(self, event: Event, database_manager) -> CommandResponse:
         """基础统计信息，是私聊群聊总发送量"""
         try:
-            result = f"当前账号：{event.self_id}\n🕒 当前时间：{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')}\n\n📊 统计结果：\n"
+            result = "当前账号：{}\n🕒 当前时间：{}\n\n📊 统计结果：\n".format(event.self_id, datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M'))
             
             now_utc = datetime.now(timezone.utc)
             today_utc_zero = datetime.combine(now_utc, datetime.min.time(), tzinfo=timezone.utc)
@@ -176,8 +176,8 @@ class SumCommand(BaseCommand):
                 # 不允许统计账号数量 * 群组数量的结果
                 group = None
                 
-            result = f"🧑‍💻 账号：{self_id if self_id else '全部'}\n"
-            result += f"📅 查询日期：{date.strftime('%Y-%m-%d')}\n"
+            result = "🧑‍💻 账号：{}\n".format(self_id if self_id else '全部')
+            result += "📅 查询日期：{}\n".format(date.strftime('%Y-%m-%d'))
             if group:
                 result += f"👥 群组：{group}\n"
             if user:
@@ -185,9 +185,9 @@ class SumCommand(BaseCommand):
             if command:
                 result += f"💬 指令：{command}\n"
             if keywords:
-                result += f"🔑 关键词：{'|'.join(keywords) if keyword_type == 'or' else '+'.join(keywords)}\n"
+                result += "🔑 关键词：{}\n".format('|'.join(keywords) if keyword_type == 'or' else '+'.join(keywords))
 
-            result += f"📨 消息方向：{direction if direction else "ALL"}\n"
+            result += "📨 消息方向：{}\n".format(direction if direction else "ALL")
             result += f"\n📊 统计结果：\n"
 
             date_utc_zero = datetime.combine(date, datetime.min.time(), tzinfo=timezone.utc)
@@ -326,11 +326,11 @@ class RankCommand(BaseCommand):
     async def rank_query(self, event: Event, date: datetime, command: str, keywords: List[str], keyword_type: str, limit: int, self_id, group_id: str, database_manager) -> CommandResponse:
         """排行榜查询"""
         try:
-            result = f"📅 日期：{date.strftime('%Y-%m-%d')}\n"
+            result = "📅 日期：{}\n".format(date.strftime('%Y-%m-%d'))
             if command:
                 result += f"指令前缀：{command}\n"
             if keywords:
-                result += f"关键词：{'|'.join(keywords) if keyword_type == 'or' else '+'.join(keywords)}\n"
+                result += "关键词：{}\n".format('|'.join(keywords) if keyword_type == 'or' else '+'.join(keywords))
             if group_id:
                 result += f"本群排行：\n"
             else:
@@ -474,15 +474,15 @@ class QueryCommand(BaseCommand):
             if command:
                 result += f"💬 指令：{command}\n"
             if keywords:
-                result += f"🔑 关键词：{'|'.join(keywords) if keyword_type == 'or' else '+'.join(keywords)}\n"
+                result += "🔑 关键词：{}\n".format('|'.join(keywords) if keyword_type == 'or' else '+'.join(keywords))
 
-            result += f"📨 消息方向：{direction if direction else "ALL"}\n"
+            result += "📨 消息方向：{}\n".format(direction if direction else "ALL")
             result += f"\n📊 统计结果：\n"
             
             q_result = await database_manager.query_messages_combined(group_id=group, user_id=user, prefix=command, keywords=keywords, keyword_type=keyword_type, direction=direction, limit=limit)
             for record in q_result[1:]: # 因为第一条一定是刚刚写入的查询消息
                 time_str = datetime.fromtimestamp(record.timestamp, tz=timezone.utc).strftime('%Y-%m-%d %H:%M')
-                result += f"{time_str}|{record.user_id if not record.sender_info.get("nickname") else record.sender_info['nickname'] + '(' + str(record.user_id) + ')'}{"于群" + str(record.group_id) if record.group_id else '私聊'}发送：{record.message_content}\n"
+                result += "{}|{}{}发送：{}\n".format(time_str, record.user_id if not record.sender_info.get("nickname") else record.sender_info['nickname'] + '(' + str(record.user_id) + ')', "于群" + str(record.group_id) if record.group_id else '私聊', record.message_content)
                 
                 if len(result) > 2000:
                     result_list.append(result)

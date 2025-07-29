@@ -180,7 +180,7 @@ class ConfigManager:
         # 验证配置
         is_valid, errors = self._validator.validate_global_config(temp_config)
         if not is_valid:
-            raise ValueError(f"全局配置验证失败: {', '.join(errors)}")
+            raise ValueError("全局配置验证失败: {}".format(', '.join(errors)))
 
         self._global_config.update(updates)
         await self._save_global_config()
@@ -208,7 +208,7 @@ class ConfigManager:
         # 验证配置
         is_valid, errors = self._validator.validate_connection_config(config)
         if not is_valid:
-            raise ValueError(f"连接配置验证失败: {', '.join(errors)}")
+            raise ValueError("连接配置验证失败: {}".format(', '.join(errors)))
 
         self._connections_config[connection_id] = config
 
@@ -311,7 +311,7 @@ class ConfigManager:
         if not config:
             raise ValueError(f"账号 {account_id} 未找到")
         elif config["enabled"] == enabled:
-            raise ValueError(f"账号 {account_id} 已经是 {'开启' if enabled else '关闭'} 状态")
+            raise ValueError("账号 {} 已经是 {} 状态".format(account_id, '开启' if enabled else '关闭'))
         
         config["enabled"] = enabled
         await self.save_account_config(account_id, config)
@@ -345,7 +345,7 @@ class ConfigManager:
         # 验证配置
         is_valid, errors = self._validator.validate_group_config(config)
         if not is_valid:
-            raise ValueError(f"群组配置验证失败: {', '.join(errors)}")
+            raise ValueError("群组配置验证失败: {}".format(', '.join(errors)))
 
         self._group_configs[group_id] = config
 
@@ -449,7 +449,7 @@ class ConfigManager:
         if not config:
             raise ValueError(f"群组 {group_id} 未找到")
         elif config["enabled"] == enabled:
-            raise ValueError(f"群组 {group_id} 已经是 {'开启' if enabled else '关闭'} 状态")
+            raise ValueError("群组 {} 已经是 {} 状态".format(group_id, '开启' if enabled else '关闭'))
         
         config["enabled"] = enabled
         await self.save_group_config(group_id, config)

@@ -132,7 +132,7 @@ class MessageProcessor:
 
         # 检查黑名单
         if self._is_in_blacklist(event) and not is_su:
-            self.logger.message.info(f"消息来自黑名单，跳过处理: user={event.user_id}, group={getattr(event, 'group_id', None)}")
+            self.logger.message.info("消息来自黑名单，跳过处理: user={}, group={}".format(event.user_id, getattr(event, 'group_id', None)))
             return None
         
         # 检查私聊设置
@@ -305,7 +305,7 @@ class MessageProcessor:
                             if segment.type == "text":
                                 text_parts.append(segment.data.get("text", ""))
                             elif segment.type == "at":
-                                text_parts.append(f"@{segment.data.get('qq', '')}")
+                                text_parts.append("@{}".format(segment.data.get('qq', '')))
                             else:
                                 text_parts.append(str(segment)[:1000])
                     content_summary = "".join(text_parts)[:100]
@@ -319,11 +319,11 @@ class MessageProcessor:
             # 额外信息
             extra_info = []
             if "self_id" in message_data:
-                extra_info.append(f"bot={message_data['self_id']}")
+                extra_info.append("bot={}".format(message_data['self_id']))
             if "user_id" in message_data:
-                extra_info.append(f"user={message_data['user_id']}")
+                extra_info.append("user={}".format(message_data['user_id']))
             if "group_id" in message_data:
-                extra_info.append(f"group={message_data['group_id']}")
+                extra_info.append("group={}".format(message_data['group_id']))
             
             extra_str = " ".join(extra_info) if extra_info else ""
             

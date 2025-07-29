@@ -202,7 +202,7 @@ class AliasCommand(BaseCommand):
                 result += "  暂无别名。"
             else:
                 for target, alias_list in aliases.items():
-                    result += f"  - {",".join(alias_list)} -> {target}\n"
+                    result += "  - {} -> {}\n".format(",".join(alias_list), target)
 
             if result.count("\n") > 10: # 如果行数过多，使用转发消息
                 return self.format_info(result.strip(), use_forward=True)

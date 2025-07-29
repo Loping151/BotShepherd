@@ -81,7 +81,7 @@ class BaseCommand(ABC):
         if self.example:
             help_text += f"示例: {self.example}\n"
         if self.aliases:
-            help_text += f"别名: {', '.join(self.aliases)}\n"
+            help_text += "别名: {}\n".format(', '.join(self.aliases))
         
         # 添加参数帮助
         if self.parser:

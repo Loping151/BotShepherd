@@ -388,7 +388,7 @@ class ProxyConnection:
             if message_data.get("self_id"): # 每次更新，客户端可能会换账号
                 if self.self_id and self.self_id != message_data["self_id"]:
                     # 但是，不论是通过头注册还是yunzai的方式都不能支持账号的热切换
-                    self.logger.ws.warning(f"[{self.connection_id}] 客户端账号已切换到 {message_data['self_id']}，请重启该连接！")
+                    self.logger.ws.warning("[{}] 客户端账号已切换到 {}，请重启该连接！".format(self.connection_id, message_data['self_id']))
                 self.self_id = message_data["self_id"]
             
             # 消息预处理
@@ -534,7 +534,7 @@ class ProxyConnection:
             if event.status != "ok" or event.retcode != 0:
                 echo_info = self.echo_cache.get(str(event.echo), None)
                 if echo_info:
-                    self.logger.ws.warning(f"[{self.connection_id}] API调用失败: {echo_info['data']} -> {event}")
+                    self.logger.ws.warning("[{}] API调用失败: {} -> {}".format(self.connection_id, echo_info['data'], event))
                     
     async def _construct_msg_from_echo(self, echo, **kwargs):
         """从api结果中构造模拟收到消息"""

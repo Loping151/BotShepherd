@@ -403,7 +403,7 @@ class MessageSegmentParser:
                         if value.startswith("base64://"):
                             value = "base64://..."
                         params.append(f"{key}={value}")
-                result_parts.append(f"[CQ:image,{','.join(params)}]")
+                result_parts.append("[CQ:image,{}]".format(','.join(params)))
 
             elif segment.type == MessageSegmentType.RECORD:
                 # 语音：[CQ:record,file=文件名]
@@ -414,7 +414,7 @@ class MessageSegmentParser:
                         if value.startswith("base64://"):
                             value = "base64://..."
                         params.append(f"{key}={value}")
-                result_parts.append(f"[CQ:record,{','.join(params)}]")
+                result_parts.append("[CQ:record,{}]".format(','.join(params)))
 
             elif segment.type == MessageSegmentType.VIDEO:
                 # 短视频：[CQ:video,file=文件名]
@@ -425,7 +425,7 @@ class MessageSegmentParser:
                         if value.startswith("base64://"):
                             value = "base64://..."
                         params.append(f"{key}={value}")
-                result_parts.append(f"[CQ:video,{','.join(params)}]")
+                result_parts.append("[CQ:video,{}]".format(','.join(params)))
 
             elif segment.type == MessageSegmentType.REPLY:
                 # 回复：[CQ:reply,id=消息ID]
@@ -451,7 +451,7 @@ class MessageSegmentParser:
                     if key in segment.data and segment.data[key] is not None:
                         value = MessageSegmentParser._escape_cq_param(str(segment.data[key]))
                         params.append(f"{key}={value}")
-                result_parts.append(f"[CQ:share,{','.join(params)}]")
+                result_parts.append("[CQ:share,{}]".format(','.join(params)))
 
             elif segment.type == MessageSegmentType.CONTACT:
                 # 推荐好友/群：[CQ:contact,type=类型,id=ID]
@@ -460,7 +460,7 @@ class MessageSegmentParser:
                     if key in segment.data and segment.data[key] is not None:
                         value = MessageSegmentParser._escape_cq_param(str(segment.data[key]))
                         params.append(f"{key}={value}")
-                result_parts.append(f"[CQ:contact,{','.join(params)}]")
+                result_parts.append("[CQ:contact,{}]".format(','.join(params)))
 
             elif segment.type == MessageSegmentType.LOCATION:
                 # 位置：[CQ:location,lat=纬度,lon=经度,title=标题,content=内容]
@@ -469,7 +469,7 @@ class MessageSegmentParser:
                     if key in segment.data and segment.data[key] is not None:
                         value = MessageSegmentParser._escape_cq_param(str(segment.data[key]))
                         params.append(f"{key}={value}")
-                result_parts.append(f"[CQ:location,{','.join(params)}]")
+                result_parts.append("[CQ:location,{}]".format(','.join(params)))
 
             elif segment.type == MessageSegmentType.MUSIC:
                 # 音乐：[CQ:music,type=类型,id=ID]
@@ -478,7 +478,7 @@ class MessageSegmentParser:
                     if key in segment.data and segment.data[key] is not None:
                         value = MessageSegmentParser._escape_cq_param(str(segment.data[key]))
                         params.append(f"{key}={value}")
-                result_parts.append(f"[CQ:music,{','.join(params)}]")
+                result_parts.append("[CQ:music,{}]".format(','.join(params)))
 
             elif segment.type == MessageSegmentType.FORWARD:
                 # 合并转发：[CQ:forward,id=ID]
@@ -496,7 +496,7 @@ class MessageSegmentParser:
                         if key in segment.data and segment.data[key] is not None:
                             value = MessageSegmentParser._escape_cq_param(str(segment.data[key]))
                             params.append(f"{key}={value}")
-                    result_parts.append(f"[CQ:node,{','.join(params)}]")
+                    result_parts.append("[CQ:node,{}]".format(','.join(params)))
 
             elif segment.type == MessageSegmentType.RPS:
                 # 猜拳魔法表情：[CQ:rps]
@@ -530,7 +530,7 @@ class MessageSegmentParser:
                         escaped_value = MessageSegmentParser._escape_cq_param(str(value))
                         params.append(f"{key}={escaped_value}")
                 if params:
-                    result_parts.append(f"[CQ:{segment.type},{','.join(params)}]")
+                    result_parts.append("[CQ:{},{}]".format(segment.type, ','.join(params)))
                 else:
                     result_parts.append(f"[CQ:{segment.type}]")
 

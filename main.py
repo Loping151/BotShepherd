@@ -202,8 +202,8 @@ class BotShepherd:
 
 def check_python_version():
     """检查Python版本"""
-    if sys.version_info < (3, 12):
-        print("❌ 错误: 需要Python 3.12或更高版本")
+    if sys.version_info < (3, 7):
+        print("❌ 错误: 需要Python 3.7或更高版本")
         print(f"当前版本: {sys.version}")
         return False
 

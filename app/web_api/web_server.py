@@ -1016,7 +1016,7 @@ class WebServer:
 
                 # 复制配置并修改名称
                 new_config = original_config.copy()
-                new_config['name'] = f"{original_config.get('name', '连接')} - 副本"
+                new_config['name'] = "{} - 副本".format(original_config.get('name', '连接'))
                 new_config['enabled'] = False
 
                 # 保存新配置

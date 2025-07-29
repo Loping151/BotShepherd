@@ -74,7 +74,7 @@ class HelpCommand(BaseCommand):
             restrictions.append("仅限私聊")
         
         if restrictions:
-            help_text += f"\n使用限制: {', '.join(restrictions)}"
+            help_text += "\n使用限制: {}".format(', '.join(restrictions))
         
         return self.format_response(help_text, use_forward=True)
     
@@ -125,7 +125,7 @@ class HelpCommand(BaseCommand):
                     # 指令名称和别名
                     cmd_info = command.name
                     if command.aliases:
-                        cmd_info += f" ({', '.join(command.aliases[:2])})"
+                        cmd_info += " ({})".format(', '.join(command.aliases[:2]))
                     
                     help_text += f"  • {cmd_info} - {command.description}\n"
                         
@@ -175,7 +175,7 @@ class StatusCommand(BaseCommand):
                 status_info += f"💾 数据库状态:\n"
                 status_info += f"  • 数据库大小: {database_manager.get_database_size() / 1024 / 1024:.2f} MB\n"
                 status_info += f"  • 记录条数: {await database_manager.get_total_message_count()} 条\n"
-                status_info += f"  • 消息保留: {db_config.get('auto_expire_days', 30)} 天\n"
+                status_info += "  • 消息保留: {} 天\n".format(db_config.get('auto_expire_days', 30))
                 
             except Exception as e:
                 status_info += f"💾 数据库状态: 获取失败 ({e})\n"
@@ -193,7 +193,7 @@ class StatusCommand(BaseCommand):
             status_info += f"  • CPU: {app_cpu:.1f}% / {total_cpu:.1f}%\n"
             status_info += f"  • 内存: {app_mem:.1f}MB / {total_mem:.1f}MB ({total_mem_percent:.1f}%)\n"
             
-            status_info += f"\n🕐 当前UTC时间: {context.get('timestamp', '未知')}"
+            status_info += "\n🕐 当前UTC时间: {}".format(context.get('timestamp', '未知'))
             
             return self.format_response(status_info, use_forward=True)
             

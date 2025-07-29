@@ -104,7 +104,7 @@ class ConfigValidator:
             db_config = config["database"]
             if isinstance(db_config, dict):
                 if "type" in db_config and db_config["type"] not in ["sqlite"]:
-                    errors.append(f"不支持的数据库类型: {db_config['type']}")
+                    errors.append("不支持的数据库类型: {}".format(db_config['type']))
                 
                 if "auto_expire_days" in db_config:
                     expire_days = db_config["auto_expire_days"]
