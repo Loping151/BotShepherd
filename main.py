@@ -18,14 +18,26 @@ from pathlib import Path
 # 添加项目根目录到Python路径
 sys.path.insert(0, str(Path(__file__).parent))
 
-from app.config.config_manager import ConfigManager
-from app.database.database_manager import DatabaseManager
-from app.server.proxy_server import ProxyServer
-from app.web_api.web_server import WebServer
-from app.utils.logger import BSLogger
-from app.commands import initialize_builtin_commands, load_plugins
-from app import __version__, __github__, __description__
+def import_app_modules():
+    from app.config.config_manager import ConfigManager
+    from app.database.database_manager import DatabaseManager
+    from app.server.proxy_server import ProxyServer
+    from app.web_api.web_server import WebServer
+    from app.utils.logger import BSLogger
+    from app.commands import initialize_builtin_commands, load_plugins
+    from app import __version__, __github__, __description__
+    globals().update(locals())
 
+try:
+    import_app_modules()
+    print("✅ 导入模块成功")
+    import_err = None
+except ImportError as e:
+    print(f"❌ 导入模块失败: {e}")
+    print("请先运行初始化命令: python main.py --setup")
+    print("或者如果使用虚拟环境: ./venv/bin/python main.py --setup")
+    import_err = e
+    sys.exit(1)
 
 class BotShepherd:
     """BotShepherd主应用类"""
@@ -197,6 +209,10 @@ def check_python_version():
 
 def create_venv_and_install():
     """创建虚拟环境并安装依赖"""
+    if not import_err:
+        print("✅ 环境已符合要求！无需安装虚拟环境！")
+        return True
+    
     venv_path = Path("./venv")
 
     if not venv_path.exists():
@@ -271,6 +287,9 @@ async def setup_initial_config():
 
     # 创建目录
     create_directories()
+    
+    # 导入应用模块
+    import_app_modules()
 
     # 初始化配置
     print("\n⚙️ 初始化配置文件...")

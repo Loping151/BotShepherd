@@ -107,6 +107,7 @@ http://localhost:5100
 端口可在初始化完成后于`config/global_config.json`中修改。
 
 5. **配置连接**
+
 如图所示
 
 ![static/imgs/pipeline.png](static/imgs/example.png)
