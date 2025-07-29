@@ -35,9 +35,8 @@ try:
 except ImportError as e:
     print(f"❌ 导入模块失败: {e}")
     print("请先运行初始化命令: python main.py --setup")
-    print("或者如果使用虚拟环境: ./venv/bin/python main.py --setup")
+    print("如已指定 --setup 请忽略")
     import_err = e
-    sys.exit(1)
 
 class BotShepherd:
     """BotShepherd主应用类"""
