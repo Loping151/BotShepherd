@@ -36,7 +36,7 @@ class FilterManager:
     async def filter_receive_message(self, event: Event, 
                                    message_data: Dict[str, Any]) -> bool:
         """过滤接收消息 True表示被过滤"""
-        try:
+        try:            
             
             # 检查全局接收过滤词
             if isinstance(event, MessageEvent):
@@ -87,6 +87,9 @@ class FilterManager:
         # 提取消息文本
         message_text = self._extract_message_text(message_data)
         if not message_text:
+            return False
+        
+        if message_text.startswith(global_config.get("command_prefix")):
             return False
         
         # 检查过滤词
@@ -155,6 +158,7 @@ class FilterManager:
     async def _apply_group_filters(self, event: GroupMessageEvent, 
                                  message_data: Dict[str, Any]) -> bool:
         """应用群组过滤词，具有额外规则：可以设为QQ号，实现群内机器人的开关或不响应单个群员"""
+        global_config = self.config_manager.get_global_config()
         group_config = await self.config_manager.get_group_config(str(event.group_id))
         if not group_config:
             return False
@@ -171,7 +175,10 @@ class FilterManager:
         self_id = str(event.self_id)
         user_id = str(event.user_id)
         message_text = message_text + self_id + user_id
-                
+                        
+        if message_text.startswith(global_config.get("command_prefix")):
+            return False
+        
         # 先检查超级用户设置的过滤词
         superuser_filters = filters.get("superuser_filters", [])
         for filter_word in superuser_filters:
@@ -183,14 +190,15 @@ class FilterManager:
                 return True
         
         # 再检查群管设置的过滤词（超级用户不受此限制）
-        admin_filters = filters.get("admin_filters", [])
-        for filter_word in admin_filters:
-            if filter_word in message_text:
-                await self._log_filter_action(
-                    event, FilterType.GROUP_FILTER, 
-                    f"包含群组管理员过滤词: {filter_word}", FilterAction.BLOCK
-                )
-                return True
+        if not self.config_manager.is_superuser(event.user_id):
+            admin_filters = filters.get("admin_filters", [])
+            for filter_word in admin_filters:
+                if filter_word in message_text:
+                    await self._log_filter_action(
+                        event, FilterType.GROUP_FILTER, 
+                        f"包含群组管理员过滤词: {filter_word}", FilterAction.BLOCK
+                    )
+                    return True
         
         return False
     
@@ -242,7 +250,7 @@ class FilterManager:
         try:
             log_info = {
                 "self_id": getattr(event, 'self_id', None),
-                "user_id": event.params.get("user_id"),
+                "user_id": event.user_id if isinstance(event, GroupMessageEvent) else event.params.get("user_id"),
                 "filter_type": filter_type.value,
                 "reason": reason,
                 "action": action.value

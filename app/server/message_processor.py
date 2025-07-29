@@ -154,9 +154,8 @@ class MessageProcessor:
             message_data = await self.apply_group_aliases(message_data)
 
         # 然后应用过滤词。也就是说，可以通过全局禁用原来的前缀，使用账号别名来使单个账号绕过过滤，实现启用功能的目的。
-        if not self.config_manager.is_superuser(event.user_id):
-            if await self.filter_manager.filter_receive_message(event, message_data):
-                return None
+        if await self.filter_manager.filter_receive_message(event, message_data):
+            return None
 
         return message_data
     
