@@ -250,13 +250,13 @@ class ConfigValidator:
         if "group_id" in config:
             group_id = config["group_id"]
             if not isinstance(group_id, str) or not group_id.isdigit():
-                errors.append("group_id 必须是数字字符串")
+                errors.append(f"group_id 必须是数字字符串，但实际为{group_id}")
         
         # 验证过期时间
         if "expire_time" in config:
             expire_time = config["expire_time"]
             if expire_time != -1 and not isinstance(expire_time, str):
-                errors.append("expire_time 必须是 -1 或 ISO格式的时间字符串")
+                errors.append(f"expire_time 必须是 -1 或 ISO格式的时间字符串，但实际为{expire_time}")
                 
         if "aliases" in config:
             aliases = config["aliases"]

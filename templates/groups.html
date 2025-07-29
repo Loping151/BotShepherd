@@ -260,7 +260,10 @@ function updateGroupStats() {
     Object.values(groups).forEach(group => {
         if (group.enabled) enabled++;
         if (group.filters?.superuser_filters?.length > 0 || group.filters?.admin_filters?.length > 0) filtered++;
-        if (group.expire_time > 0 && group.expire_time < Date.now() / 1000) expired++;
+        if (group.expire_time && group.expire_time !== -1) {
+            const expireDate = new Date(group.expire_time);
+            if (expireDate < new Date()) expired++;
+        }
     });
 
     document.getElementById('total-groups').textContent = total;
@@ -282,7 +285,9 @@ function updateGroupTable() {
             '<span class="badge bg-secondary">禁用</span>';
 
         const expireTime = group.expire_time === -1 ? '永不过期' :
-            (group.expire_time > 0 ? new Date(group.expire_time * 1000).toLocaleDateString('zh-CN', {year: '2-digit', month: '2-digit', day: '2-digit'}) : '未设置');
+            (group.expire_time && group.expire_time !== -1 ? 
+                new Date(group.expire_time).toLocaleDateString('zh-CN', {year: '2-digit', month: '2-digit', day: '2-digit'}) : 
+                '未设置');
 
         // 格式化最后活跃时间
         let lastActiveTime = '从未发送';
@@ -358,8 +363,8 @@ function editGroup(groupId) {
     document.getElementById('groupDescription').value = group.description || '';
 
     // 处理过期时间 - 转换为日期格式
-    if (group.expire_time && group.expire_time > 0) {
-        const expireDate = new Date(group.expire_time * 1000);
+    if (group.expire_time && group.expire_time !== -1) {
+        const expireDate = new Date(group.expire_time);
         document.getElementById('groupExpireTime').value = expireDate.toISOString().split('T')[0];
     } else {
         document.getElementById('groupExpireTime').value = '';
@@ -524,7 +529,8 @@ async function saveGroup() {
         // 处理过期时间
         let groupExpireTime = -1;
         if (groupExpireTimeStr) {
-            groupExpireTime = Math.floor(new Date(groupExpireTimeStr).getTime() / 1000);
+            const expireDate = new Date(groupExpireTimeStr);
+            groupExpireTime = expireDate.toISOString();
         }
 
         if (!groupId) {
@@ -616,10 +622,10 @@ function showGroupDetail(groupId) {
 
     // 格式化过期时间
     let expireTimeStr = '永不过期';
-    if (group.expire_time > 0) {
-        const expireDate = new Date(group.expire_time * 1000);
+    if (group.expire_time && group.expire_time !== -1) {
+        const expireDate = new Date(group.expire_time);
         expireTimeStr = expireDate.toLocaleString('zh-CN');
-    } else if (group.expire_time === 0) {
+    } else if (!group.expire_time || group.expire_time === 0) {
         expireTimeStr = '未设置';
     }
 
