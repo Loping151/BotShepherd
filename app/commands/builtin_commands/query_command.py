@@ -482,7 +482,7 @@ class QueryCommand(BaseCommand):
             q_result = await database_manager.query_messages_combined(group_id=group, user_id=user, prefix=command, keywords=keywords, keyword_type=keyword_type, direction=direction, limit=limit)
             for record in q_result[1:]: # 因为第一条一定是刚刚写入的查询消息
                 time_str = datetime.fromtimestamp(record.timestamp, tz=timezone.utc).strftime('%Y-%m-%d %H:%M')
-                result += f"{time_str} {record.self_id}|{record.user_id if not record.sender_info.get("nickname") else record.sender_info['nickname'] + '(' + str(record.user_id) + ')'}{"于群" + str(record.group_id) if record.group_id else '私聊'}发送：{record.message_content}\n"
+                result += f"{time_str}|{record.user_id if not record.sender_info.get("nickname") else record.sender_info['nickname'] + '(' + str(record.user_id) + ')'}{"于群" + str(record.group_id) if record.group_id else '私聊'}发送：{record.message_content}\n"
                 
                 if len(result) > 2000:
                     result_list.append(result)
