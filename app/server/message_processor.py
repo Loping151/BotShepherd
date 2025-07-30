@@ -201,18 +201,18 @@ class MessageProcessor:
             group_count = send_info["group"].get(str(event.params.get("group_id")), 0)
             group_deco_template = f"\n📈 今日已发送{total_count + 1}/4000，本群 {group_count + 1}，超出将被限制发言"
             if total_count < 3000:
-                if total_count + 1 % 100 == 0:
+                if (total_count + 1) % 100 == 0:
                     decorate_info = group_deco_template
             elif total_count < 4000:
-                if total_count + 1 % 25 == 0 or group_count + 1 % 10 == 0:
+                if (total_count + 1) % 25 == 0 or (group_count + 1) % 10 == 0:
                     decorate_info = group_deco_template
             else:
-                if group_count + 1 % 3 == 0:
+                if (group_count + 1) % 5 == 0:
                     decorate_info = group_deco_template
         else:
             private_count = send_info["private"]
             private_deco_template = f"\n📈 今日私聊已发送{private_count + 1}"
-            if private_count + 1 % 10 == 0:
+            if (private_count + 1) % 10 == 0:
                 decorate_info = private_deco_template
 
         
