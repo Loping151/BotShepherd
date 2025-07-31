@@ -41,8 +41,8 @@ class MessageProcessor:
             # 解析事件
             event = self.event_parser.parse_event_data(normalized_data)
             if not event and not normalized_data.get("echo"):
-                self.logger.debug(f"无法解析事件，已忽略")
-                self.logger.debug(f"忽略事件内容：{normalized_data}")
+                self.logger.message.debug(f"无法解析事件，已忽略")
+                self.logger.message.debug(f"忽略事件内容：{normalized_data}")
                 return normalized_data, None
             
             # 更新账号活动时间
@@ -66,7 +66,7 @@ class MessageProcessor:
             return normalized_data, event
             
         except Exception as e:
-            self.logger.error(f"预处理客户端消息失败: {e}")
+            self.logger.message.error(f"预处理客户端消息失败: {e}")
             return None, None
     
     async def postprocess_target_message(self, message_data: Dict[str, Any], self_id: str) -> Optional[Dict[str, Any]]:
@@ -92,7 +92,7 @@ class MessageProcessor:
             return message_data
             
         except Exception as e:
-            self.logger.error(f"后处理目标消息失败: {e}")
+            self.logger.message.error(f"后处理目标消息失败: {e}")
             return None
     
     async def _normalize_message(self, message_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -337,7 +337,7 @@ class MessageProcessor:
             )
             
         except Exception as e:
-            self.logger.error(f"记录消息日志失败: {e}")
+            self.logger.message.error(f"记录消息日志失败: {e}")
     
     async def extract_command_info(self, event: Event) -> Optional[Dict[str, Any]]:
         """提取指令信息"""
@@ -394,7 +394,7 @@ class MessageProcessor:
             return await self._apply_aliases(message_data, aliases)
             
         except Exception as e:
-            self.logger.error(f"应用全局别名失败: {e}")
+            self.logger.message.error(f"应用全局别名失败: {e}")
             return message_data
 
     async def apply_account_aliases(self, message_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -411,7 +411,7 @@ class MessageProcessor:
             return await self._apply_aliases(message_data, aliases)
             
         except Exception as e:
-            self.logger.error(f"应用账号别名失败: {e}")
+            self.logger.message.error(f"应用账号别名失败: {e}")
             return message_data
     
     async def apply_group_aliases(self, message_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -428,5 +428,5 @@ class MessageProcessor:
             return await self._apply_aliases(message_data, aliases)
             
         except Exception as e:
-            self.logger.error(f"应用群组别名失败: {e}，{message_data}")
+            self.logger.message.error(f"应用群组别名失败: {e}，{message_data}")
             return message_data

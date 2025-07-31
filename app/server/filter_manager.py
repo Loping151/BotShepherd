@@ -53,7 +53,7 @@ class FilterManager:
             return False
             
         except Exception as e:
-            self.logger.error(f"过滤接收消息失败: {e}，将拦截！")
+            self.logger.message.error(f"过滤接收消息失败: {e}，将拦截！")
             return True
     
     async def filter_send_message(self, event: Event, 
@@ -72,7 +72,7 @@ class FilterManager:
             return message_data
             
         except Exception as e:
-            self.logger.error(f"过滤发送消息失败: {e}，将拦截！{message_data}")
+            self.logger.message.error(f"过滤发送消息失败: {e}，将拦截！{message_data}")
             return None
     
     async def _apply_global_receive_filters(self, event: Event, 
@@ -262,12 +262,12 @@ class FilterManager:
                 log_info["group_id"] = event.params.get("group_id")
             
             if action == FilterAction.BLOCK:
-                self.logger.warning(f"消息被过滤: {log_info}")
+                self.logger.message.info(f"消息被过滤: {log_info}")
             else:
-                self.logger.info(f"过滤动作: {log_info}")
+                self.logger.message.info(f"过滤动作: {log_info}")
                 
         except Exception as e:
-            self.logger.error(f"记录过滤动作失败: {e}")
+            self.logger.message.error(f"记录过滤动作失败: {e}")
 
     
     def validate_filter_word(self, word: str) -> Tuple[bool, str]:
