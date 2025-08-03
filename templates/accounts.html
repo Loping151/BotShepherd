@@ -207,7 +207,10 @@ function updateAccountStats() {
     const total = Object.keys(accounts).length;
     let enabled = 0, disabled = 0, todayActive = 0;
 
-    const today = new Date().toISOString().split('T')[0];
+    const userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const today = new Date().toLocaleDateString('en-CA', { 
+        timeZone: userTimeZone 
+    });
 
     Object.values(accounts).forEach(account => {
         if (account.enabled) {
@@ -217,8 +220,15 @@ function updateAccountStats() {
         }
 
         // 检查今日是否活跃（基于last_send_time）
-        if (account.last_send_time && account.last_send_time.startsWith(today)) {
-            todayActive++;
+        if (account.last_send_time) {
+            const accountDate = new Date(account.last_send_time)
+                .toLocaleDateString('en-CA', { 
+                    timeZone: userTimeZone 
+                });
+            
+            if (accountDate === today) {
+                todayActive++;
+            }
         }
     });
 
