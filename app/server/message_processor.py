@@ -121,8 +121,9 @@ class MessageProcessor:
         # 检查群组是否启用和过期
         if isinstance(event, GroupMessageEvent):
             group_config = await self.config_manager.get_group_config(str(event.group_id))
-            if group_config and is_su:
-                if not group_config.get("enabled", True):
+            if group_config and not is_su: # 总是不拦截 su
+                if not group_config.get("enabled", True) and not (event.sender.role in ["owner", "admin"] and event.raw_message.startswith(self.config_manager.get_global_config().get("command_prefix", ""))):
+                    # 具有管理员权限的成员发送内置命令不受拦截，除非过期
                     self.logger.message.info(f"群组 {event.group_id} 已禁用，跳过消息处理")
                     return None
                 
