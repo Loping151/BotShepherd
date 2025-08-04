@@ -4,6 +4,7 @@
 """
 
 import json
+import os
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta, timezone
@@ -225,10 +226,18 @@ class ConfigManager:
         config = self._account_configs.get(account_id)
         if not config:
             # 创建新的账号配置
-            config = ConfigTemplate.get_default_account_config(account_id)
-            self._account_configs[account_id] = config
-            await self.save_config()
+            if await self.account_config_exists(account_id):
+                self.logger.warning(f"账号配置 {account_id} 存在，但不再记录中！")
+                raise ValueError(f"账号配置 {account_id} 获取失败！")
+            else:
+                config = ConfigTemplate.get_default_account_config(account_id)
+                self._account_configs[account_id] = config
+                await self.save_config()
         return config
+    
+    async def account_config_exists(self, account_id: str) -> bool:
+        """检查账号配置是否存在"""
+        return os.path.exists(self.account_dir / f"{account_id}.json")
     
     async def save_account_config(self, account_id: str, config: Dict[str, Any]):
         """保存账号配置"""
@@ -319,15 +328,22 @@ class ConfigManager:
         """获取所有群组配置"""
         return self._group_configs.copy()
     
-    # ?? 为啥group我写的是sync。。好像确实是我写的
     async def get_group_config(self, group_id: str) -> Optional[Dict[str, Any]]:
         """获取群组配置"""
         config = self._group_configs.get(group_id)
         if not config:
-            config = ConfigTemplate.get_default_group_config(group_id)
-            self._group_configs[group_id] = config
-            await self.save_group_config(group_id, config)
+            if await self.group_config_exists(group_id):
+                self.logger.warning(f"群组 {group_id} 存在，但不再记录中！")
+                raise ValueError(f"群组 {group_id} 获取失败！")
+            else:
+                config = ConfigTemplate.get_default_group_config(group_id)
+                self._group_configs[group_id] = config
+                await self.save_group_config(group_id, config)
         return config
+    
+    async def group_config_exists(self, group_id: str) -> bool:
+        """判断群组配置是否存在"""
+        return os.path.exists(f"config/group_configs/{group_id}.json")
     
     async def save_group_config(self, group_id: str, config: Dict[str, Any]):
         """保存群组配置"""
