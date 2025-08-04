@@ -58,7 +58,8 @@ class HelpCommand(BaseCommand):
         # 检查用户是否有权限查看此指令
         user_level = permission_manager.get_user_permission_level(event)
         if user_level.value < command.required_permission.value:
-            return self.format_error(f"您没有权限查看指令 {command_name} 的帮助")
+            # return self.format_error(f"您没有权限查看指令 {command_name} 的帮助")
+            return # 不提示
         
         help_text = command.get_help()
         

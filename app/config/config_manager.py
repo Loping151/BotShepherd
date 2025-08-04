@@ -709,53 +709,6 @@ class ConfigManager:
 
         return True
 
-    # def validate_global_config(self, config: Dict[str, Any]) -> bool:
-    #     """验证全局配置"""
-    #     required_fields = ["superusers", "command_prefix"]
-
-    #     for field in required_fields:
-    #         if field not in config:
-    #             return False
-
-    #     # 验证超级用户列表
-    #     if not isinstance(config["superusers"], list) or len(config["superusers"]) == 0:
-    #         return False
-
-    #     # 验证指令前缀
-    #     if not isinstance(config["command_prefix"], str) or len(config["command_prefix"]) == 0:
-    #         return False
-
-    #     return True
-
-    # 配置备份和恢复
-    # async def create_config_backup(self, backup_name: Optional[str] = None) -> str:
-    #     """创建配置备份"""
-    #     if not self._config_backup:
-    #         raise RuntimeError("配置备份管理器未初始化")
-
-    #     backup_path = await self._config_backup.create_backup(backup_name)
-    #     return str(backup_path)
-
-    # async def restore_config_backup(self, backup_name: str):
-    #     """恢复配置备份"""
-    #     if not self._config_backup:
-    #         raise RuntimeError("配置备份管理器未初始化")
-
-    #     await self._config_backup.restore_backup(backup_name)
-    #     # 重新加载所有配置
-    #     await self._load_all_configs()
-
-    # def list_config_backups(self) -> List[Dict[str, Any]]:
-    #     """列出所有配置备份"""
-    #     if not self._config_backup:
-    #         return []
-
-    #     return self._config_backup.list_backups()
-
-    # async def cleanup_old_backups(self, keep_count: int = 10):
-    #     """清理旧备份"""
-    #     if self._config_backup:
-    #         await self._config_backup.cleanup_old_backups(keep_count)
 
     async def setup_initial_config(self):
         """设置初始配置"""

@@ -399,34 +399,127 @@ function clearForm() {
 }
 
 // 导出结果
-function exportResults() {
-    if (currentResults.length === 0) {
+// 导出结果 - 修复版本
+async function exportResults() {
+    if (!currentResults || currentResults.length === 0) {
         showToast('暂无数据可导出', 'warning');
         return;
     }
     
-    // 创建CSV内容
-    let csvContent = "data:text/csv;charset=utf-8,";
-    csvContent += "时间,方向,账号,用户ID,群组ID,消息内容\n";
+    const exportButton = document.querySelector('button[onclick="exportResults()"]');
+    const originalText = exportButton.innerHTML;
     
-    currentResults.forEach(message => {
-        const time = new Date(message.timestamp * 1000).toLocaleString('zh-CN');
-        const direction = message.direction === 'SEND' ? '发送' : '接收';
-        const content = (message.message_content || message.raw_message).replace(/"/g, '""');
+    try {
+        // 显示导出中状态
+        exportButton.disabled = true;
+        exportButton.innerHTML = '<i class="bi bi-hourglass-split"></i> 导出中...';
         
-        csvContent += `"${time}","${direction}","${message.self_id}","${message.user_id || ''}","${message.group_id || ''}","${content}"\n`;
-    });
-    
-    // 下载文件
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `message_query_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
-    showToast('查询结果已导出', 'success');
+        // 获取完整的查询结果（如果总数大于当前结果数）
+        let allResults = currentResults;
+        
+        if (totalCount > currentResults.length) {
+            // 需要获取完整数据
+            const form = document.getElementById('queryForm');
+            const formData = new FormData(form);
+            const params = new URLSearchParams();
+            
+            // 构建查询参数（与performQuery函数中的逻辑一致）
+            for (let [key, value] of formData.entries()) {
+                const trimmedValue = value.trim();
+                if (trimmedValue) {
+                    if (key === 'keywords' && trimmedValue.includes(',')) {
+                        const keywords = trimmedValue.split(/[,，]/).map(k => k.trim()).filter(k => k);
+                        keywords.forEach(keyword => params.append('keywords', keyword));
+                    } else if (key === 'start_time' || key === 'end_time') {
+                        const timestamp = Math.floor(new Date(trimmedValue).getTime() / 1000);
+                        params.append(key, timestamp);
+                    } else {
+                        params.append(key, trimmedValue);
+                    }
+                }
+            }
+            
+            // 设置大的limit以获取所有结果
+            params.set('limit', '10000');
+            params.set('offset', '0');
+            
+            // 重新查询获取完整数据
+            const response = await apiRequest(`/api/query_messages?${params.toString()}`);
+            allResults = response.messages || [];
+        }
+        
+        if (allResults.length === 0) {
+            showToast('没有数据可导出', 'warning');
+            return;
+        }
+        
+        // 创建CSV内容
+        const csvRows = [];
+        csvRows.push(['时间', '方向', '机器人账号', '用户ID', '用户名', '群组ID', '消息内容']);
+        
+        allResults.forEach(message => {
+            const time = new Date(message.timestamp * 1000).toLocaleString('zh-CN');
+            const direction = message.direction === 'SEND' ? '发送' : '接收';
+            
+            // 解析发送者信息
+            let senderName = '';
+            try {
+                const sender = message.sender_info || {};
+                senderName = sender.nickname || sender.card || '';
+            } catch {
+                senderName = '';
+            }
+            
+            const content = (message.message_content || message.raw_message || '').replace(/"/g, '""');
+            
+            csvRows.push([
+                time,
+                direction,
+                message.self_id || '',
+                message.user_id || '',
+                senderName,
+                message.group_id || '',
+                content
+            ]);
+        });
+        
+        // 转换为CSV格式
+        const csvContent = csvRows.map(row => 
+            row.map(field => `"${field}"`).join(',')
+        ).join('\n');
+        
+        // 创建Blob并下载
+        const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        
+        // 生成文件名
+        const now = new Date();
+        const dateStr = now.toISOString().split('T')[0];
+        const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '');
+        const filename = `消息查询结果_${dateStr}_${timeStr}.csv`;
+        
+        link.href = url;
+        link.download = filename;
+        link.style.display = 'none';
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        // 释放URL对象
+        window.URL.revokeObjectURL(url);
+        
+        showToast(`成功导出 ${allResults.length} 条消息记录`, 'success');
+        
+    } catch (error) {
+        console.error('导出失败:', error);
+        showToast('导出失败: ' + error.message, 'danger');
+    } finally {
+        // 恢复按钮状态
+        exportButton.disabled = false;
+        exportButton.innerHTML = originalText;
+    }
 }
 
 // HTML转义函数

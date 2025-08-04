@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
-from sqlalchemy import select, and_, or_, func, desc
+from sqlalchemy import case, select, and_, or_, func, desc
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import text
@@ -430,60 +430,6 @@ class DatabaseManager:
             except Exception as e:
                 print(f"按时间间隔统计消息数量失败: {e}")
                 return []
-
-    async def count_messages_by_type(self,
-                                   self_id: str = None,
-                                   start_time: int = None,
-                                   end_time: int = None,
-                                   direction: str = "SEND") -> Dict[str, int]:
-        """按消息类型统计消息数量"""
-        async with self.session_factory() as session:
-            try:
-                conditions = []
-                if self_id:
-                    conditions.append(Message.self_id == self_id)
-                if direction:
-                    conditions.append(Message.direction == direction)
-                if start_time:
-                    conditions.append(Message.timestamp >= start_time)
-                if end_time:
-                    conditions.append(Message.timestamp <= end_time)
-
-                # 按消息类型分组统计
-                stmt = select(
-                    Message.message_type,
-                    func.count(Message.id).label('count')
-                ).group_by(Message.message_type)
-
-                if conditions:
-                    stmt = stmt.where(and_(*conditions))
-
-                result = await session.execute(stmt)
-                rows = result.fetchall()
-
-                # 格式化结果，将消息类型转换为中文
-                type_mapping = {
-                    'group': '群聊',
-                    'private': '私聊',
-                    'notice': '通知',
-                    'request': '请求',
-                    'meta_event': '元事件'
-                }
-
-                type_stats = {}
-                for row in rows:
-                    message_type = row.message_type
-                    count = row.count
-
-                    # 转换为中文名称
-                    chinese_type = type_mapping.get(message_type, message_type)
-                    type_stats[chinese_type] = count
-
-                return type_stats
-
-            except Exception as e:
-                print(f"按消息类型统计消息数量失败: {e}")
-                return {}
 
 
     async def _start_cleanup_task(self):

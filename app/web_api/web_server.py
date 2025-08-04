@@ -664,16 +664,6 @@ class WebServer:
                     )
                 )
 
-                # 获取真实的消息类型分布
-                message_types = asyncio.run(
-                    self.database_manager.count_messages_by_type(
-                        self_id=self_id,
-                        start_time=start_time,
-                        end_time=end_time,
-                        direction=direction
-                    )
-                )
-
                 # 获取收到的消息总量（RECV方向）
                 received_messages = asyncio.run(
                     self.database_manager.count_messages(
@@ -701,14 +691,13 @@ class WebServer:
                     'active_groups': active_groups,
                     'received_messages': received_messages,  # 收到的消息总量
                     'hourly_trend': hourly_trend,  # 每3小时的趋势数据
-                    'message_types': message_types,  # 真实的消息类型分布
                     'top_groups': [
                         {
                             'group_id': group_id,
                             'message_count': count,
                             'active_users': 1  # 简化处理
                         }
-                        for group_id, count in sorted(group_stats.items(), key=lambda x: x[1], reverse=True)[:10]
+                        for group_id, count in sorted(group_stats.items(), key=lambda x: x[1], reverse=True)
                     ],
                     # 添加变化指示器
                     'messages_change': total_messages - yesterday_messages,

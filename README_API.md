@@ -456,11 +456,6 @@ BotShepherd Web API 提供了完整的系统管理功能，包括连接管理、
       {"time": "2023-01-01 00:00", "count": 10},
       {"time": "2023-01-01 03:00", "count": 15}
     ],
-    "message_types": {
-      "text": 800,
-      "image": 150,
-      "voice": 50
-    },
     "top_groups": [
       {
         "group_id": "789012",

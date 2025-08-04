@@ -4,7 +4,10 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h1><i class="bi bi-graph-up"></i> 统计分析</h1>
+    <div>
+        <h1><i class="bi bi-graph-up"></i> 统计分析</h1>
+        <small class="text-muted">所有时间均为 UTC 时间</small>
+    </div>
     <div class="btn-group" role="group">
         <button type="button" class="btn btn-outline-primary" onclick="refreshStats()">
             <i class="bi bi-arrow-clockwise"></i>
@@ -41,7 +44,7 @@
             </div>
             <div class="col-md-3">
                 <label for="accountFilter" class="form-label">账号筛选</label>
-                <select class="form-select" id="accountFilter">
+                <select class="form-select" id="accountFilter" onchange="loadStatistics()">
                     <option value="">全部账号</option>
                 </select>
             </div>
@@ -135,15 +138,16 @@
     </div>
 </div>
 
-<!-- 群组活跃度TOP5 -->
+<!-- 群组活跃度排行 -->
 <div class="row mb-4">
     <div class="col-12">
         <div class="card">
-            <div class="card-header">
+            <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">
                     <i class="bi bi-trophy"></i>
-                    群组活跃度 TOP 5
+                    群组活跃度排行
                 </h5>
+                <small class="text-muted">所有活跃群组按消息数量排序</small>
             </div>
             <div class="card-body">
                 <div class="table-responsive">
@@ -166,17 +170,42 @@
     </div>
 </div>
 
-
-
-
-
-
 {% endblock %}
 
 {% block extra_js %}
 <script>
 let messagesTrendChart, messageTypeChart;
 let currentStats = {};
+
+// UTC时间工具函数
+function getUTCDateString(date = new Date()) {
+    return date.toISOString().split('T')[0];
+}
+
+function getUTCDateTime(date = new Date()) {
+    return date.toISOString();
+}
+
+function formatUTCTime(dateString) {
+    const date = new Date(dateString);
+    return date.toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, ' UTC');
+}
+
+function getCurrentUTCDate() {
+    return new Date().toISOString().split('T')[0];
+}
+
+function getYesterdayUTCDate() {
+    const yesterday = new Date();
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+    return yesterday.toISOString().split('T')[0];
+}
+
+function getUTCDateBefore(days) {
+    const date = new Date();
+    date.setUTCDate(date.getUTCDate() - days);
+    return date.toISOString().split('T')[0];
+}
 
 // 页面加载完成后初始化
 document.addEventListener('DOMContentLoaded', function() {
@@ -228,6 +257,13 @@ function initCharts() {
             plugins: {
                 legend: {
                     display: true
+                },
+                tooltip: {
+                    callbacks: {
+                        title: function(context) {
+                            return context[0].label;
+                        }
+                    }
                 }
             }
         }
@@ -263,7 +299,6 @@ function initCharts() {
             }
         }
     });
-
 }
 
 // 加载账号列表
@@ -293,7 +328,7 @@ async function loadStatistics() {
     try {
         const params = new URLSearchParams();
         
-        // 添加时间范围参数
+        // 添加时间范围参数（UTC）
         const dateRange = document.getElementById('dateRange').value;
         if (dateRange === 'custom') {
             const startDate = document.getElementById('startDate').value;
@@ -303,6 +338,9 @@ async function loadStatistics() {
         } else {
             params.append('range', dateRange);
         }
+        
+        // 添加UTC时区参数
+        params.append('timezone', 'UTC');
         
         // 添加账号筛选
         const accountFilter = document.getElementById('accountFilter').value;
@@ -315,7 +353,6 @@ async function loadStatistics() {
         
         updateStatsCards(stats);
         updateCharts(stats);
-        updateTopTables(stats);
         
     } catch (error) {
         console.error('加载统计数据失败:', error);
@@ -356,111 +393,149 @@ function updateChangeIndicator(elementId, change) {
 
 // 更新图表
 function updateCharts(stats) {
-    // 更新趋势图（每3小时）
+    // 更新趋势图（每3小时）- 确保时间标签显示清晰
     if (stats.hourly_trend && stats.hourly_trend.length > 0) {
         messagesTrendChart.data.labels = stats.hourly_trend.map(item => item.time_label);
         messagesTrendChart.data.datasets[0].data = stats.hourly_trend.map(item => item.message_count);
         messagesTrendChart.update();
     }
 
-    // 更新消息类型分布图 - 包含TOP5群组
-    if (stats.message_types && stats.top_groups) {
-        // 过滤掉unknown类型
-        const filteredTypes = Object.entries(stats.message_types)
-            .filter(([type, count]) => type !== 'unknown' && type !== 'Unknown')
-            .sort(([,a], [,b]) => b - a); // 按数量排序
-
-        // 获取前5名群组
-        const top5Groups = stats.top_groups.slice(0, 5);
-
-        // 计算TOP5群组的总消息数
-        const top5TotalCount = top5Groups.reduce((sum, group) => sum + group.message_count, 0);
-
-        // 合并消息类型和TOP5群组
+    // 更新消息类型分布图 - 基于top_groups计算
+    if (stats.top_groups && stats.total_messages) {
         const labels = [];
         const data = [];
         const colors = [];
 
-        // 添加消息类型，特殊处理"群聊"类型
-        let hasGroupChat = false;
-        filteredTypes.forEach(([type, count], index) => {
-            if (type === '群聊') {
-                // 将"群聊"改为"其他群组"，数量减去TOP5群组的数量
-                const otherGroupsCount = Math.max(0, count - top5TotalCount);
-                labels.push('其他群组');
-                data.push(otherGroupsCount);
-                colors.push('#6c757d');
-                hasGroupChat = true;
-            } else {
-                labels.push(type);
-                data.push(count);
-                colors.push(['#495057', '#28a745', '#17a2b8', '#ffc107', '#dc3545', '#fd7e14', '#e83e8c'][index % 7]);
-            }
-        });
+        // 获取前5名群组
+        const top10Groups = stats.top_groups.slice(0, 10);
+        
+        // 计算群聊总数（所有群组的消息总和）
+        const totalGroupMessages = stats.top_groups.reduce((sum, group) => sum + group.message_count, 0);
+        
+        // 计算私聊数量（总消息数 - 群聊总数）
+        const privateMessages = Math.max(0, stats.total_messages - totalGroupMessages);
+        
+        // 计算TOP5群组的消息总数
+        const top10TotalMessages = top10Groups.reduce((sum, group) => sum + group.message_count, 0);
+        
+        // 计算其他群组的消息数量（总群聊 - TOP5群组）
+        const otherGroupsMessages = Math.max(0, totalGroupMessages - top10TotalMessages);
 
-        // 如果没有群聊类型，也要添加"其他群组"（数量为0）
-        if (!hasGroupChat) {
-            labels.push('其他群组');
-            data.push(0);
-            colors.push('#6c757d');
+        // 1. 添加私聊（如果有）
+        if (privateMessages > 0) {
+            labels.push('私聊');
+            data.push(privateMessages);
+            colors.push('#28a745'); // 绿色
         }
 
-        // 添加TOP5群组
-        top5Groups.forEach((group, index) => {
+        // 2. 添加TOP10群组
+        const groupColors = ['#20c997', '#6f42c1', '#fd7e14', '#e83e8c', '#6610f2', '#007bff', '#28a745', '#ffc107', '#dc3545', '#17a2b8'];   
+        top10Groups.forEach((group, index) => {
             labels.push(`群组 ${group.group_id}`);
             data.push(group.message_count);
-            colors.push(['#20c997', '#6f42c1', '#fd7e14', '#e83e8c', '#6610f2'][index % 5]);
+            colors.push(groupColors[index % groupColors.length]);
         });
 
+        // 3. 添加其他群组（如果有）
+        if (otherGroupsMessages > 0) {
+            labels.push('其他群组');
+            data.push(otherGroupsMessages);
+            colors.push('#6c757d'); // 灰色
+        }
+
+        // 4. 如果没有任何数据，显示占位符
+        if (labels.length === 0) {
+            labels.push('暂无数据');
+            data.push(1);
+            colors.push('#dee2e6');
+        }
+
+        // 更新图表
         messageTypeChart.data.labels = labels;
         messageTypeChart.data.datasets[0].data = data;
         messageTypeChart.data.datasets[0].backgroundColor = colors;
         messageTypeChart.update();
     }
 
-    // 更新群组TOP5表格
+    // 更新群组排行表格
     updateTopGroupsTable(stats);
 }
 
-// 更新群组TOP5表格
+// 群组活跃度表格更新函数 - 显示所有群组
 function updateTopGroupsTable(stats) {
     const table = document.querySelector('#top-groups-table tbody');
     table.innerHTML = '';
 
     if (stats.top_groups && stats.top_groups.length > 0) {
-        const top5Groups = stats.top_groups.slice(0, 5);
+        const allGroups = stats.top_groups.slice(0, 20);
+        
+        const totalGroupMessages = stats.top_groups.reduce((sum, group) => sum + group.message_count, 0);
+        const firstPlaceCount = allGroups[0] ? allGroups[0].message_count : 1;
 
-        top5Groups.forEach((group, index) => {
+        allGroups.forEach((group, index) => {
             const row = document.createElement('tr');
 
-            // 计算活跃度百分比（相对于第一名）
-            const activityPercent = top5Groups.length > 0 ?
-                Math.round((group.message_count / top5Groups[0].message_count) * 100) : 0;
+            // 计算相对于总群聊消息的百分比
+            const percentOfTotal = totalGroupMessages > 0 ? 
+                Math.round((group.message_count / totalGroupMessages) * 100) : 0;
+            
+            // 计算相对于第一名的百分比
+            const percentOfFirst = Math.round((group.message_count / firstPlaceCount) * 100);
 
-            // 活跃度进度条颜色
-            const progressColor = index === 0 ? 'bg-success' :
-                                 index === 1 ? 'bg-info' :
-                                 index === 2 ? 'bg-warning' : 'bg-secondary';
+            // 活跃度进度条颜色 - 根据排名分配颜色
+            let progressColor;
+            let badgeColor;
+            
+            if (index === 0) {
+                progressColor = 'bg-success';
+                badgeColor = 'bg-warning';
+            } else if (index === 1) {
+                progressColor = 'bg-info';
+                badgeColor = 'bg-secondary';
+            } else if (index === 2) {
+                progressColor = 'bg-warning';
+                badgeColor = 'bg-secondary';
+            } else if (index < 10) {
+                progressColor = 'bg-primary';
+                badgeColor = 'bg-secondary';
+            } else {
+                progressColor = 'bg-secondary';
+                badgeColor = 'bg-light text-dark';
+            }
+
+            // 特殊标记前三名
+            let rankDisplay = `#${index + 1}`;
+            if (index === 0) rankDisplay = '🥇 #1';
+            else if (index === 1) rankDisplay = '🥈 #2';
+            else if (index === 2) rankDisplay = '🥉 #3';
 
             row.innerHTML = `
                 <td>
-                    <span class="badge ${index === 0 ? 'bg-warning' : 'bg-secondary'}">#${index + 1}</span>
+                    <span class="badge ${badgeColor}">${rankDisplay}</span>
                 </td>
                 <td><code>${group.group_id}</code></td>
-                <td><strong>${group.message_count}</strong></td>
+                <td>
+                    <strong>${group.message_count.toLocaleString()}</strong><small class="text-muted"> | ${percentOfTotal}% 总量</small>
+                </td>
                 <td>
                     <div class="progress" style="height: 20px;">
                         <div class="progress-bar ${progressColor}" role="progressbar"
-                             style="width: ${activityPercent}%"
-                             aria-valuenow="${activityPercent}" aria-valuemin="0" aria-valuemax="100">
-                            ${activityPercent}%
+                             style="width: ${Math.max(percentOfFirst, 2)}%"
+                             aria-valuenow="${percentOfFirst}" aria-valuemin="0" aria-valuemax="100">
+                            ${percentOfFirst}%
                         </div>
                     </div>
                 </td>
             `;
 
+            // 为前三名添加特殊样式
+            if (index < 3) {
+                row.classList.add('table-light');
+            }
+
             table.appendChild(row);
         });
+
     } else {
         // 没有数据时显示提示
         const row = document.createElement('tr');
@@ -473,13 +548,6 @@ function updateTopGroupsTable(stats) {
     }
 }
 
-// 更新排行榜表格（保留原有功能，但现在主要用于其他统计）
-function updateTopTables(stats) {
-    // 这个函数现在主要用于其他统计数据的显示
-    // 账号和群组的表格已经由专门的函数处理
-}
-
-
 
 // 更新日期范围
 function updateDateRange() {
@@ -491,13 +559,13 @@ function updateDateRange() {
         customRange1.style.display = 'block';
         customRange2.style.display = 'block';
         
-        // 设置默认日期
+        // 设置默认日期（UTC）
         const endDate = new Date();
         const startDate = new Date();
-        startDate.setDate(startDate.getDate() - 7);
+        startDate.setUTCDate(startDate.getUTCDate() - 7);
         
-        document.getElementById('endDate').value = endDate.toISOString().split('T')[0];
-        document.getElementById('startDate').value = startDate.toISOString().split('T')[0];
+        document.getElementById('endDate').value = getUTCDateString(endDate);
+        document.getElementById('startDate').value = getUTCDateString(startDate);
     } else {
         customRange1.style.display = 'none';
         customRange2.style.display = 'none';
@@ -519,26 +587,187 @@ function exportStats() {
         return;
     }
     
-    // 创建CSV内容
-    let csvContent = "data:text/csv;charset=utf-8,";
-    csvContent += "日期,消息数,用户数,群组数,指令数\n";
-    
-    if (currentStats.daily_details) {
-        currentStats.daily_details.forEach(day => {
-            csvContent += `${day.date},${day.messages},${day.users},${day.groups},${day.commands}\n`;
+    try {
+        // 获取当前的筛选参数
+        const dateRange = document.getElementById('dateRange').value;
+        const accountFilter = document.getElementById('accountFilter').value;
+        const startDate = document.getElementById('startDate').value;
+        const endDate = document.getElementById('endDate').value;
+        
+        // 创建多个CSV内容
+        const csvSections = [];
+        
+        // 1. 基础统计概览
+        let overviewContent = "统计概览\n";
+        overviewContent += "指标,数值\n";
+        overviewContent += `发送消息数,${currentStats.total_messages || 0}\n`;
+        overviewContent += `活跃用户数,${currentStats.active_users || 0}\n`;
+        overviewContent += `活跃群组数,${currentStats.active_groups || 0}\n`;
+        overviewContent += `收到消息数,${currentStats.received_messages || 0}\n`;
+        overviewContent += `统计时间范围,${getDateRangeDescription()}\n`;
+        overviewContent += `数据导出时间,${formatUTCTime(new Date().toISOString())}\n`;
+        if (accountFilter) {
+            const accountName = document.querySelector(`#accountFilter option[value="${accountFilter}"]`)?.textContent || accountFilter;
+            overviewContent += `账号筛选,${accountName}\n`;
+        }
+        overviewContent += "\n";
+        csvSections.push(overviewContent);
+        
+        // 2. 时间趋势数据（每3小时）
+        if (currentStats.hourly_trend && currentStats.hourly_trend.length > 0) {
+            let trendContent = "时间趋势（每3小时）\n";
+            trendContent += "时间段,消息数量\n";
+            currentStats.hourly_trend.forEach(item => {
+                trendContent += `"${item.time_label}",${item.message_count}\n`;
+            });
+            trendContent += "\n";
+            csvSections.push(trendContent);
+        }
+        
+        // 3. 群组活跃度排行
+        if (currentStats.top_groups && currentStats.top_groups.length > 0) {
+            let groupsContent = "群组活跃度排行\n";
+            groupsContent += "排名,群组ID,消息数量,占总量百分比\n";
+            
+            const totalGroupMessages = currentStats.top_groups.reduce((sum, group) => sum + group.message_count, 0);
+            
+            currentStats.top_groups.forEach((group, index) => {
+                const percentage = totalGroupMessages > 0 ? 
+                    ((group.message_count / totalGroupMessages) * 100).toFixed(2) : 0;
+                groupsContent += `${index + 1},"${group.group_id}",${group.message_count},${percentage}%\n`;
+            });
+            groupsContent += "\n";
+            csvSections.push(groupsContent);
+        }
+        
+        // 4. 如果存在daily_details，也包含进去
+        if (currentStats.daily_details && currentStats.daily_details.length > 0) {
+            let dailyContent = "每日详细数据\n";
+            dailyContent += "日期,消息数,用户数,群组数,指令数\n";
+            currentStats.daily_details.forEach(day => {
+                dailyContent += `${day.date},${day.messages || 0},${day.users || 0},${day.groups || 0},${day.commands || 0}\n`;
+            });
+            dailyContent += "\n";
+            csvSections.push(dailyContent);
+        }
+        
+        // 5. 如果存在消息类型分布数据
+        if (currentStats.message_types && Object.keys(currentStats.message_types).length > 0) {
+            let typesContent = "消息类型分布\n";
+            typesContent += "消息类型,数量,占比\n";
+            const totalMessages = Object.values(currentStats.message_types).reduce((sum, count) => sum + count, 0);
+            
+            Object.entries(currentStats.message_types).forEach(([type, count]) => {
+                const percentage = totalMessages > 0 ? ((count / totalMessages) * 100).toFixed(2) : 0;
+                typesContent += `"${type}",${count},${percentage}%\n`;
+            });
+            typesContent += "\n";
+            csvSections.push(typesContent);
+        }
+        
+        // 合并所有CSV内容
+        const fullCsvContent = csvSections.join("");
+        
+        // 创建Blob并下载
+        const blob = new Blob(['\ufeff' + fullCsvContent], { 
+            type: 'text/csv;charset=utf-8;' 
         });
+        
+        // 生成文件名
+        const fileName = generateFileName();
+        
+        // 使用现代下载方式
+        if (window.navigator && window.navigator.msSaveOrOpenBlob) {
+            // IE浏览器
+            window.navigator.msSaveOrOpenBlob(blob, fileName);
+        } else {
+            // 现代浏览器
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", fileName);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            // 清理URL对象
+            setTimeout(() => URL.revokeObjectURL(url), 100);
+        }
+        
+        showToast(`统计数据已导出为 ${fileName}`, 'success');
+        
+    } catch (error) {
+        console.error('导出统计数据失败:', error);
+        showToast('导出统计数据失败，请重试', 'danger');
+    }
+}
+
+// 生成文件名的辅助函数
+function generateFileName() {
+    const dateRange = document.getElementById('dateRange').value;
+    const accountFilter = document.getElementById('accountFilter').value;
+    const currentDate = getCurrentUTCDate();
+    
+    let fileName = `BotShepherd_统计_${currentDate}_UTC`;
+    
+    // 添加时间范围标识
+    switch(dateRange) {
+        case 'today':
+            fileName += '_今日';
+            break;
+        case 'yesterday':
+            fileName += '_昨日';
+            break;
+        case 'week':
+            fileName += '_7天';
+            break;
+        case 'month':
+            fileName += '_30天';
+            break;
+        case 'custom':
+            const start = document.getElementById('startDate').value;
+            const end = document.getElementById('endDate').value;
+            if (start && end) {
+                fileName += `_${start}_to_${end}`;
+            } else {
+                fileName += '_自定义';
+            }
+            break;
     }
     
-    // 下载文件
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `statistics_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    // 添加账号标识
+    if (accountFilter) {
+        fileName += `_账号${accountFilter}`;
+    }
     
-    showToast('统计数据已导出', 'success');
+    return fileName + '.csv';
+}
+
+// 获取日期范围描述的辅助函数
+function getDateRangeDescription() {
+    const dateRange = document.getElementById('dateRange').value;
+    
+    switch(dateRange) {
+        case 'today':
+            return `今日 (${getCurrentUTCDate()})`;
+        case 'yesterday':
+            return `昨日 (${getYesterdayUTCDate()})`;
+        case 'week':
+            return `最近7天 (${getUTCDateBefore(7)} 至 ${getCurrentUTCDate()})`;
+        case 'month':
+            return `最近30天 (${getUTCDateBefore(30)} 至 ${getCurrentUTCDate()})`;
+        case 'custom':
+            const start = document.getElementById('startDate').value;
+            const end = document.getElementById('endDate').value;
+            if (start && end) {
+                return `自定义范围 (${start} 至 ${end})`;
+            } else {
+                return '自定义范围';
+            }
+        default:
+            return '未知范围';
+    }
 }
 </script>
 {% endblock %}
