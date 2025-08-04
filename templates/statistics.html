@@ -179,31 +179,30 @@ let currentStats = {};
 
 // UTC时间工具函数
 function getUTCDateString(date = new Date()) {
-    return date.toISOString().split('T')[0];
-}
-
-function getUTCDateTime(date = new Date()) {
-    return date.toISOString();
-}
-
-function formatUTCTime(dateString) {
-    const date = new Date(dateString);
-    return date.toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, ' UTC');
+    // 确保始终返回UTC日期
+    const utcDate = new Date(Date.UTC(
+        date.getUTCFullYear(), 
+        date.getUTCMonth(), 
+        date.getUTCDate()
+    ));
+    return utcDate.toISOString().split('T')[0];
 }
 
 function getCurrentUTCDate() {
-    return new Date().toISOString().split('T')[0];
+    const now = new Date();
+    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+        .toISOString().split('T')[0];
 }
 
 function getYesterdayUTCDate() {
-    const yesterday = new Date();
-    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+    const now = new Date();
+    const yesterday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1));
     return yesterday.toISOString().split('T')[0];
 }
 
 function getUTCDateBefore(days) {
-    const date = new Date();
-    date.setUTCDate(date.getUTCDate() - days);
+    const now = new Date();
+    const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - days));
     return date.toISOString().split('T')[0];
 }
 
@@ -328,18 +327,24 @@ async function loadStatistics() {
     try {
         const params = new URLSearchParams();
         
-        // 添加时间范围参数（UTC）
+        // 添加时间范围参数（确保UTC）
         const dateRange = document.getElementById('dateRange').value;
         if (dateRange === 'custom') {
             const startDate = document.getElementById('startDate').value;
             const endDate = document.getElementById('endDate').value;
-            if (startDate) params.append('start_date', startDate);
-            if (endDate) params.append('end_date', endDate);
+            if (startDate && endDate) {
+                // 修复：确保发送正确的UTC ISO格式
+                params.append('start_date', startDate + 'T00:00:00.000Z');
+                params.append('end_date', endDate + 'T23:59:59.999Z');
+            } else {
+                // 如果自定义日期不完整，回退到默认的week范围
+                params.append('range', 'week');
+            }
         } else {
             params.append('range', dateRange);
         }
         
-        // 添加UTC时区参数
+        // 明确指定使用UTC时区
         params.append('timezone', 'UTC');
         
         // 添加账号筛选
@@ -358,6 +363,13 @@ async function loadStatistics() {
         console.error('加载统计数据失败:', error);
         showToast('加载统计数据失败', 'danger');
     }
+}
+
+function formatUTCTime(dateString) {
+    const date = new Date(dateString);
+    // 确保显示UTC时间
+    const utcString = date.toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '');
+    return `${utcString} UTC`;
 }
 
 // 更新统计卡片
@@ -559,16 +571,23 @@ function updateDateRange() {
         customRange1.style.display = 'block';
         customRange2.style.display = 'block';
         
-        // 设置默认日期（UTC）
-        const endDate = new Date();
-        const startDate = new Date();
-        startDate.setUTCDate(startDate.getUTCDate() - 7);
+        // 修复：设置更合理的默认日期范围
+        const now = new Date();
+        const endDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+        const startDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 7));
         
-        document.getElementById('endDate').value = getUTCDateString(endDate);
-        document.getElementById('startDate').value = getUTCDateString(startDate);
+        // 确保日期输入框使用正确的格式 (YYYY-MM-DD)
+        document.getElementById('endDate').value = endDate.toISOString().split('T')[0];
+        document.getElementById('startDate').value = startDate.toISOString().split('T')[0];
+        
+        document.getElementById('startDate').addEventListener('change', loadStatistics);
+        document.getElementById('endDate').addEventListener('change', loadStatistics);
     } else {
         customRange1.style.display = 'none';
         customRange2.style.display = 'none';
+        
+        document.getElementById('startDate').removeEventListener('change', loadStatistics);
+        document.getElementById('endDate').removeEventListener('change', loadStatistics);
     }
     
     loadStatistics();
@@ -598,14 +617,14 @@ function exportStats() {
         const csvSections = [];
         
         // 1. 基础统计概览
-        let overviewContent = "统计概览\n";
-        overviewContent += "指标,数值\n";
-        overviewContent += `发送消息数,${currentStats.total_messages || 0}\n`;
-        overviewContent += `活跃用户数,${currentStats.active_users || 0}\n`;
-        overviewContent += `活跃群组数,${currentStats.active_groups || 0}\n`;
-        overviewContent += `收到消息数,${currentStats.received_messages || 0}\n`;
-        overviewContent += `统计时间范围,${getDateRangeDescription()}\n`;
-        overviewContent += `数据导出时间,${formatUTCTime(new Date().toISOString())}\n`;
+    let overviewContent = "统计概览 (所有时间均为UTC)\n";
+    overviewContent += "指标,数值\n";
+    overviewContent += `发送消息数,${currentStats.total_messages || 0}\n`;
+    overviewContent += `活跃用户数,${currentStats.active_users || 0}\n`;
+    overviewContent += `活跃群组数,${currentStats.active_groups || 0}\n`;
+    overviewContent += `收到消息数,${currentStats.received_messages || 0}\n`;
+    overviewContent += `统计时间范围,${getDateRangeDescription()}\n`;
+    overviewContent += `数据导出时间(UTC),${new Date().toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '')}\n`;
         if (accountFilter) {
             const accountName = document.querySelector(`#accountFilter option[value="${accountFilter}"]`)?.textContent || accountFilter;
             overviewContent += `账号筛选,${accountName}\n`;

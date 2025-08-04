@@ -6,7 +6,7 @@ Web服务器
 import asyncio
 import re
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from flask import Flask, request, jsonify, render_template, session, redirect, url_for
 from flask_cors import CORS
 import requests
@@ -550,10 +550,11 @@ class WebServer:
             except Exception as e:
                 self.logger.web.error(f"获取日志文件内容失败: {e}")
                 return jsonify({'error': f'获取日志文件内容失败: {str(e)}'}), 500
-        
+            
+            
         @self.app.route('/api/statistics')
         def api_statistics():
-            """统计数据API"""
+            """统计数据API - 修复版本"""
             if not self._check_auth():
                 return jsonify({'error': '未授权'}), 401
 
@@ -563,10 +564,9 @@ class WebServer:
                 start_date = request.args.get('start_date')
                 end_date = request.args.get('end_date')
                 self_id = request.args.get('self_id')
-                direction = request.args.get('direction', 'SEND')
-
-                # 计算时间范围
-                now = datetime.now()
+                direction = request.args.get('direction', 'SEND')    
+                now = datetime.now(timezone.utc)
+                
                 if range_param == 'today':
                     start_time = int(now.replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
                     end_time = int(now.timestamp())
@@ -581,13 +581,61 @@ class WebServer:
                     start_time = int((now - timedelta(days=30)).timestamp())
                     end_time = int(now.timestamp())
                 elif range_param == 'custom' and start_date and end_date:
-                    start_time = int(datetime.fromisoformat(start_date).timestamp())
-                    end_time = int(datetime.fromisoformat(end_date).timestamp())
+                    try:
+                        start_date_clean = start_date.strip()
+                        end_date_clean = end_date.strip()
+                        
+                        def parse_date_string(date_str):
+                            if 'T' in date_str:
+                                if date_str.endswith('Z'):
+                                    return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                                else:
+                                    dt = datetime.fromisoformat(date_str)
+                                    if dt.tzinfo is None:
+                                        dt = dt.replace(tzinfo=timezone.utc)
+                                    return dt
+                            else:
+                                dt = datetime.strptime(date_str, '%Y-%m-%d')
+                                return dt.replace(tzinfo=timezone.utc)
+                        
+                        start_dt = parse_date_string(start_date_clean)
+                        end_dt = parse_date_string(end_date_clean)
+                        
+                        if start_dt.hour == 0 and start_dt.minute == 0 and start_dt.second == 0:
+                            pass
+                        else:
+                            start_dt = start_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+                        
+                        if end_dt.hour == 23 and end_dt.minute == 59:
+                            pass
+                        else:
+                            # 设置为当天结束
+                            end_dt = end_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+                        
+                        start_time = int(start_dt.timestamp())
+                        end_time = int(end_dt.timestamp())
+                        
+                        # 调试日志
+                        self.logger.web.info(f"自定义日期范围: {start_date} -> {start_dt} ({start_time})")
+                        self.logger.web.info(f"自定义日期范围: {end_date} -> {end_dt} ({end_time})")
+                        
+                    except (ValueError, TypeError) as e:
+                        self.logger.web.error(f"解析自定义日期失败: {e}, start_date={start_date}, end_date={end_date}")
+                        # 回退到默认的7天范围
+                        start_time = int((now - timedelta(days=7)).timestamp())
+                        end_time = int(now.timestamp())
                 else:
                     # 默认最近7天
                     start_time = int((now - timedelta(days=7)).timestamp())
                     end_time = int(now.timestamp())
-
+                    
+                # 验证时间范围的合理性
+                if start_time >= end_time:
+                    self.logger.web.warning(f"无效的时间范围: start_time={start_time}, end_time={end_time}")
+                    # 回退到默认范围
+                    start_time = int((now - timedelta(days=7)).timestamp())
+                    end_time = int(now.timestamp())
+                    
                 # 获取基本统计
                 total_messages = asyncio.run(
                     self.database_manager.count_messages(
@@ -621,8 +669,9 @@ class WebServer:
                 active_groups = len(group_stats)
 
                 # 获取昨日同期数据用于对比
-                yesterday_start = start_time - 24 * 60 * 60
-                yesterday_end = end_time - 24 * 60 * 60
+                time_range_duration = end_time - start_time
+                yesterday_start = start_time - time_range_duration
+                yesterday_end = end_time - time_range_duration
 
                 yesterday_messages = asyncio.run(
                     self.database_manager.count_messages(
@@ -689,13 +738,13 @@ class WebServer:
                     'total_messages': total_messages,
                     'active_users': active_users,
                     'active_groups': active_groups,
-                    'received_messages': received_messages,  # 收到的消息总量
-                    'hourly_trend': hourly_trend,  # 每3小时的趋势数据
+                    'received_messages': received_messages,
+                    'hourly_trend': hourly_trend,
                     'top_groups': [
                         {
                             'group_id': group_id,
                             'message_count': count,
-                            'active_users': 1  # 简化处理
+                            'active_users': 1
                         }
                         for group_id, count in sorted(group_stats.items(), key=lambda x: x[1], reverse=True)
                     ],
@@ -703,7 +752,14 @@ class WebServer:
                     'messages_change': total_messages - yesterday_messages,
                     'users_change': active_users - yesterday_users,
                     'groups_change': active_groups - yesterday_groups,
-                    'received_change': received_messages - yesterday_received_messages  # 收到消息的变化
+                    'received_change': received_messages - yesterday_received_messages,
+                    # 添加调试信息（可选）
+                    'debug_info': {
+                        'start_time': start_time,
+                        'end_time': end_time,
+                        'start_date_parsed': datetime.fromtimestamp(start_time, tz=timezone.utc).isoformat(),
+                        'end_date_parsed': datetime.fromtimestamp(end_time, tz=timezone.utc).isoformat()
+                    }
                 }
 
                 return jsonify(stats)
@@ -797,7 +853,6 @@ class WebServer:
             except Exception as e:
                 self.logger.web.error(f"查询消息失败: {e}")
                 return jsonify({'error': f'查询消息失败: {str(e)}'}), 500
-
 
 
         @self.app.route('/api/statistics/database')
