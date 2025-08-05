@@ -379,6 +379,8 @@ class ConfigManager:
     async def update_group_last_message_time(self, group_id: str):
         """更新群组最后消息时间"""
         config = await self.get_group_config(group_id)
+        if not config:
+            raise ValueError("群组不存在")
 
         # 更新最后消息时间
         config["last_message_time"] = datetime.now().isoformat()
@@ -406,17 +408,7 @@ class ConfigManager:
         """设置群组到期时间"""
         config = await self.get_group_config(group_id)
         if not config:
-            config = {
-                "group_id": group_id,
-                "description": f"群组_{group_id}",
-                "enabled": True,
-                "expire_time": -1,
-                "last_message_time": None,
-                "filters": {
-                    "superuser_filters": [],
-                    "admin_filters": []
-                }
-            }
+            raise ValueError("群组不存在")
 
         old_expire_time = config.get("expire_time", -1)
 

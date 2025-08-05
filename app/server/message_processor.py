@@ -359,7 +359,8 @@ class MessageProcessor:
                 # 检查是否匹配别名
                 for target, alias_list in aliases.items():
                     if text.startswith(target) and target not in alias_list: # 旁路原名
-                        message_data["message"][sid]["data"]["text"] = uuid.uuid4().hex + text[len(target):]
+                        # message_data["message"][sid]["data"]["text"] = uuid.uuid4().hex + text[len(target):]
+                        message_data["message"][sid]["data"]["text"] = text[len(target):] # 为了支持取消前缀
                         modified = True
                         break
                     for alias in alias_list:
