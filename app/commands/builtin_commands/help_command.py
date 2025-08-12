@@ -18,7 +18,7 @@ class HelpCommand(BaseCommand):
         self.description = "显示帮助信息和可用指令列表"
         self.usage = "帮助 [指令名称]"
         self.aliases = ["help", "h", "?"]
-        self.required_permission = PermissionLevel.MEMBER
+        self.required_permission = PermissionLevel.ADMIN
     
     def _setup_parser(self):
         """设置参数解析器"""
