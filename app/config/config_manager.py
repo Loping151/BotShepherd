@@ -436,7 +436,7 @@ class ConfigManager:
 
         try:
             expire_date = datetime.fromisoformat(expire_time)
-            return datetime.now() > expire_date
+            return datetime.now(timezone.utc) > expire_date
         except (ValueError, TypeError):
             return False
         
