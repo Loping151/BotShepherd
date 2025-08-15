@@ -104,8 +104,9 @@ class ProxyServer:
                 max_size=None,  # 移除消息大小限制
                 max_queue=None,  # 移除队列大小限制
                 ping_interval=20,  # 心跳间隔
-                ping_timeout=10,   # 心跳超时
-                close_timeout=10   # 关闭超时
+                ping_timeout=20,   # 心跳超时
+                close_timeout=None,   # 关闭超时
+                compression='deflate'  # 启用压缩
             ):
                 self.logger.ws.info(f"连接代理 {connection_id} 已启动在 {client_endpoint}")
 
@@ -282,10 +283,10 @@ class ProxyConnection:
             connection_params = {
                 'max_size': None,  # 移除消息大小限制
                 'max_queue': None,  # 移除队列大小限制
-                'ping_interval': 30,  # 心跳间隔
-                'ping_timeout': 10,   # 心跳超时
-                'close_timeout': 10,   # 关闭超时
-                'compression': None
+                'ping_interval': 20,  # 心跳间隔
+                'ping_timeout': 20,   # 心跳超时
+                'close_timeout': None,   # 关闭超时
+                'compression': 'deflate'
             }
 
             connection_attempts = [
