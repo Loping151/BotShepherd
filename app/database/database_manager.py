@@ -124,7 +124,7 @@ class DatabaseManager:
                             text_parts.append(f"[at BS Bot]")
                 message_content = "".join(text_parts)
             else:
-                message_content = str(message_data["message"])
+                message_content = str(message_data["message"])[:1000]  # 限制长度为1000字符
 
         # 发送者信息
         sender_info = json.dumps(message_data.get("sender", {}), ensure_ascii=False)
