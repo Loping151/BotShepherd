@@ -25,7 +25,12 @@ async def reboot(event = None, wait_seconds: int = 3):
             print(f"记录重启数据失败: {e}")
     
     await asyncio.sleep(wait_seconds)
-    os.execv(sys.executable, ['python'] + sys.argv)
+    if sys.platform == "win32" and os.path.exists("./venv/Scripts/python.exe"):
+        os.execv("venv/Scripts/python.exe", ["venv/Scripts/python.exe"] + sys.argv)
+    elif os.path.exists("./venv/bin/python"):
+        os.execv("venv/bin/python", ["venv/bin/python"] + sys.argv)
+    else:
+        os.execv(sys.executable, ['python'] + sys.argv)
 
 
 async def read_reboot_record():

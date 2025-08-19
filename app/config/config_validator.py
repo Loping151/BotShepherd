@@ -350,7 +350,7 @@ class ConfigTemplate:
                 "username": "admin",
                 "password": "admin"
             },
-            "web_port": 5000
+            "web_port": 5111
         }
     
     @staticmethod

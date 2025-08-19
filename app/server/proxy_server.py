@@ -213,7 +213,6 @@ class ProxyConnection:
             # 等待客户端第一个消息以获取请求头
             self.first_message = await self.client_ws.recv()
 
-            # 获取客户端请求头
             try:
                 # 尝试不同的方式获取请求头
                 if hasattr(self.client_ws, 'request_headers'):

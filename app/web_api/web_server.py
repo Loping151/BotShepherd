@@ -433,9 +433,7 @@ class WebServer:
 
                 # 延迟重启，给前端时间接收响应
                 def restart_delayed():
-                    import time
-                    time.sleep(2)
-                    os.execv(sys.executable, ['python'] + sys.argv)
+                    asyncio.run(reboot(wait_seconds=2))
 
                 import threading
                 threading.Thread(target=restart_delayed, daemon=True).start()

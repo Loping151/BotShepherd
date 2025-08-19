@@ -327,9 +327,8 @@ async def setup_initial_config():
 
         print("\n🎉 初始化完成！")
         print("\n📋 后续步骤:")
-        print("1. 编辑配置文件:")
+        print("1. 编辑配置文件（或直接使用webui编辑）:")
         print("   - config/global_config.json (全局配置)")
-        print("   - config/connections/default.json (连接配置)")
         print("\n2. 启动系统:")
         if Path("./venv").exists():
             if sys.platform == "win32":
@@ -339,7 +338,7 @@ async def setup_initial_config():
         else:
             print("   python main.py")
         print("\n3. 访问Web管理界面:")
-        print("   http://localhost:5100")
+        print("   http://localhost:5111（默认）")
         print("   默认用户名/密码: admin/admin")
         print("\n📖 更多信息请查看 README.md")
 
