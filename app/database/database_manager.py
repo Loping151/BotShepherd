@@ -464,7 +464,7 @@ class DatabaseManager:
                     messages_to_delete = result.scalars().all()
 
                     for message in messages_to_delete:
-                        session.delete(message)
+                        await session.delete(message)
 
                 await session.commit()
 

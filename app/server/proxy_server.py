@@ -237,8 +237,6 @@ class ProxyConnection:
             
             await self.send_reboot_message()
 
-            self.logger.ws.info(f"[{self.connection_id}] 已连接到 {len(self.target_connections)} 个目标端点")
-
             # 启动消息转发任务
             tasks = []
 
@@ -247,9 +245,10 @@ class ProxyConnection:
 
             # 目标到客户端的转发任务
             for idx, target_ws in enumerate(self.target_connections):
-                tasks.append(asyncio.create_task(
-                    self._forward_target_to_client(target_ws, self.list_index2target_index(idx))
-                ))
+                if target_ws:
+                    tasks.append(asyncio.create_task(
+                        self._forward_target_to_client(target_ws, self.list_index2target_index(idx))
+                    ))
 
             if tasks:
                 # 等待任务完成
@@ -319,6 +318,10 @@ class ProxyConnection:
             return target_ws
             
          except Exception as e:
+            if target_index == len(self.target_connections) + 1:
+                self.target_connections.append(None)
+            else:
+                self.target_connections[self.target_index2list_index(target_index)] = None
             self.logger.ws.error(f"[{self.connection_id}] 连接目标失败 {endpoint}: {e}")
             return None
 
