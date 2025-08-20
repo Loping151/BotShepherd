@@ -271,7 +271,7 @@ class ApiRequest(BaseModel):
     """API请求"""
     action: str = Field(..., description="API动作")
     params: Dict[str, Any] = Field(default_factory=dict, description="参数")
-    echo: Optional[str|dict] = Field(None, description="回声")
+    echo: Optional[str|dict|int] = Field(None, description="回声")
 
 class ApiResponse(BaseModel):
     """API响应"""
