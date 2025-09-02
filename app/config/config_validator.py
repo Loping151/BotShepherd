@@ -334,7 +334,7 @@ class ConfigTemplate:
             },
             "database": {
                 "data_path": "./data",
-                "auto_expire_days": 30
+                "auto_expire_days": 5
             },
             "logging": {
                 "level": "INFO",
