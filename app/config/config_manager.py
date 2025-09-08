@@ -232,7 +232,7 @@ class ConfigManager:
             else:
                 config = ConfigTemplate.get_default_account_config(account_id)
                 self._account_configs[account_id] = config
-                await self.save_config()
+                await self.save_account_config(account_id, config)
         return config
     
     async def account_config_exists(self, account_id: str) -> bool:
