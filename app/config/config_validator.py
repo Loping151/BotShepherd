@@ -334,12 +334,12 @@ class ConfigTemplate:
             },
             "database": {
                 "data_path": "./data",
-                "auto_expire_days": 5
+                "auto_expire_days": 3
             },
             "logging": {
                 "level": "INFO",
                 "file_rotation": True,
-                "keep_days": 7
+                "keep_days": 3
             },
             "message_normalization": {
                 "enabled": False,

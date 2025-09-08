@@ -103,8 +103,8 @@ class ProxyServer:
                 port,
                 max_size=None,  # 移除消息大小限制
                 max_queue=None,  # 移除队列大小限制
-                ping_interval=20,  # 心跳间隔
-                ping_timeout=20,   # 心跳超时
+                ping_interval=300,  # 心跳间隔
+                ping_timeout=60,   # 心跳超时
                 close_timeout=None,   # 关闭超时
                 compression='deflate'  # 启用压缩
             ):
@@ -281,8 +281,8 @@ class ProxyConnection:
             connection_params = {
                 'max_size': None,  # 移除消息大小限制
                 'max_queue': None,  # 移除队列大小限制
-                'ping_interval': 20,  # 心跳间隔
-                'ping_timeout': 20,   # 心跳超时
+                'ping_interval': 300,  # 心跳间隔
+                'ping_timeout': 60,   # 心跳超时
                 'close_timeout': None,   # 关闭超时
                 'compression': 'deflate'
             }
