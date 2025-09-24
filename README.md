@@ -14,7 +14,7 @@
 
 ## 📝 更新记录
 
-### 2025-09-24 v0.3.4 webui编辑bug 
+### 2025-09-24 v0.3.4 & v0.3.5 webui编辑bug，新增过滤词and/or模式
 
 <details>
 <summary>点此展开</summary>

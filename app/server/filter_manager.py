@@ -94,7 +94,9 @@ class FilterManager:
         
         # 检查过滤词
         for filter_word in receive_filters:
-            if filter_word in message_text:
+            if filter_word in message_text or \
+                ("+" in filter_word and all(part in message_text for part in filter_word.split("+"))) or \
+                    ("|" in filter_word and any(part in message_text for part in filter_word.split("|"))):
                 await self._log_filter_action(
                     event, FilterType.RECEIVE_FILTER, 
                     f"包含全局接收过滤词: {filter_word}", FilterAction.BLOCK
@@ -119,7 +121,9 @@ class FilterManager:
         
         # 检查过滤词
         for filter_word in send_filters:
-            if filter_word in message_text:
+            if filter_word in message_text or \
+                ("+" in filter_word and all(part in message_text for part in filter_word.split("+"))) or \
+                    ("|" in filter_word and any(part in message_text for part in filter_word.split("|"))):
                 await self._log_filter_action(
                     event, FilterType.SEND_FILTER, 
                     f"包含全局发送过滤词: {filter_word}", FilterAction.BLOCK
@@ -182,7 +186,9 @@ class FilterManager:
         # 先检查超级用户设置的过滤词
         superuser_filters = filters.get("superuser_filters", [])
         for filter_word in superuser_filters:
-            if filter_word in message_text:
+            if filter_word in message_text or \
+                ("+" in filter_word and all(part in message_text for part in filter_word.split("+"))) or \
+                    ("|" in filter_word and any(part in message_text for part in filter_word.split("|"))):
                 await self._log_filter_action(
                     event, FilterType.GROUP_FILTER, 
                     f"包含群组超级用户过滤词: {filter_word}", FilterAction.BLOCK
@@ -193,7 +199,9 @@ class FilterManager:
         if not self.config_manager.is_superuser(event.user_id):
             admin_filters = filters.get("admin_filters", [])
             for filter_word in admin_filters:
-                if filter_word in message_text:
+                if filter_word in message_text or \
+                    ("+" in filter_word and all(part in message_text for part in filter_word.split("+"))) or \
+                        ("|" in filter_word and any(part in message_text for part in filter_word.split("|"))):
                     await self._log_filter_action(
                         event, FilterType.GROUP_FILTER, 
                         f"包含群组管理员过滤词: {filter_word}", FilterAction.BLOCK
