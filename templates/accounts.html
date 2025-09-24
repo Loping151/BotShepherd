@@ -128,14 +128,14 @@
                             <small><i class="bi bi-info-circle"></i> 为指令设置别名，格式：别名1，别名2 -> 目标指令。例如：yz -> #，想保留原指令需将原指令加入别名</small>
                         </div>
                         <div id="accountAliasesList">
-                            <div class="input-group mb-2">
-                                <input type="text" class="form-control account-alias-from" placeholder="别名（如：yz）">
-                                <span class="input-group-text">→</span>
-                                <input type="text" class="form-control account-alias-to" placeholder="目标指令（如：#）">
-                                <button class="btn btn-outline-danger" type="button" onclick="removeAccountAlias(this)">
-                                    <i class="bi bi-trash"></i>
-                                </button>
-                            </div>
+                            <div class="alias-row input-group mb-2">
+                            <input type="text" class="form-control alias-values" placeholder="别名（如：yz）">
+                            <span class="input-group-text">→</span>
+                            <input type="text" class="form-control alias-key" placeholder="目标指令（如：#）">
+                            <button class="btn btn-outline-danger" type="button" onclick="removeAccountAlias(this)">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
                         </div>
                         <button type="button" class="btn btn-outline-primary btn-sm" onclick="addAccountAlias()">
                             <i class="bi bi-plus"></i>
@@ -327,53 +327,44 @@ async function saveAccount() {
         const name = document.getElementById('accountName').value.trim();
         const description = document.getElementById('accountDescription').value.trim();
         const enabled = document.getElementById('accountEnabled').checked;
-        
-        if (!accountId || !name) {
-            showToast('请填写账号ID和名称', 'warning');
-            return;
-        }
-        
-        if (!/^\d+$/.test(accountId)) {
-            showToast('账号ID必须是数字', 'warning');
-            return;
-        }
 
-        // 收集指令别名
+        const aliasRows = document.querySelectorAll('.alias-row');
         const aliases = {};
-        document.querySelectorAll('.alias-row').forEach(row => {
-            const aliasValues = row.querySelector('.alias-values').value.trim();
-            const target = row.querySelector('.alias-key').value.trim();
-            
-            if (target && aliasValues) {
-                // 使用中英文逗号分割别名，并过滤空值
-                const aliasList = aliasValues.split(/[,，]/).map(v => v.trim()).filter(v => v);
-                if (aliasList.length > 0) {
-                    aliases[target] = aliasList;
+
+        aliasRows.forEach(row => {
+            const aliasValuesInput = row.querySelector('.alias-values');
+            const targetInput = row.querySelector('.alias-key');
+
+            if (aliasValuesInput && targetInput) {
+                const aliasValues = aliasValuesInput.value.trim();
+                const target = targetInput.value.trim();
+
+                if (target && aliasValues) {
+                    const aliasList = aliasValues.split(/[,，]/).map(v => v.trim()).filter(v => v);
+                    if (aliasList.length > 0) {
+                        aliases[target] = aliasList;
+                    }
                 }
             }
         });
 
         const accountData = {
             account_id: accountId,
-            name,
-            description,
+            name: name,
+            description: description,
+            enabled: enabled,
             aliases: aliases,
-            enabled
         };
-        
+
         await apiRequest(`/api/accounts/${accountId}`, {
             method: 'PUT',
             body: JSON.stringify(accountData)
         });
-        
-        showToast(editingAccountId ? '账号更新成功' : '账号添加成功', 'success');
+
+        showToast('账号更新成功', 'success');
         bootstrap.Modal.getInstance(document.getElementById('accountModal')).hide();
-        
-        // 重置表单状态
-        document.getElementById('accountId').disabled = false;
-        
         loadAccounts();
-        
+
     } catch (error) {
         showToast(`保存账号失败: ${error.message}`, 'danger');
     }
@@ -425,6 +416,13 @@ async function deleteAccount(accountId) {
 function showAccountDetail(accountId) {
     const account = accounts[accountId];
     
+    let formattedAliases = '无';
+    if (account.aliases && Object.keys(account.aliases).length > 0) {
+        formattedAliases = Object.entries(account.aliases).map(([target, aliasList]) => {
+            return `<code>${aliasList.join(', ')}</code> → <code>${target}</code>`;
+        }).join('<br>');
+    }
+
     const content = `
         <div class="row">
             <div class="col-md-6">
@@ -432,7 +430,9 @@ function showAccountDetail(accountId) {
                 <table class="table table-sm">
                     <tr><td>账号ID</td><td><code>${accountId}</code></td></tr>
                     <tr><td>名称</td><td>${account.name}</td></tr>
-                    <tr><td>别名</td><td>${account.alias || '无'}</td></tr>
+                    
+                    <tr><td>别名</td><td>${formattedAliases}</td></tr>
+                    
                     <tr><td>描述</td><td>${account.description || '无'}</td></tr>
                     <tr><td>状态</td><td>${account.enabled ? '启用' : '禁用'}</td></tr>
                 </table>
@@ -455,11 +455,11 @@ function showAccountDetail(accountId) {
 function addAccountAlias() {
     const list = document.getElementById('accountAliasesList');
     const div = document.createElement('div');
-    div.className = 'input-group mb-2';
+    div.className = 'alias-row input-group mb-2';
     div.innerHTML = `
-        <input type="text" class="form-control account-alias-from" placeholder="别名（如：yun）">
+        <input type="text" class="form-control alias-values" placeholder="别名（如：yun）">
         <span class="input-group-text">→</span>
-        <input type="text" class="form-control account-alias-to" placeholder="目标指令（如：#）">
+        <input type="text" class="form-control alias-key" placeholder="目标指令（如：#）">
         <button class="btn btn-outline-danger" type="button" onclick="removeAccountAlias(this)">
             <i class="bi bi-trash"></i>
         </button>
@@ -479,10 +479,10 @@ function removeAccountAlias(button) {
 function resetAccountAliasesList() {
     const list = document.getElementById('accountAliasesList');
     list.innerHTML = `
-        <div class="input-group mb-2">
-            <input type="text" class="form-control account-alias-from" placeholder="别名（如：yz）">
+        <div class="alias-row input-group mb-2">
+            <input type="text" class="form-control alias-values" placeholder="别名（如：yz）">
             <span class="input-group-text">→</span>
-            <input type="text" class="form-control account-alias-to" placeholder="目标指令（如：#）">
+            <input type="text" class="form-control alias-key" placeholder="目标指令（如：#）">
             <button class="btn btn-outline-danger" type="button" onclick="removeAccountAlias(this)">
                 <i class="bi bi-trash"></i>
             </button>
