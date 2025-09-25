@@ -154,7 +154,7 @@
                     <div class="mb-3">
                         <label class="form-label">管理员过滤词</label>
                         <div class="alert alert-info py-2">
-                            <small><i class="bi bi-info-circle"></i> 每行一个过滤词，不支持正则表达式。包含这些词的消息将被过滤，账号ID也可以作为过滤词，支持过滤某些群员。设为Bot的ID则该Bot不响应消息事件。支持+连接（and）和|连接（or），可实现某bot屏蔽某些消息</small>
+                            <small><i class="bi bi-info-circle"></i> 每行一个过滤词，不支持正则表达式。包含这些词的消息将被过滤，账号ID也可以作为过滤词，支持过滤某些群员。设为Bot的ID则该Bot不响应消息事件。支持 + 连接（and）和 | 连接（or），可实现某bot屏蔽某些消息</small>
                         </div>
                         <div id="adminFiltersList">
                             <div class="input-group mb-2">
@@ -175,7 +175,7 @@
                     <div class="mb-3">
                         <label class="form-label">指令别名</label>
                         <div class="alert alert-info py-2">
-                            <small><i class="bi bi-info-circle"></i> 为指令设置别名，支持多个别名用逗号分隔。格式：别名1,别名2,别名3 -> 目标指令。例如：#,yun -> #，想保留原指令需将原指令加入别名</small>
+                            <small><i class="bi bi-info-circle"></i> 为指令设置别名，支持多个别名用逗号分隔。格式：别名1,别名2,别名3 -> 目标指令。例如：#,yun -> #，想保留原指令需将原指令加入别名，否则原指令将被转为随机串。不要将空字符串作为原指令或别名</small>
                         </div>
                         <div id="aliasesList">
                             <div class="alias-row input-group mb-2">
