@@ -146,11 +146,20 @@ class FilterManager:
         # 检查保护前缀
         for prefix in prefix_protections:
             for idx, item in enumerate(message_data.get("params", {}).get("message")):
-                t = item.get("type")
-                if t == MessageSegmentType.TEXT:
-                    text = item.get("data", {}).get("text", "")
-                    if text.startswith(prefix):
-                        message_data["params"]["message"][idx]["data"]["text"] = f"[禁止诱导触发]{text}"
+                if isinstance(item, dict):
+                    t, text = item.get("type"), item.get("data", {}).get("text", "")
+                    if t == MessageSegmentType.TEXT:
+                        if text.startswith(prefix):
+                            message_data["params"]["message"][idx]["data"]["text"] = f"[禁止诱导触发]{text}"
+                            await self._log_filter_action(
+                                event, FilterType.PREFIX_PROTECTION, 
+                                f"触发前缀保护: {prefix}", FilterAction.MODIFY
+                            )
+                            return message_data
+                        break
+                elif isinstance(item, str):
+                    if item.startswith(prefix):
+                        message_data["params"]["message"][idx] = f"[禁止诱导触发]{item}"
                         await self._log_filter_action(
                             event, FilterType.PREFIX_PROTECTION, 
                             f"触发前缀保护: {prefix}", FilterAction.MODIFY
