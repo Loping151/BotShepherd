@@ -72,7 +72,7 @@ class FilterManager:
             return message_data
             
         except Exception as e:
-            self.logger.message.error(f"过滤发送消息失败: {e}，将拦截！{message_data}")
+            self.logger.message.error(f"过滤发送消息失败: {e}，将拦截！{message_data}"[:1000])
             return None
     
     async def _apply_global_receive_filters(self, event: Event, 
@@ -145,9 +145,10 @@ class FilterManager:
         
         # 检查保护前缀
         for prefix in prefix_protections:
-            for idx , item in enumerate(message_data.get("params", {}).get("message")):
-                t, text = item.get("type"), item.get("data", {}).get("text", "")
+            for idx, item in enumerate(message_data.get("params", {}).get("message")):
+                t = item.get("type")
                 if t == MessageSegmentType.TEXT:
+                    text = item.get("data", {}).get("text", "")
                     if text.startswith(prefix):
                         message_data["params"]["message"][idx]["data"]["text"] = f"[禁止诱导触发]{text}"
                         await self._log_filter_action(
