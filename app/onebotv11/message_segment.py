@@ -376,6 +376,10 @@ class MessageSegmentParser:
         result_parts = []
 
         for segment in segments:
+            if isinstance(segment, str):
+                result_parts.append(segment)
+                continue
+
             if isinstance(segment, dict):
                 segment = MessageSegment(**segment)
 
