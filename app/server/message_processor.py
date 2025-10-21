@@ -92,6 +92,9 @@ class MessageProcessor:
             return message_data
             
         except Exception as e:
+            import traceback
+            traceback.print_exc()
+            self.logger.message.error(f"Traceback: {traceback.format_exc()}")
             self.logger.message.error(f"后处理目标消息失败: {e}")
             return None
     
@@ -163,7 +166,9 @@ class MessageProcessor:
     async def _postprocess_message_event(self, event: Event, self_id: str,
                                        message_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """后处理消息事件"""
-        if isinstance(message_data.get("params", {}).get("message"), str):
+        if "message" not in message_data.get("params", {}):
+            pass # 无消息内容，跳过处理
+        elif isinstance(message_data.get("params", {}).get("message"), str):
             message_data["params"]["message"] = [{"type": "text", "data": {"text": message_data["params"]["message"]}}]
             message_data["message_format"] = "array"
         elif isinstance(message_data.get("params", {}).get("message"), list):
