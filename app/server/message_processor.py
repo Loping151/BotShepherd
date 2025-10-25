@@ -222,7 +222,7 @@ class MessageProcessor:
                 decorate_info = private_deco_template
 
         
-        if decorate_info:
+        if decorate_info and isinstance(message_data.get("params", {}), dict) and "message" in message_data["params"] and isinstance(message_data["params"]["message"], list):
             existing_types = set()
             allowed_types = set([MessageSegmentType.AT, MessageSegmentType.TEXT, MessageSegmentType.IMAGE, MessageSegmentType.REPLY])
             for seg in message_data["params"]["message"]:
