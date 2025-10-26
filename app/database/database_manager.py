@@ -117,7 +117,10 @@ class DatabaseManager:
                 text_parts = []
                 for msg_part in message_data["message"]:
                     if msg_part.get("type") == "text":
-                        text_parts.append(msg_part.get("data", {}).get("text", ""))
+                        if isinstance(msg_part.get("data", {}).get("text", ""), list):
+                            text_parts.append("\n".join(msg_part.get("data", {}).get("text", "")))
+                        else:
+                            text_parts.append(msg_part.get("data", {}).get("text", ""))
                     elif msg_part.get("type") == "at":
                         text_parts.append(f"@{msg_part.get('data', {}).get('qq', '')}")
                         if str(msg_part.get("data", {}).get("qq")) == self_id:
