@@ -149,6 +149,8 @@ class FilterManager:
                 if isinstance(item, dict):
                     t, text = item.get("type"), item.get("data", {}).get("text", "")
                     if t == MessageSegmentType.TEXT:
+                        if isinstance(text, list):
+                            text = "\n".join(text)
                         if text.startswith(prefix):
                             message_data["params"]["message"][idx]["data"]["text"] = f"[禁止诱导触发]{text}"
                             await self._log_filter_action(
