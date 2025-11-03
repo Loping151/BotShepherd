@@ -37,7 +37,7 @@ class ConfigManager:
         self.logger = logger
         
     def log(self, message, level="info"):
-        if self.logger:
+        if hasattr(self, 'logger') and self.logger:
             if level == "info":
                 self.logger.info(message)
             elif level == "warning":
