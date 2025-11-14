@@ -299,11 +299,11 @@ function updateGlobalAliases() {
         div.className = 'row mb-3 alias-row';
         div.innerHTML = `
             <div class="col-md-3">
-                <input type="text" class="form-control alias-key" value="${key}" placeholder="别名">
+                <input type="text" class="form-control alias-key" value="${key}" placeholder="原指令">
             </div>
             <div class="col-md-8">
                 <input type="text" class="form-control alias-values" value="${values.join(', ')}" 
-                       placeholder="目标命令，多个用逗号分隔。保留原指令需将原指令加入别名">
+                       placeholder="别名，多个用逗号分隔。保留原指令需将原指令加入别名">
             </div>
             <div class="col-md-1">
                 <button class="btn btn-outline-danger" onclick="removeGlobalAlias(this)">
