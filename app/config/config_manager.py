@@ -176,9 +176,9 @@ class ConfigManager:
         """保存全局配置"""
         global_config_file = self.config_dir / "global_config.json"
         try:
-            with open(global_config_file.replace(".json", "_tmp.json"), 'w', encoding='utf-8') as f:
+            with open(str(global_config_file).replace(".json", "_tmp.json"), 'w', encoding='utf-8') as f:
                 json.dump(self._global_config, f, indent=2, ensure_ascii=False)
-            os.replace(global_config_file.replace(".json", "_tmp.json"), global_config_file)
+            os.replace(str(global_config_file).replace(".json", "_tmp.json"), global_config_file)
         except Exception as e:
             self.log(f"保存全局配置失败: {e}", "error")
     
@@ -202,9 +202,9 @@ class ConfigManager:
 
         config_file = self.connections_dir / f"{connection_id}.json"
         try:
-            with open(config_file.replace(".json", "_tmp.json"), 'w', encoding='utf-8') as f:
+            with open(str(config_file).replace(".json", "_tmp.json"), 'w', encoding='utf-8') as f:
                 json.dump(config, f, indent=2, ensure_ascii=False)
-            os.replace(config_file.replace(".json", "_tmp.json"), config_file)
+            os.replace(str(config_file).replace(".json", "_tmp.json"), config_file)
         except Exception as e:
             self.log(f"保存连接配置失败 {connection_id}: {e}", "error")
             raise
@@ -247,9 +247,9 @@ class ConfigManager:
         
         config_file = self.account_dir / f"{account_id}.json"
         try:
-            with open(config_file.replace(".json", "_tmp.json"), 'w', encoding='utf-8') as f:
+            with open(str(config_file).replace(".json", "_tmp.json"), 'w', encoding='utf-8') as f:
                 json.dump(config, f, indent=2, ensure_ascii=False)
-            os.replace(config_file.replace(".json", "_tmp.json"), config_file)
+            os.replace(str(config_file).replace(".json", "_tmp.json"), config_file)
         except Exception as e:
             self.log(f"保存账号配置失败 {account_id}: {e}", "error")
     
@@ -359,9 +359,9 @@ class ConfigManager:
 
         config_file = self.group_dir / f"{group_id}.json"
         try:
-            with open(config_file.replace(".json", "_tmp.json"), 'w', encoding='utf-8') as f:
+            with open(str(config_file).replace(".json", "_tmp.json"), 'w', encoding='utf-8') as f:
                 json.dump(config, f, indent=2, ensure_ascii=False)
-            os.replace(config_file.replace(".json", "_tmp.json"), config_file)
+            os.replace(str(config_file).replace(".json", "_tmp.json"), config_file)
         except Exception as e:
             self.log(f"保存群组配置失败 {group_id}: {e}", "error")
             raise
