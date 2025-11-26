@@ -530,7 +530,7 @@ class ConfigManager:
         for alias_list in aliases.values():
             all_aliases.update(alias_list)
         
-        alias_list = [a.strip() for a in alias_str.replace("，", ",").split(",") if a.strip()]
+        alias_list = [a for a in alias_str.replace("，", ",").split(",") if a.strip()]
         for alias in alias_list:
             if alias in all_targets and alias != target:
                 raise ValueError(f"别名 {alias} 已作为原指令存在！")

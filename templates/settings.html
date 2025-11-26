@@ -366,10 +366,21 @@ async function saveAllSettings() {
         // 收集全局别名
         const globalAliases = {};
         document.querySelectorAll('.alias-row').forEach(row => {
-            const key = row.querySelector('.alias-key').value.trim();
-            const values = row.querySelector('.alias-values').value.trim();
-            if (key && values) {
-                globalAliases[key] = values.split(/[,，]/).map(v => v.trim()).filter(v => v);
+            const keyInput = row.querySelector('.alias-key');
+            const valueInput = row.querySelector('.alias-values');
+            if (!keyInput || !valueInput) {
+                return;
+            }
+
+            const rawKey = keyInput.value;
+            const normalizedKey = rawKey.trim();
+            const values = valueInput.value.trim();
+
+            if (normalizedKey && values) {
+                globalAliases[rawKey] = values
+                    .split(/[,，]/)
+                    .map(v => v.trim())
+                    .filter(Boolean);
             }
         });
         
