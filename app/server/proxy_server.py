@@ -537,7 +537,11 @@ class ProxyConnection:
             if event.status != "ok" or event.retcode != 0:
                 echo_info = self.echo_cache.get(str(event.echo), None)
                 if echo_info:
-                    self.logger.ws.warning("[{}] API调用失败: {} -> {}".format(self.connection_id, echo_info['data'], event))
+                    # 截断过长的数据（如base64）避免日志爆炸
+                    data_str = str(echo_info['data'])
+                    if len(data_str) > 200:
+                        data_str = data_str[:200] + f"...[total length: {len(data_str)}]"
+                    self.logger.ws.warning("[{}] API调用失败: {} -> {}".format(self.connection_id, data_str, event))
                     
     async def _construct_msg_from_echo(self, echo, **kwargs):
         """从api结果中构造模拟收到消息"""
