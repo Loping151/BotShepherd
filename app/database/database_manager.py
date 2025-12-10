@@ -125,6 +125,12 @@ class DatabaseManager:
                         text_parts.append(f"@{msg_part.get('data', {}).get('qq', '')}")
                         if str(msg_part.get("data", {}).get("qq")) == self_id:
                             text_parts.append(f"[at BS Bot]")
+                    elif msg_part.get("type") == "face":
+                        text_parts.append(f"[动画表情]")
+                    elif msg_part.get("type") == "image":
+                        text_parts.append(f"[图片]")
+                    else: # 其他类型
+                        text_parts.append(f"[{msg_part.get('type', '未知消息类型')}]")
                 message_content = "".join(text_parts)
             else:
                 message_content = str(message_data["message"])[:1000]  # 限制长度为1000字符
