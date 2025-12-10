@@ -71,7 +71,7 @@
     <div class="card-body">
         <div class="alert alert-warning" role="alert">
             <i class="bi bi-exclamation-triangle"></i>
-            <strong>注意：</strong>数据库设置修改后需要重启系统才能生效。
+            <strong>注意：</strong>数据库设置修改后需要重启系统才能生效！数据库仅记录纯文本消息，但聊天记录量本身较大时，请留意短期数据库大小后再决定保留天数！
         </div>
         <div class="row">
             <div class="col-md-6">
@@ -171,7 +171,7 @@
                         <label class="form-check-label" for="normalizeNapcatSent">
                             规范化NapCat发送消息
                         </label>
-                        <div class="form-text">对NapCat发送的消息进行规范化，将message_sent类型重新转为message类型</div>
+                        <div class="form-text">对NapCat发送的消息进行规范化，将message_sent类型重新转为message类型，可使得自身上报兼容如Nonebot等框架</div>
                     </div>
                 </div>
             </div>

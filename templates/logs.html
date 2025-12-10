@@ -61,10 +61,6 @@
             日志内容
         </h5>
         <div class="btn-group btn-group-sm" role="group">
-            <button type="button" class="btn btn-outline-secondary" onclick="toggleWordWrap()">
-                <i class="bi bi-text-wrap"></i>
-                自动换行
-            </button>
             <button type="button" class="btn btn-outline-secondary" onclick="scrollToTop()">
                 <i class="bi bi-arrow-up"></i>
                 顶部
@@ -86,7 +82,7 @@
         
         <!-- 日志内容区域 -->
         <div id="logContentContainer" style="height: 600px; overflow-y: auto;">
-            <pre id="logContent" class="mb-0 p-3" style="background-color: #1e1e1e; color: #d4d4d4; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 12px; line-height: 1.4; white-space: pre-wrap;">请选择日志文件查看内容</pre>
+            <pre id="logContent" class="mb-0 p-3" style="background-color: #263238; color: #eceff1; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 13px; line-height: 1.5; white-space: pre; border-radius: 0 0 16px 16px;">请选择日志文件查看内容</pre>
         </div>
     </div>
 </div>
@@ -96,7 +92,6 @@
 <script>
 let currentLogFile = '';
 let logFiles = [];
-let wordWrapEnabled = true;
 
 // 页面加载完成后初始化
 document.addEventListener('DOMContentLoaded', function() {
@@ -240,20 +235,6 @@ function downloadCurrentLog() {
     
     URL.revokeObjectURL(url);
     showToast('日志文件已下载', 'success');
-}
-
-// 切换自动换行
-function toggleWordWrap() {
-    const logContent = document.getElementById('logContent');
-    wordWrapEnabled = !wordWrapEnabled;
-    
-    if (wordWrapEnabled) {
-        logContent.style.whiteSpace = 'pre-wrap';
-        showToast('已启用自动换行', 'info');
-    } else {
-        logContent.style.whiteSpace = 'pre';
-        showToast('已禁用自动换行', 'info');
-    }
 }
 
 // 滚动到顶部

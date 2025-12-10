@@ -263,19 +263,21 @@ function updateAccountTable() {
             <td><small>${lastReceive}</small></td>
             <td><small>${lastSend}</small></td>
             <td>
-                <button class="btn btn-sm btn-outline-primary" onclick="showAccountDetail('${accountId}')">
-                    <i class="bi bi-eye"></i>
-                </button>
-                <button class="btn btn-sm btn-outline-warning" onclick="editAccount('${accountId}')">
-                    <i class="bi bi-pencil"></i>
-                </button>
-                <button class="btn btn-sm btn-outline-${account.enabled ? 'warning' : 'success'}" 
-                        onclick="toggleAccount('${accountId}')">
-                    <i class="bi bi-${account.enabled ? 'pause' : 'play'}"></i>
-                </button>
-                <button class="btn btn-sm btn-outline-danger" onclick="deleteAccount('${accountId}')">
-                    <i class="bi bi-trash"></i>
-                </button>
+                <div class="btn-group" role="group">
+                    <button class="btn btn-sm btn-outline-primary" onclick="showAccountDetail('${accountId}')" title="查看详情">
+                        <i class="bi bi-eye"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-warning" onclick="editAccount('${accountId}')" title="编辑">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-${account.enabled ? 'warning' : 'success'}" 
+                            onclick="toggleAccount('${accountId}')" title="${account.enabled ? '禁用' : '启用'}">
+                        <i class="bi bi-${account.enabled ? 'pause' : 'play'}"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteAccount('${accountId}')" title="删除">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
             </td>
         `;
         
@@ -461,7 +463,7 @@ function addAccountAlias() {
         <span class="input-group-text">→</span>
         <input type="text" class="form-control alias-key" placeholder="目标指令（如：#）">
         <button class="btn btn-outline-danger" type="button" onclick="removeAccountAlias(this)">
-            <i class="bi bi-trash"></i>
+                <i class="bi bi-trash"></i>
         </button>
     `;
     list.appendChild(div);

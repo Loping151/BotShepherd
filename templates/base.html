@@ -17,109 +17,230 @@
     <!-- 自定义样式 -->
     <style>
         :root {
-            --bs-primary: #6c757d;
-            --bs-primary-rgb: 108, 117, 125;
-            --bs-secondary: #495057;
-            --bs-success: #28a745;
-            --bs-info: #17a2b8;
-            --bs-warning: #ffc107;
-            --bs-danger: #dc3545;
-            --bs-light: #f8f9fa;
-            --bs-dark: #343a40;
+            /* 淡黄绿主题配色 */
+            --bs-primary: #66bb6a;
+            --bs-primary-rgb: 102, 187, 106;
+            --bs-secondary: #8d6e63;
+            --bs-success: #9ccc65;
+            --bs-info: #4dd0e1;
+            --bs-warning: #ffca28;
+            --bs-danger: #ef5350;
+            --bs-light: #f1f8e9;
+            --bs-dark: #33691e;
+            
+            --theme-bg: #f9fbe7;
+            --sidebar-bg: rgba(255, 255, 255, 0.95);
+            --card-shadow: 0 8px 24px rgba(149, 157, 165, 0.1);
         }
         
         body {
-            background-color: #f5f5f5;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--theme-bg);
+            font-family: 'Nunito', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #546e7a;
         }
         
+        /* 导航栏优化 */
         .navbar {
-            background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            background: linear-gradient(135deg, #66bb6a 0%, #558b2f 100%);
+            box-shadow: 0 4px 12px rgba(85, 139, 47, 0.2);
+            padding: 0.8rem 1rem;
         }
         
         .navbar-brand {
-            font-weight: bold;
+            font-weight: 700;
             color: white !important;
+            letter-spacing: 0.5px;
+            font-size: 1.35rem;
         }
         
+        /* 侧边栏优化 */
         .sidebar {
-            background: white;
-            min-height: calc(100vh - 56px);
-            box-shadow: 2px 0 4px rgba(0,0,0,0.1);
+            background: var(--sidebar-bg);
+            min-height: calc(100vh - 70px);
+            box-shadow: 2px 0 12px rgba(0,0,0,0.03);
+            border-radius: 0 16px 0 0;
+            margin-top: 10px;
+            padding: 1.5rem 0;
         }
         
         .sidebar .nav-link {
-            color: #6c757d;
-            padding: 12px 20px;
-            border-radius: 0;
-            transition: all 0.3s ease;
+            color: #78909c;
+            padding: 12px 24px;
+            margin: 4px 16px 4px 0;
+            border-radius: 0 50px 50px 0;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            font-weight: 500;
+            display: flex;
+            align-items: center;
         }
         
-        .sidebar .nav-link:hover,
+        .sidebar .nav-link i {
+            margin-right: 12px;
+            font-size: 1.1rem;
+            transition: transform 0.2s;
+        }
+        
+        .sidebar .nav-link:hover {
+            background-color: #f1f8e9;
+            color: #33691e;
+            padding-left: 28px;
+        }
+        
+        .sidebar .nav-link:hover i {
+            transform: scale(1.1);
+        }
+        
         .sidebar .nav-link.active {
-            background-color: #e9ecef;
-            color: #495057;
-            border-left: 4px solid #6c757d;
+            background: linear-gradient(90deg, #dcedc8 0%, #f1f8e9 100%);
+            color: #33691e;
+            font-weight: 700;
+            box-shadow: 2px 2px 8px rgba(0,0,0,0.05);
         }
-        
+
+        /* 主内容区优化 */
         .main-content {
-            background: white;
-            min-height: calc(100vh - 56px);
+            background: transparent;
+            min-height: calc(100vh - 70px);
             padding: 20px;
+            animation: fadeIn 0.4s ease-out;
         }
         
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        /* 卡片美化 */
         .card {
             border: none;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            border-radius: 8px;
+            box-shadow: var(--card-shadow);
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            margin-bottom: 20px;
+        }
+        
+        .card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 28px rgba(149, 157, 165, 0.15);
         }
         
         .card-header {
-            background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
-            color: white;
-            border-radius: 8px 8px 0 0 !important;
+            background: transparent;
+            border-bottom: 1px solid #f0f4c3;
+            color: #33691e;
+            font-weight: 700;
+            padding: 1.2rem 1.5rem;
+            border-radius: 16px 16px 0 0 !important;
+        }
+        
+        /* 按钮美化 */
+        .btn {
+            border-radius: 10px;
+            padding: 0.5rem 1.2rem;
+            font-weight: 600;
+            transition: all 0.2s;
         }
         
         .btn-primary {
-            background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+            background: linear-gradient(135deg, #66bb6a 0%, #558b2f 100%);
             border: none;
+            box-shadow: 0 4px 6px rgba(102, 187, 106, 0.25);
         }
         
         .btn-primary:hover {
-            background: linear-gradient(135deg, #495057 0%, #343a40 100%);
+            background: linear-gradient(135deg, #558b2f 0%, #33691e 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 6px 10px rgba(102, 187, 106, 0.3);
+        }
+
+        /* 移动端适配 */
+        @media (max-width: 768px) {
+            .sidebar {
+                min-height: auto;
+                margin: 10px;
+                padding: 10px;
+                border-radius: 16px;
+                display: flex;
+                overflow-x: auto;
+                white-space: nowrap;
+                box-shadow: var(--card-shadow);
+            }
+            
+            .sidebar .nav {
+                flex-direction: row !important;
+                /* width: 100%; -- Removed as it might cause unwanted wrapping */
+            }
+            
+            .sidebar .nav-link {
+                margin: 0 6px 0 0;
+                padding: 8px 16px;
+                border-radius: 12px;
+                background: #f5f5f5;
+                font-size: 0.9rem;
+                flex-shrink: 0; /* Prevent items from shrinking */
+            }
+            
+            .sidebar .nav-link:hover {
+                padding-left: 16px;
+            }
+            
+            .sidebar .nav-link.active {
+                background: #66bb6a;
+                color: white;
+            }
+            
+            .main-content {
+                padding: 10px;
+            }
+            
+            .card-header {
+                padding: 1rem;
+            }
         }
         
         .alert {
             border: none;
-            border-radius: 8px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
         }
         
         .toast-container {
             position: fixed;
-            top: 70px;
+            top: 80px;
             right: 20px;
             z-index: 1055;
         }
         
+        /* 状态指示器 */
         .status-indicator {
             display: inline-block;
-            width: 8px;
-            height: 8px;
+            width: 10px;
+            height: 10px;
             border-radius: 50%;
             margin-right: 8px;
+            box-shadow: 0 0 0 2px rgba(255,255,255,0.8);
         }
         
-        .status-online {
-            background-color: #28a745;
-        }
+        .status-online { background-color: #7cb342; }
+        .status-offline { background-color: #ef5350; }
+        .status-warning { background-color: #ffca28; }
         
-        .status-offline {
-            background-color: #dc3545;
+        /* 滚动条美化 */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
         }
-        
-        .status-warning {
-            background-color: #ffc107;
+        ::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.02);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #dce775;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #c0ca33;
         }
     </style>
     
@@ -127,30 +248,36 @@
 </head>
 <body>
     <!-- 导航栏 -->
-    <nav class="navbar navbar-expand-lg navbar-dark">
+    <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
         <div class="container-fluid">
             <a class="navbar-brand" href="/">
                 <i class="bi bi-shield-check"></i>
                 BotShepherd
             </a>
             
-            <div class="navbar-nav ms-auto">
-                <button class="btn btn-outline-light btn-sm me-2" onclick="refreshAllData()" title="刷新数据">
-                    <i class="bi bi-arrow-clockwise"></i>
-                    刷新
-                </button>
-                <a class="btn btn-outline-light btn-sm me-2" href="https://github.com/Loping151/BotShepherd" target="_blank" title="GitHub项目">
-                    <i class="bi bi-github"></i>
-                    GitHub
-                </a>
-                <button class="btn btn-outline-warning btn-sm me-2" onclick="restartSystem()" title="重启系统">
-                    <i class="bi bi-power"></i>
-                    重启
-                </button>
-                <a class="btn btn-outline-light btn-sm" href="/logout">
-                    <i class="bi bi-box-arrow-right"></i>
-                    登出
-                </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent" aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <div class="collapse navbar-collapse" id="navbarContent">
+                <div class="navbar-nav ms-auto pt-2 pt-lg-0">
+                    <button class="btn btn-outline-light btn-sm me-lg-2 mb-2 mb-lg-0" onclick="refreshAllData()" title="刷新数据">
+                        <i class="bi bi-arrow-clockwise"></i>
+                        刷新
+                    </button>
+                    <a class="btn btn-outline-light btn-sm me-lg-2 mb-2 mb-lg-0" href="https://github.com/Loping151/BotShepherd" target="_blank" title="GitHub项目">
+                        <i class="bi bi-github"></i>
+                        GitHub
+                    </a>
+                    <button class="btn btn-outline-warning btn-sm me-lg-2 mb-2 mb-lg-0" onclick="restartSystem()" title="重启系统">
+                        <i class="bi bi-power"></i>
+                        重启
+                    </button>
+                    <a class="btn btn-outline-light btn-sm mb-2 mb-lg-0" href="/logout">
+                        <i class="bi bi-box-arrow-right"></i>
+                        登出
+                    </a>
+                </div>
             </div>
         </div>
     </nav>

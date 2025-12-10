@@ -229,10 +229,15 @@ function initCharts() {
             datasets: [{
                 label: '每3小时发送量',
                 data: [],
-                borderColor: '#6c757d',
-                backgroundColor: 'rgba(108, 117, 125, 0.1)',
+                borderColor: '#66bb6a', // 主题绿色
+                backgroundColor: 'rgba(102, 187, 106, 0.15)', // 淡绿色背景
+                pointBackgroundColor: '#fff',
+                pointBorderColor: '#66bb6a',
+                pointHoverBackgroundColor: '#66bb6a',
+                pointHoverBorderColor: '#fff',
                 tension: 0.4,
-                fill: true
+                fill: true,
+                borderWidth: 2
             }]
         },
         options: {
@@ -241,23 +246,47 @@ function initCharts() {
             scales: {
                 y: {
                     beginAtZero: true,
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.05)',
+                        drawBorder: false
+                    },
                     title: {
                         display: true,
-                        text: '消息数量'
+                        text: '消息数量',
+                        color: '#78909c'
+                    },
+                    ticks: {
+                        color: '#78909c'
                     }
                 },
                 x: {
+                    grid: {
+                        display: false
+                    },
                     title: {
                         display: true,
-                        text: '时间（每3小时）'
+                        text: '时间（每3小时）',
+                        color: '#78909c'
+                    },
+                    ticks: {
+                        color: '#78909c'
                     }
                 }
             },
             plugins: {
                 legend: {
-                    display: true
+                    display: true,
+                    labels: {
+                        color: '#546e7a',
+                        usePointStyle: true
+                    }
                 },
                 tooltip: {
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                    titleColor: '#33691e',
+                    bodyColor: '#546e7a',
+                    borderColor: '#dcedc8',
+                    borderWidth: 1,
                     callbacks: {
                         title: function(context) {
                             return context[0].label;
@@ -269,6 +298,7 @@ function initCharts() {
     });
     
     // 消息类型分布图
+    const isMobile = window.innerWidth < 768;
     const typeCtx = document.getElementById('messageTypeChart').getContext('2d');
     messageTypeChart = new Chart(typeCtx, {
         type: 'doughnut',
@@ -277,25 +307,51 @@ function initCharts() {
             datasets: [{
                 data: [],
                 backgroundColor: [
-                    '#6c757d',
-                    '#495057',
-                    '#28a745',
-                    '#17a2b8',
-                    '#ffc107',
-                    '#dc3545',
-                    '#fd7e14',
-                    '#e83e8c'
-                ]
+                    '#9ccc65', // 浅绿
+                    '#66bb6a', // 主绿
+                    '#33691e', // 深绿
+                    '#dce775', // 柠檬黄
+                    '#26a69a', // 青色
+                    '#ffa726', // 橙色
+                    '#8d6e63', // 褐色
+                    '#78909c'  // 蓝灰
+                ],
+                borderWidth: 2,
+                borderColor: '#ffffff',
+                hoverOffset: 4
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            layout: {
+                padding: {
+                    bottom: 10
+                }
+            },
             plugins: {
                 legend: {
-                    position: 'bottom'
+                    position: isMobile ? 'bottom' : 'right',
+                    align: 'start', // 顶部对齐
+                    labels: {
+                        color: '#000000', // 纯黑，确保可见
+                        padding: 15,
+                        usePointStyle: true,
+                        boxWidth: 10,
+                        font: {
+                            size: 11
+                        }
+                    },
+                    maxHeight: 400 // 增加图例区域最大高度
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                    bodyColor: '#000000', // Tooltip文字也设为黑色
+                    borderColor: '#dcedc8',
+                    borderWidth: 1
                 }
-            }
+            },
+            cutout: '60%'
         }
     });
 }
@@ -403,7 +459,7 @@ function updateChangeIndicator(elementId, change) {
     element.textContent = `${icon} ${Math.abs(change)}`;
 }
 
-// 更新图表
+    // 更新图表
 function updateCharts(stats) {
     // 更新趋势图（每3小时）- 确保时间标签显示清晰
     if (stats.hourly_trend && stats.hourly_trend.length > 0) {
@@ -418,7 +474,7 @@ function updateCharts(stats) {
         const data = [];
         const colors = [];
 
-        // 获取前5名群组
+        // 获取前10名群组
         const top10Groups = stats.top_groups.slice(0, 10);
         
         // 计算群聊总数（所有群组的消息总和）
@@ -427,39 +483,57 @@ function updateCharts(stats) {
         // 计算私聊数量（总消息数 - 群聊总数）
         const privateMessages = Math.max(0, stats.total_messages - totalGroupMessages);
         
-        // 计算TOP5群组的消息总数
+        // 计算TOP10群组的消息总数
         const top10TotalMessages = top10Groups.reduce((sum, group) => sum + group.message_count, 0);
         
-        // 计算其他群组的消息数量（总群聊 - TOP5群组）
+        // 计算其他群组的消息数量（总群聊 - TOP10群组）
         const otherGroupsMessages = Math.max(0, totalGroupMessages - top10TotalMessages);
+
+        // 颜色池 - 扩展到足够覆盖所有可能的段
+        const groupColors = [
+            '#66bb6a', // 主绿
+            '#9ccc65', // 浅绿
+            '#26a69a', // 青色
+            '#ffa726', // 橙色
+            '#ef5350', // 红色
+            '#ab47bc', // 紫色
+            '#5c6bc0', // 靛蓝
+            '#42a5f5', // 蓝色
+            '#29b6f6', // 浅蓝
+            '#ffee58', // 黄色
+            '#8d6e63', // 褐色
+            '#78909c'  // 蓝灰
+        ];
+
+        let colorIndex = 0;
 
         // 1. 添加私聊（如果有）
         if (privateMessages > 0) {
             labels.push('私聊');
             data.push(privateMessages);
-            colors.push('#28a745'); // 绿色
+            colors.push('#33691e'); // 特殊深绿色
         }
 
         // 2. 添加TOP10群组
-        const groupColors = ['#20c997', '#6f42c1', '#fd7e14', '#e83e8c', '#6610f2', '#007bff', '#28a745', '#ffc107', '#dc3545', '#17a2b8'];   
-        top10Groups.forEach((group, index) => {
+        top10Groups.forEach((group) => {
             labels.push(`群组 ${group.group_id}`);
             data.push(group.message_count);
-            colors.push(groupColors[index % groupColors.length]);
+            colors.push(groupColors[colorIndex % groupColors.length]);
+            colorIndex++;
         });
 
         // 3. 添加其他群组（如果有）
         if (otherGroupsMessages > 0) {
             labels.push('其他群组');
             data.push(otherGroupsMessages);
-            colors.push('#6c757d'); // 灰色
+            colors.push('#bdbdbd'); // 灰色
         }
 
         // 4. 如果没有任何数据，显示占位符
         if (labels.length === 0) {
             labels.push('暂无数据');
             data.push(1);
-            colors.push('#dee2e6');
+            colors.push('#e0e0e0');
         }
 
         // 更新图表
@@ -472,7 +546,6 @@ function updateCharts(stats) {
     // 更新群组排行表格
     updateTopGroupsTable(stats);
 }
-
 // 群组活跃度表格更新函数 - 显示所有群组
 function updateTopGroupsTable(stats) {
     const table = document.querySelector('#top-groups-table tbody');

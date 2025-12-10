@@ -31,7 +31,7 @@ class MessageProcessor:
         """预处理客户端消息"""
         try:
             # 记录原始消息
-            self._log_message(message_data, "RECV", "RAW")
+            self._log_message(message_data, "RECV", "RAW", "debug")
             
             # 消息标准化
             normalized_data = await self._normalize_message(message_data)
@@ -58,7 +58,7 @@ class MessageProcessor:
                 normalized_data = processed_data
             
             # 记录处理后的消息
-            self._log_message(normalized_data, "RECV", "PROCESSED", "debug")
+            self._log_message(normalized_data, "RECV", "PROCESSED")
             
             # 重新解析事件，事件也受到预处理的影响，会作用到本体指令集
             event = self.event_parser.parse_event_data(normalized_data)
@@ -73,7 +73,7 @@ class MessageProcessor:
         """后处理目标消息"""
         try:            
             # 记录原始消息
-            self._log_message(message_data, "SEND", "RAW")
+            self._log_message(message_data, "SEND", "RAW", "debug")
             
             # 解析事件
             event = self.event_parser.parse_event_data(message_data)
@@ -87,7 +87,7 @@ class MessageProcessor:
                     message_data = processed_data
                     
                     # 记录处理后的消息
-                    self._log_message(message_data, "SEND", "PROCESSED", "debug")
+                    self._log_message(message_data, "SEND", "PROCESSED")
             
             return message_data
             

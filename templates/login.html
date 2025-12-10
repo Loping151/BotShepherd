@@ -12,91 +12,105 @@
     
     <style>
         body {
-            background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+            /* 淡黄绿渐变背景 */
+            background: linear-gradient(135deg, #dcedc8 0%, #f1f8e9 50%, #dcedc8 100%);
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
+            font-family: 'Nunito', 'Segoe UI', Tahoma, sans-serif;
         }
         
         .login-card {
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 15px 35px rgba(51, 105, 30, 0.1);
             overflow: hidden;
             max-width: 400px;
             width: 100%;
+            border: 1px solid rgba(255, 255, 255, 0.5);
         }
         
         .login-header {
-            background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+            background: linear-gradient(135deg, #66bb6a 0%, #558b2f 100%);
             color: white;
-            padding: 30px;
+            padding: 40px 30px;
             text-align: center;
         }
         
         .login-header h2 {
             margin: 0;
-            font-weight: bold;
+            font-weight: 700;
+            letter-spacing: 1px;
         }
         
         .login-header .subtitle {
             margin-top: 10px;
             opacity: 0.9;
             font-size: 14px;
+            font-weight: 300;
         }
         
         .login-body {
-            padding: 30px;
+            padding: 40px 30px;
         }
         
         .form-control {
-            border-radius: 8px;
-            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            border: 2px solid #f1f8e9;
             padding: 12px 15px;
             transition: all 0.3s ease;
+            background: #f9fbe7;
         }
         
         .form-control:focus {
-            border-color: #6c757d;
-            box-shadow: 0 0 0 0.2rem rgba(108, 117, 125, 0.25);
+            border-color: #9ccc65;
+            box-shadow: 0 0 0 0.2rem rgba(156, 204, 101, 0.25);
+            background: white;
         }
         
         .btn-login {
-            background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+            background: linear-gradient(135deg, #66bb6a 0%, #558b2f 100%);
             border: none;
-            border-radius: 8px;
-            padding: 12px;
-            font-weight: bold;
+            border-radius: 10px;
+            padding: 14px;
+            font-weight: 700;
             width: 100%;
             transition: all 0.3s ease;
+            box-shadow: 0 4px 10px rgba(102, 187, 106, 0.3);
         }
         
         .btn-login:hover {
-            background: linear-gradient(135deg, #495057 0%, #343a40 100%);
-            transform: translateY(-1px);
+            background: linear-gradient(135deg, #558b2f 0%, #33691e 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(102, 187, 106, 0.4);
         }
         
         .input-group-text {
-            background: #f8f9fa;
-            border: 2px solid #e9ecef;
+            background: #f1f8e9;
+            border: 2px solid #f1f8e9;
             border-right: none;
+            color: #558b2f;
+            border-radius: 10px 0 0 10px !important;
         }
         
         .input-group .form-control {
             border-left: none;
+            border-radius: 0 10px 10px 0 !important;
         }
         
         .alert {
-            border-radius: 8px;
+            border-radius: 10px;
             border: none;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
         }
         
         .footer-text {
             text-align: center;
-            margin-top: 20px;
-            color: #6c757d;
-            font-size: 12px;
+            margin-top: 25px;
+            color: #78909c;
+            font-size: 13px;
         }
     </style>
 </head>
