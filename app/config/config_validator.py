@@ -108,8 +108,8 @@ class ConfigValidator:
                 
                 if "auto_expire_days" in db_config:
                     expire_days = db_config["auto_expire_days"]
-                    if not isinstance(expire_days, int) or expire_days < 3:
-                        errors.append("auto_expire_days 必须是大于等于3的整数")
+                    if not isinstance(expire_days, int) or (expire_days != -1 and expire_days < 3):
+                        errors.append("auto_expire_days 必须是 -1 或大于等于3的整数")
         
         # 验证Web认证配置
         if "web_auth" in config:
