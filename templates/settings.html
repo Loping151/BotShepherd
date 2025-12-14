@@ -332,11 +332,11 @@ function addGlobalAlias() {
     div.className = 'row mb-3 alias-row';
     div.innerHTML = `
         <div class="col-md-3">
-            <input type="text" class="form-control alias-key" placeholder="别名">
+            <input type="text" class="form-control alias-key" placeholder="原名">
         </div>
         <div class="col-md-8">
             <input type="text" class="form-control alias-values" 
-                   placeholder="目标命令，多个用逗号分隔">
+                   placeholder="别名，多个用逗号分隔。保留原指令需将原指令加入别名">
         </div>
         <div class="col-md-1">
             <button class="btn btn-outline-danger" onclick="removeGlobalAlias(this)">
