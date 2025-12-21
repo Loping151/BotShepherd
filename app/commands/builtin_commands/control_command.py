@@ -26,6 +26,9 @@ class RestartCommand(BaseCommand):
         """执行重启指令"""
         try:
             if not is_rebooting():
+                config_manager = context.get("config_manager")
+                if config_manager:
+                    await config_manager.flush_dirty_configs()
                 # 创建一个后台任务来执行重启逻辑，这样不会阻塞当前响应
                 loop = asyncio.get_event_loop()
                 loop.create_task(reboot(event, wait_seconds = 3))

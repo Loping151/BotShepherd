@@ -511,7 +511,11 @@ class WebServer:
 
                 # 延迟重启，给前端时间接收响应
                 def restart_delayed():
-                    asyncio.run(reboot(wait_seconds=2))
+                    try:
+                        asyncio.run(self.config_manager.flush_dirty_configs())
+                        asyncio.run(reboot(wait_seconds=2))
+                    except Exception as e:
+                        self.logger.web.error(f"重启前写盘失败: {e}")
 
                 import threading
                 threading.Thread(target=restart_delayed, daemon=True).start()
