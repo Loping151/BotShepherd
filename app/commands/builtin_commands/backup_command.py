@@ -5,6 +5,7 @@
 
 import base64
 from typing import Dict, Any, List
+from ...onebotv11.message_segment import MessageSegmentBuilder
 from ...onebotv11.models import Event, PrivateMessageEvent
 from ..permission_manager import PermissionLevel
 from ..base_command import BaseCommand, CommandResponse, CommandResult, command_registry
