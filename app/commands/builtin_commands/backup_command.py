@@ -5,8 +5,7 @@
 
 import base64
 from typing import Dict, Any, List
-from ...onebotv11.models import Event
-from ...onebotv11.message_segment import MessageSegmentBuilder
+from ...onebotv11.models import Event, PrivateMessageEvent
 from ..permission_manager import PermissionLevel
 from ..base_command import BaseCommand, CommandResponse, CommandResult, command_registry
 
@@ -29,6 +28,9 @@ class BackupCommand(BaseCommand):
     async def execute(self, event: Event, args: List[str], context: Dict[str, Any]) -> CommandResponse:
         """执行备份指令"""
         try:
+            if isinstance(event, PrivateMessageEvent):
+                # 私聊消息不允许执行备份指令
+                return self.format_error("私聊发送文件受限，请在群聊中使用该指令")
             # 获取backup_manager
             if "backup_manager" not in context:
                 return self.format_error("备份管理器未初始化")
