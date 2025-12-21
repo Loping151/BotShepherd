@@ -53,7 +53,8 @@ class HelpCommand(BaseCommand):
         """显示特定指令的帮助"""
         command = command_registry.get_command(command_name)
         if not command:
-            return self.format_error(f"未找到指令: {command_name}")
+            # return self.format_error(f"未找到指令: {command_name}")
+            return # 不提示
         
         # 检查用户是否有权限查看此指令
         user_level = permission_manager.get_user_permission_level(event)
@@ -223,7 +224,7 @@ class PINGCommand(BaseCommand):
 
 class EchoCommand(BaseCommand):
     """Echo指令"""
-    
+
     def __init__(self):
         super().__init__()
         self.name = "echo"
@@ -231,14 +232,97 @@ class EchoCommand(BaseCommand):
         self.usage = "echo xxx"
         self.aliases = ["Echo"]
         self.required_permission = PermissionLevel.SUPERUSER
-    
+
     def _setup_parser(self):
         """设置参数解析器"""
         super()._setup_parser()
-    
+
     async def execute(self, event: Event, args: List[str], context: Dict[str, Any]) -> CommandResponse:
         """执行PING指令"""
         return self.format_response(" ".join(args))
+
+
+class UpdateCommand(BaseCommand):
+    """更新指令"""
+
+    def __init__(self):
+        super().__init__()
+        self.name = "更新"
+        self.description = "检查并执行系统更新"
+        self.usage = "更新"
+        self.aliases = ["update"]
+        self.required_permission = PermissionLevel.SUPERUSER
+
+    def _setup_parser(self):
+        """设置参数解析器"""
+        super()._setup_parser()
+
+    async def execute(self, event: Event, args: List[str], context: Dict[str, Any]) -> CommandResponse:
+        """执行更新指令"""
+        try:
+            import subprocess
+            import os
+            import requests
+            import re
+            from app import __version__
+
+            # 检查是否有新版本
+            try:
+                # 获取代理配置
+                config_manager = context["config_manager"]
+                global_config = config_manager.get_global_config()
+                proxy = global_config.get("proxy", "")
+                proxies = {"http": proxy, "https": proxy} if proxy else None
+
+                response = requests.get(
+                    "https://raw.githubusercontent.com/Loping151/BotShepherd/main/app/__init__.py",
+                    timeout=5,
+                    proxies=proxies
+                )
+                response.raise_for_status()
+                content = response.text
+
+                version_match = re.search(r"__version__\s*=\s*['\"](.+?)['\"]", content)
+                if not version_match:
+                    return self.format_error("无法获取远程版本信息")
+
+                remote_version = version_match.group(1)
+
+                if remote_version == __version__:
+                    return self.format_response(f"当前已是最新版本 {__version__}，无需更新")
+
+                # 执行更新
+                update_info = f"发现新版本 {remote_version}（当前版本：{__version__}）\n"
+
+                # 获取项目根目录
+                project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+                # 执行 git pull
+                result = subprocess.run(
+                    ['git', 'pull'],
+                    cwd=project_root,
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+
+                if result.returncode == 0:
+                    update_info += "✅ 更新成功！\n"
+                    update_info += f"输出:\n{result.stdout}\n"
+                    update_info += "⚠️ 请使用 bs重启 指令重启系统以应用更新"
+                    return self.format_response(update_info, use_forward=True)
+                else:
+                    return self.format_error(f"更新失败:\n{result.stderr}", use_forward=True)
+
+            except requests.RequestException as e:
+                return self.format_error(f"无法连接到GitHub检查更新: {e}")
+            except subprocess.TimeoutExpired:
+                return self.format_error("更新超时，请稍后重试")
+            except FileNotFoundError:
+                return self.format_error("Git未安装，无法执行更新")
+
+        except Exception as e:
+            return self.format_error(f"更新失败: {e}")
 
 
 # 注册指令
@@ -248,5 +332,6 @@ def register_basic_commands():
     command_registry.register(StatusCommand())
     command_registry.register(PINGCommand())
     command_registry.register(EchoCommand())
+    command_registry.register(UpdateCommand())
 
 register_basic_commands()

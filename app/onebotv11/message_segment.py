@@ -287,6 +287,26 @@ class MessageSegmentBuilder:
             data={"data": data}
         )
 
+    @staticmethod
+    def file(file: str, name: Optional[str] = None, url: Optional[str] = None) -> MessageSegment:
+        """文件消息段
+
+        Args:
+            file: 文件路径或base64编码的文件内容（格式：base64://...）
+            name: 文件名
+            url: 文件URL
+        """
+        data = {"file": file}
+        if name is not None:
+            data["name"] = name
+        if url is not None:
+            data["url"] = url
+
+        return MessageSegment(
+            type=MessageSegmentType.FILE,
+            data=data
+        )
+
 class MessageSegmentParser:
     """消息段解析器"""
     

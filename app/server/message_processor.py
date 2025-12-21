@@ -3,15 +3,12 @@
 负责消息的预处理和后处理
 """
 
-import json
 from typing import Dict, Any, Optional, List, Tuple
-from datetime import datetime
 import uuid
 
 from ..onebotv11 import EventParser, MessageNormalizer
-from ..onebotv11.models import ApiRequest, Event, MessageEvent, MessageSegmentType, PrivateMessageEvent, GroupMessageEvent, MessageSegment
+from ..onebotv11.models import ApiRequest, Event, MessageEvent, MessageSegmentType, PrivateMessageEvent, GroupMessageEvent, NoticeEvent
 from ..onebotv11.message_segment import MessageSegmentParser
-from ..commands.permission_manager import PermissionManager
 from .filter_manager import FilterManager
 
 class MessageProcessor:
@@ -46,10 +43,11 @@ class MessageProcessor:
                 return normalized_data, None
             
             # 更新账号活动时间
-            if isinstance(event, MessageEvent):
-                await self.config_manager.update_account_last_activity(
-                    str(event.self_id), None, "receive"
-                )
+            if isinstance(event, MessageEvent) or isinstance(event, NoticeEvent):
+                if isinstance(event, MessageEvent):
+                    await self.config_manager.update_account_last_activity(
+                        str(event.self_id), None, "receive"
+                    )
             
                 # 消息事件预处理，包括决定是否拦截，应用别名等
                 processed_data = await self._preprocess_message_event(event, normalized_data)
@@ -114,27 +112,28 @@ class MessageProcessor:
     async def _preprocess_message_event(self, event: Event, 
                                       message_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """预处理消息事件"""
-        # 检查账号是否启用
-        is_su = self.config_manager.is_superuser(event.user_id)
-        account_config = await self.config_manager.get_account_config(str(event.self_id))
-        if account_config and not account_config.get("enabled", True) and not is_su:
-            self.logger.message.info(f"账号 {event.self_id} 已禁用，跳过消息处理")
-            return None
-        
-        # 检查群组是否启用和过期
-        if isinstance(event, GroupMessageEvent):
-            group_config = await self.config_manager.get_group_config(str(event.group_id))
-            if group_config and not is_su: # 总是不拦截 su
-                if not group_config.get("enabled", True) and not (event.sender.role in ["owner", "admin"] and event.raw_message.startswith(self.config_manager.get_global_config().get("command_prefix", ""))):
-                    # 具有管理员权限的成员发送内置命令不受拦截，除非过期
-                    self.logger.message.info(f"群组 {event.group_id} 已禁用，跳过消息处理")
-                    return None
-                
-                if await self.config_manager.is_group_expired(str(event.group_id)):
-                    self.logger.message.info(f"群组 {event.group_id} 已过期，跳过消息处理")
-                    return None
+        if isinstance(event, MessageEvent):
+            # 检查账号是否启用
+            is_su = self.config_manager.is_superuser(event.user_id)
+            account_config = await self.config_manager.get_account_config(str(event.self_id))
+            if account_config and not account_config.get("enabled", True) and not is_su:
+                self.logger.message.info(f"账号 {event.self_id} 已禁用，跳过消息处理")
+                return None
+            
+            # 检查群组是否启用和过期
+            if isinstance(event, GroupMessageEvent):
+                group_config = await self.config_manager.get_group_config(str(event.group_id))
+                if group_config and not is_su: # 总是不拦截 su
+                    if not group_config.get("enabled", True) and not (event.sender.role in ["owner", "admin"] and event.raw_message.startswith(self.config_manager.get_global_config().get("command_prefix", ""))):
+                        # 具有管理员权限的成员发送内置命令不受拦截，除非过期
+                        self.logger.message.info(f"群组 {event.group_id} 已禁用，跳过消息处理")
+                        return None
+                    
+                    if await self.config_manager.is_group_expired(str(event.group_id)):
+                        self.logger.message.info(f"群组 {event.group_id} 已过期，跳过消息处理")
+                        return None
 
-        # 检查黑名单
+        # 检查黑名单，黑名单覆盖消息事件、入群欢迎、好友申请等
         if self._is_in_blacklist(event) and not is_su:
             self.logger.message.info("消息来自黑名单，跳过处理: user={}, group={}".format(event.user_id, getattr(event, 'group_id', None)))
             return None
@@ -152,10 +151,11 @@ class MessageProcessor:
             message_data["params"]["message"] = [seg if not isinstance(seg, str) else {"type": "text", "data": {"text": seg}} for seg in message_data["params"]["message"]]
         
         # 应用多级别名转换，优先级为全局->账号->群组
-        message_data = await self.apply_global_aliases(message_data)
-        message_data = await self.apply_account_aliases(message_data)
-        if isinstance(event, GroupMessageEvent):
-            message_data = await self.apply_group_aliases(message_data)
+        if isinstance(event, MessageEvent):
+            message_data = await self.apply_global_aliases(message_data)
+            message_data = await self.apply_account_aliases(message_data)
+            if isinstance(event, GroupMessageEvent):
+                message_data = await self.apply_group_aliases(message_data)
 
         # 然后应用过滤词。也就是说，可以通过全局禁用原来的前缀，使用账号别名来使单个账号绕过过滤，实现启用功能的目的。
         if await self.filter_manager.filter_receive_message(event, message_data):
@@ -182,7 +182,7 @@ class MessageProcessor:
         
         # 更新群组最后消息时间（机器人发送的消息）
         if isinstance(event, ApiRequest) and event.params.get("group_id"):
-            await self.config_manager.update_group_last_message_time(str(event.params.get("group_id")))
+            await self.config_manager.update_group_last_message_time(str(event.params.get("group_id")), self_id)
             await self.config_manager.update_account_last_activity(self_id, str(event.params.get("group_id")), "send")
         else:
             await self.config_manager.update_account_last_activity(self_id, None, "send")
@@ -235,13 +235,14 @@ class MessageProcessor:
     def _is_in_blacklist(self, event: Event) -> bool:
         """检查是否在黑名单中"""
                 
-        # superuser总是允许
-        if self.config_manager.is_superuser(event.user_id):
-            return False
-        
-        # 检查用户黑名单
-        if self.config_manager.is_in_blacklist("users", str(event.user_id)):
-            return True
+        if hasattr(event, "user_id"):
+            # superuser总是允许
+            if self.config_manager.is_superuser(event.user_id):
+                return False
+            
+            # 检查用户黑名单
+            if self.config_manager.is_in_blacklist("users", str(event.user_id)):
+                return True
         
         # 检查群组黑名单
         if isinstance(event, GroupMessageEvent):

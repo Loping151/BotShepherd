@@ -61,6 +61,10 @@
             border-radius: 0 16px 0 0;
             margin-top: 10px;
             padding: 1.5rem 0;
+            position: sticky;
+            top: 80px;
+            height: calc(100vh - 90px);
+            overflow-y: auto;
         }
         
         .sidebar .nav-link {
@@ -103,6 +107,13 @@
             min-height: calc(100vh - 70px);
             padding: 20px;
             animation: fadeIn 0.4s ease-out;
+        }
+
+        .app-footer {
+            color: #90a4ae;
+            font-size: 0.9rem;
+            text-align: center;
+            padding: 12px 0 24px;
         }
         
         @keyframes fadeIn {
@@ -164,8 +175,11 @@
                 border-radius: 16px;
                 display: flex;
                 overflow-x: auto;
+                overflow-y: hidden;
                 white-space: nowrap;
                 box-shadow: var(--card-shadow);
+                position: static;
+                height: auto;
             }
             
             .sidebar .nav {
@@ -265,14 +279,18 @@
                         <i class="bi bi-arrow-clockwise"></i>
                         刷新
                     </button>
-                    <a class="btn btn-outline-light btn-sm me-lg-2 mb-2 mb-lg-0" href="https://github.com/Loping151/BotShepherd" target="_blank" title="GitHub项目">
-                        <i class="bi bi-github"></i>
-                        GitHub
-                    </a>
+                    <button id="updateBtn" class="btn btn-outline-info btn-sm me-lg-2 mb-2 mb-lg-0" onclick="performUpdate()" title="更新系统" style="display: none;">
+                        <i class="bi bi-download"></i>
+                        更新
+                    </button>
                     <button class="btn btn-outline-warning btn-sm me-lg-2 mb-2 mb-lg-0" onclick="restartSystem()" title="重启系统">
                         <i class="bi bi-power"></i>
                         重启
                     </button>
+                    <a class="btn btn-outline-light btn-sm me-lg-2 mb-2 mb-lg-0" href="https://github.com/Loping151/BotShepherd" target="_blank" title="GitHub项目">
+                        <i class="bi bi-github"></i>
+                        GitHub
+                    </a>
                     <a class="btn btn-outline-light btn-sm mb-2 mb-lg-0" href="/logout">
                         <i class="bi bi-box-arrow-right"></i>
                         登出
@@ -320,6 +338,10 @@
                             <i class="bi bi-file-text"></i>
                             日志查看
                         </a>
+                        <a class="nav-link" href="/backups">
+                            <i class="bi bi-archive"></i>
+                            备份管理
+                        </a>
                         <a class="nav-link" href="/settings">
                             <i class="bi bi-gear"></i>
                             系统设置
@@ -332,6 +354,7 @@
             <div class="col-md-10">
                 <div class="main-content">
                     {% block content %}{% endblock %}
+                    <footer class="app-footer">By Loping151 and 小维</footer>
                 </div>
             </div>
         </div>
@@ -477,9 +500,72 @@
             });
         }
         
+        // 检查系统更新
+        async function checkUpdate() {
+            try {
+                const response = await apiRequest('/api/github-version');
+                if (response.needs_update) {
+                    const updateBtn = document.getElementById('updateBtn');
+                    if (updateBtn) {
+                        updateBtn.style.display = 'inline-block';
+                        updateBtn.title = `发现新版本 ${response.version}（当前版本：${response.local_version}）`;
+                    }
+                }
+            } catch (error) {
+                console.error('检查更新失败:', error);
+            }
+        }
+
+        // 执行系统更新
+        async function performUpdate() {
+            if (!confirm('确定要更新系统吗？更新后需要重启系统以应用更新。')) {
+                return;
+            }
+
+            try {
+                const updateBtn = document.getElementById('updateBtn');
+                if (updateBtn) {
+                    updateBtn.disabled = true;
+                    updateBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> 更新中...';
+                }
+
+                const response = await apiRequest('/api/update', {
+                    method: 'POST'
+                });
+
+                if (response.success) {
+                    showToast('更新成功！请重启系统以应用更新', 'success');
+                    if (updateBtn) {
+                        updateBtn.style.display = 'none';
+                    }
+
+                    // 提示用户重启
+                    if (confirm('更新成功！是否立即重启系统？')) {
+                        await restartSystem();
+                    }
+                } else {
+                    showToast('更新失败: ' + response.message, 'danger');
+                    if (updateBtn) {
+                        updateBtn.disabled = false;
+                        updateBtn.innerHTML = '<i class="bi bi-download"></i> 更新';
+                    }
+                }
+
+            } catch (error) {
+                console.error('更新系统失败:', error);
+                showToast('更新系统失败: ' + error.message, 'danger');
+                const updateBtn = document.getElementById('updateBtn');
+                if (updateBtn) {
+                    updateBtn.disabled = false;
+                    updateBtn.innerHTML = '<i class="bi bi-download"></i> 更新';
+                }
+            }
+        }
+
         // 页面加载完成后执行
         document.addEventListener('DOMContentLoaded', function() {
             setActiveNav();
+            checkUpdate(); // 检查更新
         });
     </script>
     

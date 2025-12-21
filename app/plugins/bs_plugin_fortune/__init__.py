@@ -18,7 +18,7 @@ class SamplePluginCommand(BaseCommand):
         self.description = "测试图文插件移植"
         self.usage = "今日运势"
         self.aliases = []
-        self.required_permission = PermissionLevel.SUPERUSER
+        self.required_permission = PermissionLevel.MEMBER
     
     def _setup_parser(self):
         """设置参数解析器"""

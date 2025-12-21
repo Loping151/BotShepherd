@@ -179,7 +179,34 @@
     </div>
 </div>
 
+<!-- 高级设置 -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="bi bi-gear-fill"></i>
+            高级设置
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="mb-3">
+                    <label for="autoSaveInterval" class="form-label">自动保存间隔（分钟）</label>
+                    <input type="number" class="form-control" id="autoSaveInterval" value="10" min="1">
+                    <div class="form-text">配置文件自动保存到磁盘的间隔时间，最小1分钟</div>
+                </div>
+            </div>
 
+            <div class="col-md-6">
+                <div class="mb-3">
+                    <label for="proxy" class="form-label">代理地址</label>
+                    <input type="text" class="form-control" id="proxy" placeholder="http://127.0.0.1:7890">
+                    <div class="form-text">用于访问GitHub检查更新，格式如 http://127.0.0.1:7890，留空则不使用代理</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- Web认证设置 -->
 <div class="card mb-4">
@@ -208,6 +235,43 @@
         <div class="alert alert-warning">
             <i class="bi bi-exclamation-triangle"></i>
             请及时修改默认的用户名和密码以确保安全
+        </div>
+    </div>
+</div>
+
+<!-- 备份设置 -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="bi bi-archive"></i>
+            备份设置
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i>
+            系统每天凌晨 3 点自动备份配置文件，备份文件使用 Web 登录密码加密
+        </div>
+        <div class="row">
+            <div class="col-md-6">
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="backupEnabled" checked>
+                        <label class="form-check-label" for="backupEnabled">
+                            启用自动备份
+                        </label>
+                        <div class="form-text">每天凌晨 3 点自动备份配置文件</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="mb-3">
+                    <label for="backupKeepDays" class="form-label">备份保留天数</label>
+                    <input type="number" class="form-control" id="backupKeepDays" value="7" min="1">
+                    <div class="form-text">自动清理超过保留天数的备份文件</div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -275,14 +339,21 @@ function updateSettingsForm() {
     const normalization = globalConfig.message_normalization || {};
     document.getElementById('normalizationEnabled').checked = normalization.enabled || false;
     document.getElementById('normalizeNapcatSent').checked = normalization.normalize_napcat_sent || false;
-    
 
-    
+    // 高级设置
+    document.getElementById('autoSaveInterval').value = globalConfig.auto_save_interval || 10;
+    document.getElementById('proxy').value = globalConfig.proxy || '';
+
     // Web认证设置
     const webAuth = globalConfig.web_auth || {};
     document.getElementById('webUsername').value = webAuth.username || 'admin';
     document.getElementById('webPassword').value = webAuth.password || 'admin';
-    
+
+    // 备份设置
+    const backup = globalConfig.backup || {};
+    document.getElementById('backupEnabled').checked = backup.enabled !== false;  // 默认启用
+    document.getElementById('backupKeepDays').value = backup.keep_days || 7;
+
     // 全局别名设置
     updateGlobalAliases();
 }
@@ -403,10 +474,15 @@ async function saveAllSettings() {
                 enabled: document.getElementById('normalizationEnabled').checked,
                 normalize_napcat_sent: document.getElementById('normalizeNapcatSent').checked
             },
-
+            auto_save_interval: parseInt(document.getElementById('autoSaveInterval').value) || 10,
+            proxy: document.getElementById('proxy').value.trim(),
             web_auth: {
                 username: document.getElementById('webUsername').value.trim(),
                 password: document.getElementById('webPassword').value.trim()
+            },
+            backup: {
+                enabled: document.getElementById('backupEnabled').checked,
+                keep_days: parseInt(document.getElementById('backupKeepDays').value) || 7
             }
         };
         

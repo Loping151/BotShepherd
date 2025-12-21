@@ -119,7 +119,18 @@ class ConfigValidator:
                     if field in web_auth:
                         if not isinstance(web_auth[field], str) or len(web_auth[field]) == 0:
                             errors.append(f"web_auth.{field} 不能为空")
-        
+
+        # 验证备份配置（可选字段，向后兼容）
+        if "backup" in config:
+            backup = config["backup"]
+            if isinstance(backup, dict):
+                if "enabled" in backup and not isinstance(backup["enabled"], bool):
+                    errors.append("backup.enabled 必须是布尔值")
+                if "keep_days" in backup:
+                    keep_days = backup["keep_days"]
+                    if not isinstance(keep_days, int) or keep_days < 1:
+                        errors.append("backup.keep_days 必须是大于等于1的整数")
+
         return len(errors) == 0, errors
     
     @staticmethod
@@ -276,7 +287,11 @@ class ConfigValidator:
         if "last_message_time" in config and config["last_message_time"] is not None:
             if not isinstance(config["last_message_time"], str):
                 errors.append("last_message_time 必须是ISO格式的时间字符串")
-        
+
+        if "last_message_bot_id" in config and config["last_message_bot_id"] is not None:
+            if not isinstance(config["last_message_bot_id"], str):
+                errors.append("last_message_bot_id 必须是字符串")
+
         # 验证过滤器
         if "filters" in config:
             filters = config["filters"]
@@ -350,7 +365,13 @@ class ConfigTemplate:
                 "username": "admin",
                 "password": "admin"
             },
-            "web_port": 5111
+            "web_port": 5111,
+            "auto_save_interval": 10,  # 自动保存间隔（分钟），最小1分钟
+            "proxy": "",  # 代理地址，格式如 http://127.0.0.1:7890，为空则不使用代理
+            "backup": {
+                "enabled": True,  # 是否启用自动备份
+                "keep_days": 7  # 备份保留天数
+            }
         }
     
     @staticmethod
@@ -390,6 +411,7 @@ class ConfigTemplate:
             "expire_time": -1,
             "aliases": {},
             "last_message_time": None,
+            "last_message_bot_id": None,
             "filters": {
                 "superuser_filters": [],
                 "admin_filters": []

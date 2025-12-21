@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block title %}备份管理 - BotShepherd{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="bi bi-archive"></i> 备份管理</h1>
+</div>
+
+<div class="alert alert-info">
+    <i class="bi bi-info-circle"></i>
+    <strong>说明：</strong>
+    <ul class="mb-0">
+        <li>备份文件使用 AES-256 加密，密码为当前 Web 登录密码</li>
+        <li>系统每天凌晨 3 点自动备份配置文件</li>
+        <li>备份保留天数可在系统设置中修改</li>
+        <li>备份仅包含 config 文件夹中的 JSON 配置文件</li>
+        <li>使用 <code>bs备份</code> 命令可立即创建备份并发送到Onebot</li>
+    </ul>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="bi bi-folder"></i>
+            备份文件列表
+        </h5>
+    </div>
+    <div class="card-body">
+        <div id="backupsContainer">
+            <div class="text-center py-4">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">加载中...</span>
+                </div>
+                <p class="mt-2 text-muted">正在加载备份列表...</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let backups = [];
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+    loadBackups();
+});
+
+// 加载备份列表
+async function loadBackups() {
+    try {
+        const response = await apiRequest('/api/backups');
+        backups = response.backups || [];
+        updateBackupsTable();
+    } catch (error) {
+        document.getElementById('backupsContainer').innerHTML = `
+            <div class="alert alert-danger">
+                <i class="bi bi-exclamation-triangle"></i>
+                加载备份列表失败: ${error.message}
+            </div>
+        `;
+    }
+}
+
+// 更新备份列表表格
+function updateBackupsTable() {
+    const container = document.getElementById('backupsContainer');
+
+    if (backups.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-4">
+                <i class="bi bi-inbox" style="font-size: 3rem; color: #ccc;"></i>
+                <p class="text-muted mt-3">暂无备份文件</p>
+            </div>
+        `;
+        return;
+    }
+
+    let tableHTML = `
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>文件名</th>
+                        <th>创建时间</th>
+                        <th>文件大小</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+
+    backups.forEach(backup => {
+        const sizeKB = (backup.size / 1024).toFixed(2);
+        tableHTML += `
+            <tr>
+                <td>
+                    <i class="bi bi-file-zip"></i>
+                    <code>${backup.filename}</code>
+                </td>
+                <td>${backup.created_time}</td>
+                <td>${sizeKB} KB</td>
+                <td>
+                    <button class="btn btn-sm btn-primary" onclick="downloadBackup('${backup.filename}')" title="下载">
+                        <i class="bi bi-download"></i> 下载
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+
+    tableHTML += `
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    container.innerHTML = tableHTML;
+}
+
+// 下载备份
+function downloadBackup(filename) {
+    window.location.href = `/api/backups/${filename}`;
+}
+</script>
+{% endblock %}

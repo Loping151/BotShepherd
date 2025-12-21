@@ -156,7 +156,7 @@
                             <tr>
                                 <th>排名</th>
                                 <th>群组ID</th>
-                                <th>消息数量</th>
+                                <th>发送消息数量</th>
                                 <th>活跃度</th>
                             </tr>
                         </thead>
@@ -646,7 +646,7 @@ function updateDateRange() {
         
         // 修复：设置更合理的默认日期范围
         const now = new Date();
-        const endDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+        const endDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) + 1);
         const startDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 7));
         
         // 确保日期输入框使用正确的格式 (YYYY-MM-DD)

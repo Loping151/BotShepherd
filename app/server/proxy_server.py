@@ -7,25 +7,23 @@ import asyncio
 import websockets
 import json
 from datetime import datetime
-from typing import Dict, List, Any, Optional, Tuple
-from collections import defaultdict
-from pathlib import Path
+from typing import Dict, Any, Optional, Tuple
 
 from app.onebotv11.message_segment import MessageSegmentParser
 
-from ..onebotv11 import EventParser, MessageNormalizer, EventValidator
-from ..onebotv11.models import ApiResponse, Event, PrivateMessageEvent, GroupMessageEvent
+from ..onebotv11.models import ApiResponse, Event
 from ..commands import CommandHandler
 from .message_processor import MessageProcessor
 from ..utils.reboot import construct_reboot_message
 
 class ProxyServer:
     """WebSocket代理服务器"""
-    
-    def __init__(self, config_manager, database_manager, logger):
+
+    def __init__(self, config_manager, database_manager, logger, backup_manager=None):
         self.config_manager = config_manager
         self.database_manager = database_manager
         self.logger = logger
+        self.backup_manager = backup_manager
 
         # 连接管理
         self.active_connections = {}  # connection_id -> ProxyConnection
@@ -130,7 +128,8 @@ class ProxyServer:
                 client_ws=client_ws,
                 config_manager=self.config_manager,
                 database_manager=self.database_manager,
-                logger=self.logger
+                logger=self.logger,
+                backup_manager=self.backup_manager
             )
             
             # 保存活动连接
@@ -179,14 +178,15 @@ class ProxyServer:
 
 class ProxyConnection:
     """单个代理连接"""
-    
-    def __init__(self, connection_id, config, client_ws, config_manager, database_manager, logger):
+
+    def __init__(self, connection_id, config, client_ws, config_manager, database_manager, logger, backup_manager=None):
         self.connection_id = connection_id
         self.config = config
         self.client_ws = client_ws
         self.config_manager = config_manager
         self.database_manager = database_manager
         self.logger = logger
+        self.backup_manager = backup_manager
 
         self.target_connections = []
         self.echo_cache = {}
@@ -194,16 +194,16 @@ class ProxyConnection:
         self.client_headers = None
         self.first_message = None
         self.self_id: int | None = None
-        
+
         self.reconnect_locks = []  # 每个 target_index 一个 Lock
         for _ in self.config.get("target_endpoints", []):
             self.reconnect_locks.append(asyncio.Lock())
 
         # 初始化消息处理器
         self.message_processor = MessageProcessor(config_manager, database_manager, logger)
-        
+
         # 自身指令处理
-        self.command_handler = CommandHandler(config_manager, database_manager, logger)
+        self.command_handler = CommandHandler(config_manager, database_manager, logger, backup_manager)
         
     async def start_proxy(self):
         """启动代理"""
@@ -512,7 +512,7 @@ class ProxyConnection:
         }
 
         if echo in self.echo_cache:
-            self.logger.ws.warning(f"[{self.connection_id}] echo {echo} 已经存在，将被覆盖!可能由于单个账号连接多个相同框架！")
+            self.logger.ws.warning(f"[{self.connection_id}] echo {echo} 已经存在，将被覆盖!可能由于单个账号连接多个相同框架！如为此种情况不会导致错误")
         self.echo_cache[echo] = echo_info
         self.logger.ws.debug(f"[{self.connection_id}] 收到echo {echo}，缓存大小 {len(self.echo_cache)}")
 
@@ -558,7 +558,7 @@ class ProxyConnection:
         params = message_data.get("params", {})
         params.update({"self_id": self.self_id})
         if "sender" not in params:
-            params.update({"sender": {"user_id": self.self_id, "nickname": "BS Bot"}})
+            params.update({"sender": {"user_id": self.self_id, "nickname": "BS Bot Send"}})
         # 这个 message_sent 不是 napcat 那种修改的 Onebot，而是本框架数据库中的标识
         params.update({"post_type": "message_sent"})
         raw_message = MessageSegmentParser.message2raw_message(params.get("message", []))

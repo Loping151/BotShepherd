@@ -2,7 +2,6 @@ import os
 import sys
 import asyncio
 
-from app.onebotv11.models import ApiRequest
 from ..onebotv11.api_handler import ApiHandler
 
 REBOOT_RECORD = "data/.reboot"

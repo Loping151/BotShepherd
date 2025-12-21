@@ -27,65 +27,65 @@
     </div>
     <div class="card-body">
         <form id="queryForm">
-            <div class="row mb-3">
+            <div class="row g-2 mb-2">
                 <div class="col-md-4">
-                    <label for="selfId" class="form-label">机器人账号</label>
-                    <select class="form-select" id="selfId" name="self_id">
+                    <label for="selfId" class="form-label small text-muted">机器人账号</label>
+                    <select class="form-select form-select-sm" id="selfId" name="self_id">
                         <option value="">全部账号</option>
                     </select>
                 </div>
                 <div class="col-md-4">
-                    <label for="userId" class="form-label">用户ID</label>
-                    <input type="text" class="form-control" id="userId" name="user_id" placeholder="输入用户QQ号">
+                    <label for="userId" class="form-label small text-muted">用户ID</label>
+                    <input type="text" class="form-control form-control-sm" id="userId" name="user_id" placeholder="输入用户QQ号">
                 </div>
                 <div class="col-md-4">
-                    <label for="groupId" class="form-label">群组ID</label>
-                    <input type="text" class="form-control" id="groupId" name="group_id" placeholder="输入群号">
+                    <label for="groupId" class="form-label small text-muted">群组ID</label>
+                    <input type="text" class="form-control form-control-sm" id="groupId" name="group_id" placeholder="输入群号">
                 </div>
             </div>
             
-            <div class="row mb-3">
+            <div class="row g-2 mb-2">
                 <div class="col-md-6">
-                    <label for="startTime" class="form-label">开始时间</label>
-                    <input type="datetime-local" class="form-control" id="startTime" name="start_time">
+                    <label for="startTime" class="form-label small text-muted">开始时间</label>
+                    <input type="datetime-local" class="form-control form-control-sm" id="startTime" name="start_time">
                 </div>
                 <div class="col-md-6">
-                    <label for="endTime" class="form-label">结束时间</label>
-                    <input type="datetime-local" class="form-control" id="endTime" name="end_time">
+                    <label for="endTime" class="form-label small text-muted">结束时间</label>
+                    <input type="datetime-local" class="form-control form-control-sm" id="endTime" name="end_time">
                 </div>
             </div>
             
-            <div class="row mb-3">
+            <div class="row g-2 mb-2">
                 <div class="col-md-8">
-                    <label for="keywords" class="form-label">关键词</label>
-                    <input type="text" class="form-control" id="keywords" name="keywords" placeholder="多个关键词用逗号分隔">
-                    <div class="form-text">支持多个关键词搜索，用逗号分隔</div>
+                    <label for="keywords" class="form-label small text-muted">关键词</label>
+                    <input type="text" class="form-control form-control-sm" id="keywords" name="keywords" placeholder="多个关键词用逗号分隔">
+                    <div class="form-text small">支持多个关键词搜索，用逗号分隔</div>
                 </div>
                 <div class="col-md-4">
-                    <label for="keywordType" class="form-label">关键词匹配方式</label>
-                    <select class="form-select" id="keywordType" name="keyword_type">
+                    <label for="keywordType" class="form-label small text-muted">关键词匹配方式</label>
+                    <select class="form-select form-select-sm" id="keywordType" name="keyword_type">
                         <option value="and">全部匹配(AND)</option>
                         <option value="or">任一匹配(OR)</option>
                     </select>
                 </div>
             </div>
             
-            <div class="row mb-3">
+            <div class="row g-2 mb-2">
                 <div class="col-md-4">
-                    <label for="prefix" class="form-label">消息前缀</label>
-                    <input type="text" class="form-control" id="prefix" name="prefix" placeholder="如: bs, /">
+                    <label for="prefix" class="form-label small text-muted">消息前缀</label>
+                    <input type="text" class="form-control form-control-sm" id="prefix" name="prefix" placeholder="如: bs, /">
                 </div>
                 <div class="col-md-4">
-                    <label for="direction" class="form-label">消息方向</label>
-                    <select class="form-select" id="direction" name="direction">
+                    <label for="direction" class="form-label small text-muted">消息方向</label>
+                    <select class="form-select form-select-sm" id="direction" name="direction">
                         <option value="" cselected>全部方向</option>
                         <option value="SEND">发送</option>
                         <option value="RECV">接收</option>
                     </select>
                 </div>
                 <div class="col-md-4">
-                    <label for="limit" class="form-label">结果数量</label>
-                    <select class="form-select" id="limit" name="limit">
+                    <label for="limit" class="form-label small text-muted">结果数量</label>
+                    <select class="form-select form-select-sm" id="limit" name="limit">
                         <option value="20" selected>20条</option>
                         <option value="50">50条</option>
                         <option value="100">100条</option>
@@ -95,7 +95,7 @@
             
             <div class="row">
                 <div class="col-12">
-                    <button type="submit" class="btn btn-primary">
+                    <button type="submit" class="btn btn-primary btn-sm">
                         <i class="bi bi-search"></i>
                         查询消息
                     </button>

@@ -84,12 +84,32 @@
             <table class="table table-hover" id="groups-table">
                 <thead>
                     <tr>
-                        <th>群组ID</th>
+                        <th>
+                            <button class="btn btn-link btn-sm p-0 text-decoration-none sort-header" type="button" data-sort="group_id">
+                                群组ID <span class="sort-indicator"></span>
+                            </button>
+                        </th>
                         <th>描述</th>
-                        <th>最后发送时间</th>
-                        <th>过期时间</th>
-                        <th>过滤词</th>
-                        <th>状态</th>
+                        <th>
+                            <button class="btn btn-link btn-sm p-0 text-decoration-none sort-header" type="button" data-sort="last_message_time">
+                                最后发送时间 <span class="sort-indicator"></span>
+                            </button>
+                        </th>
+                        <th>
+                            <button class="btn btn-link btn-sm p-0 text-decoration-none sort-header" type="button" data-sort="expire_time">
+                                过期时间 <span class="sort-indicator"></span>
+                            </button>
+                        </th>
+                        <th>
+                            <button class="btn btn-link btn-sm p-0 text-decoration-none sort-header" type="button" data-sort="filter_count">
+                                过滤词 <span class="sort-indicator"></span>
+                            </button>
+                        </th>
+                        <th>
+                            <button class="btn btn-link btn-sm p-0 text-decoration-none sort-header" type="button" data-sort="enabled">
+                                状态 <span class="sort-indicator"></span>
+                            </button>
+                        </th>
                         <th>操作</th>
                     </tr>
                 </thead>
@@ -134,7 +154,7 @@
                     <div class="mb-3">
                         <label class="form-label">超级用户过滤词</label>
                         <div class="alert alert-info py-2">
-                            <small><i class="bi bi-info-circle"></i> 每行一个过滤词，不支持正则表达式。包含这些词的消息将被过滤，账号ID也可以作为过滤词，支持过滤某些群员。设为Bot的ID则该Bot不响应消息事件。支持+连接（and）和|连接（or），可实现某bot屏蔽某些消息</small>
+                            <small><i class="bi bi-info-circle"></i> 每行一个过滤词（行之间为and逻辑），非支持正则表达式。包含这些词的消息将被过滤，账号ID也可以作为过滤词，支持过滤某些群员。设为Bot的ID则该Bot不响应消息事件。每个过滤词支持 + 连接（and逻辑）或 | 连接（or逻辑），二选一，可实现精准控制某bot屏蔽某些消息，也可以直接填写Bot号以在某群禁用某Bot</small>
                         </div>
                         <div id="superuserFiltersList">
                             <div class="input-group mb-2">
@@ -154,7 +174,7 @@
                     <div class="mb-3">
                         <label class="form-label">管理员过滤词</label>
                         <div class="alert alert-info py-2">
-                            <small><i class="bi bi-info-circle"></i> 每行一个过滤词，不支持正则表达式。包含这些词的消息将被过滤，账号ID也可以作为过滤词，支持过滤某些群员。设为Bot的ID则该Bot不响应消息事件。支持 + 连接（and）和 | 连接（or），可实现某bot屏蔽某些消息</small>
+                            <small><i class="bi bi-info-circle"></i> 规则同上 </small>
                         </div>
                         <div id="adminFiltersList">
                             <div class="input-group mb-2">
@@ -233,10 +253,12 @@
 <script>
 let groups = {};
 let editingGroupId = null;
+let sortState = { key: 'group_id', dir: 'asc' };
 
 // 页面加载完成后初始化
 document.addEventListener('DOMContentLoaded', function() {
     loadGroups();
+    initSortHandlers();
     // setInterval(loadGroups, 30000); // 每30秒刷新
 });
 
@@ -277,7 +299,8 @@ function updateGroupTable() {
     const tbody = document.querySelector('#groups-table tbody');
     tbody.innerHTML = '';
 
-    Object.entries(groups).forEach(([groupId, group]) => {
+    const sortedEntries = getSortedGroupEntries();
+    sortedEntries.forEach(([groupId, group]) => {
         const row = document.createElement('tr');
 
         const statusBadge = group.enabled ?
@@ -308,6 +331,11 @@ function updateGroupTable() {
                     lastActiveTime = `${diffMinutes}分钟前`;
                 } else {
                     lastActiveTime = '刚刚';
+                }
+
+                // 添加bot_id信息
+                if (group.last_message_bot_id) {
+                    lastActiveTime += ` 由 <code class="text-primary">${group.last_message_bot_id}</code>`;
                 }
             } catch (e) {
                 lastActiveTime = '时间格式错误';
@@ -342,6 +370,9 @@ function updateGroupTable() {
 
         tbody.appendChild(row);
     });
+
+    updateSortIndicators();
+    filterGroupTable();
 }
 
 // 显示添加群组模态框
@@ -484,6 +515,92 @@ function resetAliasesList() {
             </button>
         </div>
     `;
+}
+
+function initSortHandlers() {
+    document.querySelectorAll('[data-sort]').forEach((element) => {
+        element.addEventListener('click', () => {
+            setSort(element.dataset.sort);
+        });
+    });
+    updateSortIndicators();
+}
+
+function defaultSortDir(key) {
+    return ['last_message_time', 'expire_time'].includes(key) ? 'desc' : 'asc';
+}
+
+function setSort(key) {
+    if (sortState.key === key) {
+        sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortState.key = key;
+        sortState.dir = defaultSortDir(key);
+    }
+    updateGroupTable();
+}
+
+function parseDateValue(value) {
+    const ts = Date.parse(value);
+    return Number.isNaN(ts) ? 0 : ts;
+}
+
+function getSortValue(groupId, group, key) {
+    if (key === 'group_id') {
+        const num = Number(groupId);
+        return Number.isFinite(num) ? num : String(groupId);
+    }
+    if (key === 'last_message_time') {
+        return group.last_message_time ? parseDateValue(group.last_message_time) : 0;
+    }
+    if (key === 'expire_time') {
+        if (!group.expire_time || group.expire_time === -1) {
+            return Number.MAX_SAFE_INTEGER;
+        }
+        return parseDateValue(group.expire_time);
+    }
+    if (key === 'filter_count') {
+        return (group.filters?.superuser_filters?.length || 0) + (group.filters?.admin_filters?.length || 0);
+    }
+    if (key === 'enabled') {
+        return group.enabled ? 1 : 0;
+    }
+    return 0;
+}
+
+function getSortedGroupEntries() {
+    const entries = Object.entries(groups);
+    const key = sortState.key;
+    entries.sort((a, b) => {
+        const [aId, aGroup] = a;
+        const [bId, bGroup] = b;
+        const aVal = getSortValue(aId, aGroup, key);
+        const bVal = getSortValue(bId, bGroup, key);
+        let result = 0;
+
+        if (typeof aVal === 'string' || typeof bVal === 'string') {
+            result = String(aVal).localeCompare(String(bVal), 'zh-CN', { numeric: true, sensitivity: 'base' });
+        } else {
+            result = aVal - bVal;
+        }
+
+        return sortState.dir === 'asc' ? result : -result;
+    });
+    return entries;
+}
+
+function updateSortIndicators() {
+    document.querySelectorAll('[data-sort]').forEach((element) => {
+        const indicator = element.querySelector('.sort-indicator');
+        if (!indicator) {
+            return;
+        }
+        if (element.dataset.sort === sortState.key) {
+            indicator.textContent = sortState.dir === 'asc' ? '^' : 'v';
+        } else {
+            indicator.textContent = '';
+        }
+    });
 }
 
 // 加载别名到表单
@@ -651,6 +768,7 @@ function showGroupDetail(groupId) {
                     <tr><td>描述</td><td>${group.description || '无'}</td></tr>
                     <tr><td>状态</td><td>${group.enabled ? '<span class="badge bg-success">启用</span>' : '<span class="badge bg-secondary">禁用</span>'}</td></tr>
                     <tr><td>过期时间</td><td>${expireTimeStr}</td></tr>
+                    <tr><td>最后发送Bot</td><td>${group.last_message_bot_id ? '<code>' + group.last_message_bot_id + '</code>' : '无'}</td></tr>
                 </table>
             </div>
             <div class="col-md-6">

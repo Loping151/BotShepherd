@@ -5,27 +5,38 @@
 
 import json
 import os
+import shutil
+import asyncio
+import signal
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Set
 from datetime import datetime, timedelta, timezone
 
 from .config_validator import ConfigValidator, ConfigTemplate
 
 class ConfigManager:
     """配置管理器"""
-    
+
     def __init__(self):
         self.config_dir = Path("config")
         self.connections_dir = self.config_dir / "connections"
         self.account_dir = self.config_dir / "account"
         self.group_dir = self.config_dir / "group"
-        
+
         # 配置缓存
         self._global_config = None
         self._connections_config = {}
         self._account_configs = {}
         self._group_configs = {}
-        
+
+        # 脏数据标记（只标记accounts和groups）
+        self._dirty_accounts: Set[str] = set()
+        self._dirty_groups: Set[str] = set()
+
+        # 定时保存任务
+        self._auto_save_task = None
+        self._is_running = False
+
         # 配置文件监控
         self._config_watcher = None
         # self._config_backup = None
@@ -52,13 +63,32 @@ class ConfigManager:
             elif level == "error":
                 print(f"ERROR: {message}")
 
+    def _backup_corrupted_config(self, config_file: Path) -> bool:
+        try:
+            backup_file = config_file.with_suffix('.json.old')
+
+            if backup_file.exists():
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                backup_file = config_file.with_suffix(f'.json.old.{timestamp}')
+
+            shutil.copy2(config_file, backup_file)
+            self.log(f"已备份损坏的配置文件: {config_file} -> {backup_file}", "warning")
+            return True
+        except Exception as e:
+            self.log(f"备份配置文件失败 {config_file}: {e}", "error")
+            return False
+
     async def initialize(self):
         """初始化配置管理器"""
         # 创建配置目录
         self._ensure_directories()
-        
+
         # 加载所有配置
         await self._load_all_configs()
+
+        # 启动定时保存任务
+        self._is_running = True
+        self._start_auto_save_task()
     
     def _ensure_directories(self):
         """确保配置目录存在"""
@@ -84,14 +114,18 @@ class ConfigManager:
     async def _load_global_config(self):
         """加载全局配置"""
         global_config_file = self.config_dir / "global_config.json"
-        
+
         if global_config_file.exists():
             try:
                 with open(global_config_file, 'r', encoding='utf-8') as f:
                     self._global_config = json.load(f)
             except Exception as e:
-                self.log(f"加载全局配置失败: {e}", "error")
+                self.log(f"加载全局配置失败: {e}", "warning")
+                # 备份损坏的配置文件
+                self._backup_corrupted_config(global_config_file)
+                # 按新建配置流程处理
                 self._global_config = ConfigTemplate.get_default_global_config()
+                await self._save_global_config()
         else:
             self._global_config = ConfigTemplate.get_default_global_config()
             await self._save_global_config()
@@ -99,10 +133,10 @@ class ConfigManager:
     async def _load_connections_config(self):
         """加载连接配置"""
         self._connections_config = {}
-        
+
         if not self.connections_dir.exists():
             return
-        
+
         for config_file in self.connections_dir.glob("*.json"):
             try:
                 with open(config_file, 'r', encoding='utf-8') as f:
@@ -110,15 +144,17 @@ class ConfigManager:
                     connection_id = config_file.stem
                     self._connections_config[connection_id] = config
             except Exception as e:
-                self.log(f"加载连接配置失败 {config_file}: {e}", "error")
+                self.log(f"加载连接配置失败 {config_file}: {e}", "warning")
+                # 备份损坏的配置文件
+                self._backup_corrupted_config(config_file)
     
     async def _load_account_configs(self):
         """加载账号配置"""
         self._account_configs = {}
-        
+
         if not self.account_dir.exists():
             return
-        
+
         for config_file in self.account_dir.glob("*.json"):
             try:
                 with open(config_file, 'r', encoding='utf-8') as f:
@@ -126,15 +162,17 @@ class ConfigManager:
                     account_id = config_file.stem
                     self._account_configs[account_id] = config
             except Exception as e:
-                self.log(f"加载账号配置失败 {config_file}: {e}", "error")
+                self.log(f"加载账号配置失败 {config_file}: {e}", "warning")
+                # 备份损坏的配置文件
+                self._backup_corrupted_config(config_file)
 
     async def _load_group_configs(self):
         """加载群组配置"""
         self._group_configs = {}
-        
+
         if not self.group_dir.exists():
             return
-        
+
         for config_file in self.group_dir.glob("*.json"):
             try:
                 with open(config_file, 'r', encoding='utf-8') as f:
@@ -142,13 +180,81 @@ class ConfigManager:
                     group_id = config_file.stem
                     self._group_configs[group_id] = config
             except Exception as e:
-                self.log(f"加载群组配置失败 {config_file}: {e}", "error")
+                self.log(f"加载群组配置失败 {config_file}: {e}", "warning")
+                # 备份损坏的配置文件
+                self._backup_corrupted_config(config_file)
 
     def config_exists(self) -> bool:
         """检查配置文件是否存在"""
         global_config_file = self.config_dir / "global_config.json"
         return global_config_file.exists()
-    
+
+    # 定时保存相关方法
+    def _start_auto_save_task(self):
+        """启动定时保存任务"""
+        interval = self._global_config.get("auto_save_interval", 10) * 60  # 转换为秒
+        if interval < 60:  # 最小1分钟
+            interval = 60
+
+        self._auto_save_task = asyncio.create_task(self._auto_save_loop(interval))
+        self.log(f"定时保存任务已启动，间隔: {interval // 60} 分钟")
+
+    async def _auto_save_loop(self, interval: int):
+        """定时保存循环"""
+        while self._is_running:
+            try:
+                await asyncio.sleep(interval)
+                if self._is_running:  # 再次检查，避免在sleep期间被停止
+                    await self.flush_dirty_configs()
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                self.log(f"定时保存失败: {e}", "error")
+
+    async def flush_dirty_configs(self):
+        """刷新所有脏数据到磁盘"""
+        dirty_count = 0
+
+        # 保存脏账号配置
+        for account_id in list(self._dirty_accounts):
+            try:
+                if account_id in self._account_configs:
+                    await self._save_account_config_immediate(account_id, self._account_configs[account_id])
+                    self._dirty_accounts.discard(account_id)
+                    dirty_count += 1
+            except Exception as e:
+                self.log(f"保存账号配置失败 {account_id}: {e}", "error")
+
+        # 保存脏群组配置
+        for group_id in list(self._dirty_groups):
+            try:
+                if group_id in self._group_configs:
+                    await self._save_group_config_immediate(group_id, self._group_configs[group_id])
+                    self._dirty_groups.discard(group_id)
+                    dirty_count += 1
+            except Exception as e:
+                self.log(f"保存群组配置失败 {group_id}: {e}", "error")
+
+        if dirty_count > 0:
+            self.log(f"已保存 {dirty_count} 个配置文件到磁盘")
+
+    async def shutdown(self):
+        """关闭配置管理器，保存所有配置"""
+        self.log("正在保存所有配置...")
+        self._is_running = False
+
+        # 取消定时保存任务
+        if self._auto_save_task:
+            self._auto_save_task.cancel()
+            try:
+                await self._auto_save_task
+            except asyncio.CancelledError:
+                pass
+
+        # 强制刷新所有脏数据
+        await self.flush_dirty_configs()
+        self.log("所有配置已保存")
+
     # 全局配置相关方法
     def get_global_config(self) -> Dict[str, Any]:
         """获取全局配置"""
@@ -242,9 +348,12 @@ class ConfigManager:
         return os.path.exists(self.account_dir / f"{account_id}.json")
     
     async def save_account_config(self, account_id: str, config: Dict[str, Any]):
-        """保存账号配置"""
+        """保存账号配置（标记为脏数据，延迟写入）"""
         self._account_configs[account_id] = config
-        
+        self._dirty_accounts.add(account_id)
+
+    async def _save_account_config_immediate(self, account_id: str, config: Dict[str, Any]):
+        """立即保存账号配置到磁盘"""
         config_file = self.account_dir / f"{account_id}.json"
         try:
             with open(str(config_file).replace(".json", "_tmp.json"), 'w', encoding='utf-8') as f:
@@ -349,14 +458,17 @@ class ConfigManager:
         return os.path.exists(f"config/group_configs/{group_id}.json")
     
     async def save_group_config(self, group_id: str, config: Dict[str, Any]):
-        """保存群组配置"""
+        """保存群组配置（标记为脏数据，延迟写入）"""
         # 验证配置
         is_valid, errors = self._validator.validate_group_config(config)
         if not is_valid:
             raise ValueError("群组配置验证失败: {}".format(', '.join(errors)))
 
         self._group_configs[group_id] = config
+        self._dirty_groups.add(group_id)
 
+    async def _save_group_config_immediate(self, group_id: str, config: Dict[str, Any]):
+        """立即保存群组配置到磁盘"""
         config_file = self.group_dir / f"{group_id}.json"
         try:
             with open(str(config_file).replace(".json", "_tmp.json"), 'w', encoding='utf-8') as f:
@@ -380,21 +492,23 @@ class ConfigManager:
         """获取所有群组配置"""
         return self._group_configs.copy()
 
-    async def update_group_last_message_time(self, group_id: str):
+    async def update_group_last_message_time(self, group_id: str, bot_id: str = None):
         """更新群组最后消息时间"""
         config = await self.get_group_config(group_id)
         if not config:
             raise ValueError("群组不存在")
 
-        # 更新最后消息时间
+        # 更新最后消息时间和bot_id
         config["last_message_time"] = datetime.now().isoformat()
+        if bot_id is not None:
+            config["last_message_bot_id"] = bot_id
         await self.save_group_config(group_id, config)
         
         
     async def get_recently_active_groups(self, hours: int = 24) -> List[Dict[str, Any]]:
         """获取最近活跃的群组"""
         cutoff_time = datetime.now() - timedelta(hours=hours)
-        
+
         active_groups = []
         for group_id, config in self._group_configs.items():
             last_message_time = config.get("last_message_time", "1970-01-01T00:00:00")
@@ -403,9 +517,10 @@ class ConfigManager:
             if datetime.fromisoformat(last_message_time) >= cutoff_time:
                 active_groups.append({
                     "group_id": group_id,
-                    "last_message_time": last_message_time
+                    "last_message_time": last_message_time,
+                    "last_message_bot_id": config.get("last_message_bot_id")
                 })
-        
+
         return active_groups
 
     async def set_group_expire_time(self, group_id: str, expire_days: int):
@@ -529,19 +644,25 @@ class ConfigManager:
         all_aliases = set()
         for alias_list in aliases.values():
             all_aliases.update(alias_list)
-        
+
+        trigger_prefix = self._global_config.get("trigger_prefix")
+        forbidden_prefix = trigger_prefix[0] if isinstance(trigger_prefix, str) and trigger_prefix else None
         alias_list = [a for a in alias_str.replace("，", ",").split(",") if a.strip()]
+        target_clean = target.strip() if isinstance(target, str) else target
+        if forbidden_prefix and target_clean and isinstance(target_clean, str) and target_clean[0] == forbidden_prefix:
+            raise ValueError(f"目标指令 {target_clean} 不能以 {forbidden_prefix} 开头")
         for alias in alias_list:
-            if alias in all_targets and alias != target:
-                raise ValueError(f"别名 {alias} 已作为原指令存在！")
-            if alias in all_aliases:
-                raise ValueError(f"别名 {alias} 已作为其他指令别名！")
+            alias_clean = alias.strip()
+            if alias_clean in all_targets and alias_clean != target:
+                raise ValueError(f"别名 {alias_clean} 已作为原指令存在！")
+            if alias_clean in all_aliases:
+                raise ValueError(f"别名 {alias_clean} 已作为其他指令别名！")
             if target not in aliases:
                 aliases[target] = []
-            if alias not in aliases[target]:
-                aliases[target].append(alias)
+            if alias_clean not in aliases[target]:
+                aliases[target].append(alias_clean)
             else:
-                raise ValueError(f"别名 {alias} 已作为 {target} 的别名！")
+                raise ValueError(f"别名 {alias_clean} 已作为 {target} 的别名！")
         return aliases
     
     async def _remove_alias(self, aliases: Dict[str, List[str]], alias: str, target: str):

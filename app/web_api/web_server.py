@@ -134,7 +134,14 @@ class WebServer:
             if not self._check_auth():
                 return redirect(url_for('login'))
             return render_template('settings.html')
-        
+
+        @self.app.route('/backups')
+        def backups():
+            """备份管理页面"""
+            if not self._check_auth():
+                return redirect(url_for('login'))
+            return render_template('backups.html')
+
         # API路由
         @self.app.route('/api/version')
         def api_version():
@@ -164,7 +171,16 @@ class WebServer:
                 return jsonify({'error': '未授权'}), 401
 
             try:
-                response = requests.get("https://raw.githubusercontent.com/Loping151/BotShepherd/main/app/__init__.py", timeout=3)
+                # 获取代理配置
+                global_config = self.config_manager.get_global_config()
+                proxy = global_config.get("proxy", "")
+                proxies = {"http": proxy, "https": proxy} if proxy else None
+
+                response = requests.get(
+                    "https://raw.githubusercontent.com/Loping151/BotShepherd/main/app/__init__.py",
+                    timeout=5,
+                    proxies=proxies
+                )
                 response.raise_for_status()
                 content = response.text
 
@@ -173,18 +189,80 @@ class WebServer:
                 author = re.search(r"__author__\s*=\s*['\"](.+?)['\"]", content)
                 description = re.search(r"__description__\s*=\s*['\"](.+?)['\"]", content)
 
+                remote_version = version.group(1) if version else None
+                from app import __version__, __author__, __description__
+
+                # 检查是否需要更新
+                needs_update = False
+                if remote_version and remote_version != __version__:
+                    needs_update = True
+
                 return jsonify({
-                    'version': version.group(1) if version else f'获取失败',
+                    'version': remote_version if remote_version else '获取失败',
                     'author': author.group(1) if author else 'unknown',
-                    'description': description.group(1) if description else 'unknown'
+                    'description': description.group(1) if description else 'unknown',
+                    'local_version': __version__,
+                    'needs_update': needs_update
                 })
             except Exception as e:
                 return jsonify({
-                    'version': f'访问Github失败',
+                    'version': '访问Github失败',
                     'author': 'unknown',
                     'description': 'unknown',
+                    'needs_update': False,
                     'error': str(e)
                 })
+
+        @self.app.route('/api/update', methods=['POST'])
+        def api_update():
+            """执行系统更新（git pull）"""
+            if not self._check_auth():
+                return jsonify({'error': '未授权'}), 401
+
+            try:
+                import subprocess
+                import os
+
+                # 获取项目根目录
+                project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+                # 执行 git pull
+                result = subprocess.run(
+                    ['git', 'pull'],
+                    cwd=project_root,
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+
+                if result.returncode == 0:
+                    return jsonify({
+                        'success': True,
+                        'message': '更新成功，请重启系统以应用更新',
+                        'output': result.stdout
+                    })
+                else:
+                    return jsonify({
+                        'success': False,
+                        'message': '更新失败',
+                        'error': result.stderr
+                    }), 500
+
+            except subprocess.TimeoutExpired:
+                return jsonify({
+                    'success': False,
+                    'message': '更新超时'
+                }), 500
+            except FileNotFoundError:
+                return jsonify({
+                    'success': False,
+                    'message': 'Git未安装或不在PATH中'
+                }), 500
+            except Exception as e:
+                return jsonify({
+                    'success': False,
+                    'message': f'更新失败: {str(e)}'
+                }), 500
 
         @self.app.route('/api/status')
         def api_status():
@@ -942,7 +1020,8 @@ class WebServer:
                 return jsonify({'error': '未授权'}), 401
 
             try:
-                # 重新加载账号配置以获取最新数据
+                # 先落盘脏数据，再重新加载账号配置以获取最新数据
+                asyncio.run(self.config_manager.flush_dirty_configs())
                 asyncio.run(self.config_manager._load_account_configs())
                 accounts = self.config_manager.get_all_account_configs()
                 return jsonify(accounts)
@@ -970,6 +1049,7 @@ class WebServer:
                 asyncio.run(
                     self.config_manager.save_account_config(account_id, original_config)
                 )
+                asyncio.run(self.config_manager.flush_dirty_configs())
                 return jsonify({'success': True})
             except ValueError as e:
                 self.logger.web.warning(f"账号配置验证失败: {e}")
@@ -1005,10 +1085,23 @@ class WebServer:
                 return jsonify({'error': '未授权'}), 401
 
             try:
-                # 重新加载群组配置以获取最新数据
+                # 先落盘脏数据，再重新加载群组配置以获取最新数据
+                asyncio.run(self.config_manager.flush_dirty_configs())
                 asyncio.run(self.config_manager._load_group_configs())
                 groups = self.config_manager.get_all_group_configs()
                 return jsonify(groups)
+            except Exception as e:
+                return jsonify({'error': str(e)}), 500
+
+        @self.app.route('/api/config/flush', methods=['POST'])
+        def api_flush_config():
+            """立即将内存中的脏配置写入磁盘"""
+            if not self._check_auth():
+                return jsonify({'error': '未授权'}), 401
+
+            try:
+                asyncio.run(self.config_manager.flush_dirty_configs())
+                return jsonify({'success': True})
             except Exception as e:
                 return jsonify({'error': str(e)}), 500
 
@@ -1032,6 +1125,7 @@ class WebServer:
                 asyncio.run(
                     self.config_manager.save_group_config(group_id, original_config)
                 )
+                asyncio.run(self.config_manager.flush_dirty_configs())
                 return jsonify({'success': True})
             except ValueError as e:
                 self.logger.web.warning(f"群组配置验证失败: {e}")
@@ -1176,7 +1270,107 @@ class WebServer:
             except Exception as e:
                 self.logger.web.error(f"移除黑名单失败: {e}")
                 return jsonify({'error': f'移除黑名单失败: {str(e)}'}), 500
-    
+
+        @self.app.route('/api/backups')
+        def api_list_backups():
+            """列出所有备份文件"""
+            if not self._check_auth():
+                return jsonify({'error': '未授权'}), 401
+
+            try:
+                backup_manager = self.proxy_server.backup_manager
+                if not backup_manager:
+                    return jsonify({'error': '备份管理器未初始化'}), 500
+
+                backups = backup_manager.list_backups()
+                return jsonify({'backups': backups})
+            except Exception as e:
+                self.logger.web.error(f"列出备份失败: {e}")
+                return jsonify({'error': f'列出备份失败: {str(e)}'}), 500
+
+        @self.app.route('/api/backups/<filename>')
+        def api_download_backup(filename):
+            """下载备份文件"""
+            if not self._check_auth():
+                return jsonify({'error': '未授权'}), 401
+
+            try:
+                backup_manager = self.proxy_server.backup_manager
+                if not backup_manager:
+                    return jsonify({'error': '备份管理器未初始化'}), 500
+
+                # 获取备份文件路径
+                backup_path = backup_manager.get_backup_path(filename)
+                if not backup_path:
+                    return jsonify({'error': '备份文件不存在'}), 404
+
+                # 发送文件
+                from flask import send_file
+                return send_file(backup_path, as_attachment=True, download_name=filename)
+            except Exception as e:
+                self.logger.web.error(f"下载备份失败: {e}")
+                return jsonify({'error': f'下载备份失败: {str(e)}'}), 500
+
+        @self.app.route('/api/backups', methods=['POST'])
+        def api_create_backup():
+            """创建新备份"""
+            if not self._check_auth():
+                return jsonify({'error': '未授权'}), 401
+
+            try:
+                backup_manager = self.proxy_server.backup_manager
+                if not backup_manager:
+                    return jsonify({'error': '备份管理器未初始化'}), 500
+
+                # 获取密码
+                global_config = self.config_manager.get_global_config()
+                web_auth = global_config.get("web_auth", {})
+                password = web_auth.get("password", "admin")
+
+                # 创建备份
+                backup_path = backup_manager.create_backup(password)
+                if not backup_path:
+                    return jsonify({'error': '备份创建失败'}), 500
+
+                # 获取文件信息
+                import os
+                filename = os.path.basename(backup_path)
+                file_size = os.path.getsize(backup_path)
+
+                return jsonify({
+                    'success': True,
+                    'filename': filename,
+                    'size': file_size
+                })
+            except Exception as e:
+                self.logger.web.error(f"创建备份失败: {e}")
+                return jsonify({'error': f'创建备份失败: {str(e)}'}), 500
+
+        @self.app.route('/api/backups/<filename>', methods=['DELETE'])
+        def api_delete_backup(filename):
+            """删除备份文件"""
+            if not self._check_auth():
+                return jsonify({'error': '未授权'}), 401
+
+            try:
+                backup_manager = self.proxy_server.backup_manager
+                if not backup_manager:
+                    return jsonify({'error': '备份管理器未初始化'}), 500
+
+                # 获取备份文件路径
+                backup_path = backup_manager.get_backup_path(filename)
+                if not backup_path:
+                    return jsonify({'error': '备份文件不存在'}), 404
+
+                # 删除文件
+                import os
+                os.remove(backup_path)
+
+                return jsonify({'success': True})
+            except Exception as e:
+                self.logger.web.error(f"删除备份失败: {e}")
+                return jsonify({'error': f'删除备份失败: {str(e)}'}), 500
+
     def _check_auth(self) -> bool:
         """检查认证状态"""
         return session.get('authenticated', False)

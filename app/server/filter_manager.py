@@ -4,12 +4,10 @@
 """
 
 import re
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Tuple
 from enum import Enum
 
-from ..onebotv11.models import ApiRequest, Event, MessageEvent, MessageSegmentType, PrivateMessageEvent, GroupMessageEvent
-from ..onebotv11.message_segment import MessageSegmentParser
-from ..commands.permission_manager import PermissionManager, PermissionLevel
+from ..onebotv11.models import ApiRequest, Event, MessageEvent, MessageSegmentType, GroupMessageEvent, NoticeEvent
 
 class FilterAction(Enum):
     """过滤动作"""
@@ -45,10 +43,10 @@ class FilterManager:
                     return True
                 
                 # 检查群组过滤词
-                if isinstance(event, GroupMessageEvent):
-                    filtered = await self._apply_group_filters(event, message_data)
-                    if filtered:
-                        return True
+            if isinstance(event, GroupMessageEvent) or isinstance(event, NoticeEvent):
+                filtered = await self._apply_group_filters(event, message_data)
+                if filtered:
+                    return True
             
             return False
             
@@ -171,26 +169,28 @@ class FilterManager:
                         
         return message_data
     
-    async def _apply_group_filters(self, event: GroupMessageEvent, 
+    async def _apply_group_filters(self, event: GroupMessageEvent | NoticeEvent, 
                                  message_data: Dict[str, Any]) -> bool:
-        """应用群组过滤词，具有额外规则：可以设为QQ号，实现群内机器人的开关或不响应单个群员"""
+        """应用群组过滤词，具有额外规则：可以设为ID，实现群内机器人的开关或不响应单个群员"""
         global_config = self.config_manager.get_global_config()
-        group_config = await self.config_manager.get_group_config(str(event.group_id))
-        if not group_config:
-            return False
         
-        filters = group_config.get("filters", {})
-        if not filters:
-            return False
-        
-        # 提取消息文本
-        message_text = self._extract_message_text(message_data)
-        if not message_text:
+        if hasattr(event, "group_id"):
+            group_config = await self.config_manager.get_group_config(str(event.group_id))
+            if not group_config:
+                return False
+            filters = group_config.get("filters", {})
+            if not filters:
+                return False
+        else:
+            # Not a group event
             return False
         
         self_id = str(event.self_id)
-        user_id = str(event.user_id)
-        message_text = message_text + self_id + user_id
+        user_id = str(event.user_id) if hasattr(event, "user_id") else ""
+        
+        # 提取消息文本
+        message_text = self._extract_message_text(message_data) if isinstance(event, MessageEvent) else ""
+        message_text = message_text + self_id + user_id # NoticeEvent时只检查账号过滤
                         
         if message_text.startswith(global_config.get("command_prefix")):
             return False

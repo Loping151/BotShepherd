@@ -15,12 +15,13 @@ from .base_command import BaseCommand, CommandResponse, CommandResult, command_r
 
 class CommandHandler:
     """指令处理器"""
-    
-    def __init__(self, config_manager, database_manager, logger):
+
+    def __init__(self, config_manager, database_manager, logger, backup_manager=None):
         self.config_manager = config_manager
         self.database_manager = database_manager
         self.permission_manager = PermissionManager(config_manager, logger)
         self.logger = logger
+        self.backup_manager = backup_manager
         
         
     async def preprocesser(self, message_data: dict) -> dict:
@@ -178,6 +179,7 @@ class CommandHandler:
                 "database_manager": self.database_manager,
                 "permission_manager": self.permission_manager,
                 "logger": self.logger,
+                "backup_manager": self.backup_manager,
                 "command_info": command_info,
                 "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
             }

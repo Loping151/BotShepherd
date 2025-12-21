@@ -238,6 +238,7 @@ BotShepherd Web API 提供了完整的系统管理功能，包括连接管理、
     "success": true
   }
   ```
+- **备注**: 更新后会立即将脏数据写入磁盘
 
 ### 删除账号配置
 - **URL**: `/api/accounts/{account_id}`
@@ -303,6 +304,7 @@ BotShepherd Web API 提供了完整的系统管理功能，包括连接管理、
     "success": true
   }
   ```
+- **备注**: 更新后会立即将脏数据写入磁盘
 
 ### 删除群组配置
 - **URL**: `/api/groups/{group_id}`
@@ -367,6 +369,21 @@ BotShepherd Web API 提供了完整的系统管理功能，包括连接管理、
     }
   }
   ```
+- **响应**:
+  ```json
+  {
+    "success": true
+  }
+  ```
+
+---
+
+## 配置写盘API
+
+### 手动刷盘
+- **URL**: `/api/config/flush`
+- **方法**: POST
+- **描述**: 立即将账号/群组的脏配置写入磁盘
 - **响应**:
   ```json
   {
@@ -626,3 +643,24 @@ BotShepherd Web API 提供了完整的系统管理功能，包括连接管理、
 4. **文件安全**: 日志文件访问有路径遍历保护
 5. **数据格式**: 时间戳使用Unix时间戳格式
 6. **编码**: 所有文本数据使用UTF-8编码
+
+---
+
+## 配置读写规则（内存 vs 文件）
+
+### 读盘会覆盖内存
+- `/api/accounts`：先写盘，再从文件重载账号配置，覆盖内存
+- `/api/groups`：先写盘，再从文件重载群组配置，覆盖内存
+- `/api/connections`：直接从文件重载连接配置，覆盖内存
+- `/api/blacklist`：从文件重载全局配置（仅黑名单相关）
+
+### 写盘与内存关系
+- `/api/accounts/{account_id}`：先更新内存，再立即写盘
+- `/api/groups/{group_id}`：先更新内存，再立即写盘
+- `/api/config/flush`：仅写盘（账号/群组脏数据），不重载
+- `/api/global-config`：更新内存并立即写盘
+- `/api/connections/{connection_id}`：更新内存并立即写盘
+
+### 说明
+- 账号/群组配置使用“脏数据”机制，内存更新后可通过定时保存或 `/api/config/flush` 落盘
+- 连接/全局配置不使用脏数据机制，修改即写盘

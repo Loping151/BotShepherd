@@ -138,6 +138,7 @@ class ReloadCommand(BaseCommand):
         """执行重载指令"""
         try:
             config_manager = context["config_manager"]
+            await config_manager.flush_dirty_configs()
             await config_manager._load_all_configs()
             return self.format_success("已重载配置文件")
         except Exception as e:

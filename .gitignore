@@ -7,3 +7,5 @@ devnote.md
 *.png
 *.jpg
 venv
+*.zip
+!data/test.png

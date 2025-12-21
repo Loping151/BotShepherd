@@ -18,29 +18,32 @@ from pathlib import Path
 # 添加项目根目录到Python路径
 sys.path.insert(0, str(Path(__file__).parent))
 
+# 导入依赖安装工具（这个不依赖其他模块）
+from app.utils.dependency_installer import try_import_with_install
+
 def import_app_modules():
     from app.config.config_manager import ConfigManager
     from app.database.database_manager import DatabaseManager
     from app.server.proxy_server import ProxyServer
     from app.web_api.web_server import WebServer
     from app.utils.logger import BSLogger
+    from app.utils.backup_manager import BackupManager
     from app.commands import initialize_builtin_commands, load_plugins
     from app import __version__, __github__, __description__
     globals().update(locals())
 
-try:
-    import_app_modules()
-    print("✅ 导入模块成功")
-    import_err = None
-except ImportError as e:
-    print(f"❌ 导入模块失败: {e}")
+# 尝试导入模块，失败时自动安装依赖
+success, import_err = try_import_with_install(import_app_modules)
+if not success and import_err:
     print("请先运行初始化命令: python main.py --setup")
     print("如已指定 --setup 请忽略")
     if sys.platform == "win32":
         print("如已经完成初始化，请使用 ./venv/Scripts/python.exe main.py")
     else:
         print("如已经完成初始化，请使用 ./venv/bin/python main.py")
-    import_err = e
+    sys.exit(1)
+    
+import_app_modules()
 
 class BotShepherd:
     """BotShepherd主应用类"""
@@ -50,10 +53,12 @@ class BotShepherd:
         self.database_manager = None
         self.proxy_server = None
         self.web_server = None
+        self.backup_manager = None
         self.logger = None
         self.running = False
         self.shutdown_event = None
         self._shutdown_in_progress = False
+        self._backup_task = None
         
     async def initialize(self):
         """初始化系统组件"""
@@ -76,13 +81,20 @@ class BotShepherd:
             self.database_manager = DatabaseManager(self.config_manager)
             await self.database_manager.initialize()
 
+            # 初始化备份管理器
+            self.backup_manager = BackupManager(
+                config_dir="./config",
+                backup_dir="./config/backup"
+            )
+
             # 初始化WebSocket代理服务器
             self.proxy_server = ProxyServer(
                 config_manager=self.config_manager,
                 database_manager=self.database_manager,
-                logger=self.logger
+                logger=self.logger,
+                backup_manager=self.backup_manager
             )
-            
+
             # 初始化指令系统
             initialize_builtin_commands(self.logger)
             load_plugins(self.logger)
@@ -108,7 +120,63 @@ class BotShepherd:
             else:
                 print(f"系统初始化失败: {e}")
             return False
-    
+
+    async def _daily_backup_task(self):
+        """每日备份任务"""
+        from datetime import datetime, time
+
+        while self.running:
+            try:
+                # 获取备份配置
+                global_config = self.config_manager.get_global_config()
+                backup_config = global_config.get("backup", {})
+
+                if not backup_config.get("enabled", True):
+                    # 如果备份未启用，等待一小时后再检查
+                    await asyncio.sleep(3600)
+                    continue
+
+                # 计算到明天凌晨3点的等待时间
+                now = datetime.now()
+                target_time = datetime.combine(now.date(), time(hour=3, minute=0))
+
+                # 如果已经过了今天的3点，设置为明天的3点
+                if now.time() > time(hour=3, minute=0):
+                    target_time = datetime.combine(now.date(), time(hour=3, minute=0))
+                    target_time = target_time.replace(day=target_time.day + 1)
+
+                wait_seconds = (target_time - now).total_seconds()
+
+                self.logger.info(f"下次备份时间: {target_time.strftime('%Y-%m-%d %H:%M:%S')}")
+
+                # 等待到备份时间
+                await asyncio.sleep(wait_seconds)
+
+                if not self.running:
+                    break
+
+                # 执行备份
+                self.logger.info("开始执行每日配置备份...")
+                web_auth = global_config.get("web_auth", {})
+                password = web_auth.get("password", "admin")
+
+                backup_path = self.backup_manager.create_backup(password)
+                if backup_path:
+                    self.logger.info(f"备份成功: {backup_path}")
+
+                    # 清理过期备份
+                    keep_days = backup_config.get("keep_days", 7)
+                    self.backup_manager.clean_old_backups(keep_days)
+                else:
+                    self.logger.error("备份失败")
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                self.logger.error(f"备份任务出错: {e}")
+                # 出错后等待一小时再重试
+                await asyncio.sleep(3600)
+
     async def start(self):
         """启动所有服务"""
         if not await self.initialize():
@@ -118,17 +186,39 @@ class BotShepherd:
             self.running = True
             self.logger.info("启动BotShepherd服务...")
 
+            # 启动时立即创建一次固定命名备份（覆盖旧文件）
+            if self.backup_manager:
+                global_config = self.config_manager.get_global_config()
+                web_auth = global_config.get("web_auth", {})
+                password = web_auth.get("password", "admin")
+                startup_backup_path = self.backup_manager.create_startup_backup(password)
+                if startup_backup_path:
+                    self.logger.info(f"启动备份成功: {startup_backup_path}")
+                else:
+                    self.logger.error("启动备份失败")
+
             # 启动Web服务器
             web_task = asyncio.create_task(self.web_server.start())
 
             # 启动WebSocket代理服务器
             proxy_task = asyncio.create_task(self.proxy_server.start())
 
+            # 启动每日备份任务
+            global_config = self.config_manager.get_global_config()
+            backup_config = global_config.get("backup", {})
+            if backup_config.get("enabled", True):
+                self._backup_task = asyncio.create_task(self._daily_backup_task())
+                self.logger.info("每日备份任务已启动")
+
             self.logger.info("BotShepherd启动完成")
 
             # 等待关闭信号或服务异常
+            tasks_to_wait = [web_task, proxy_task, asyncio.create_task(self.shutdown_event.wait())]
+            if self._backup_task:
+                tasks_to_wait.append(self._backup_task)
+
             done, pending = await asyncio.wait(
-                [web_task, proxy_task, asyncio.create_task(self.shutdown_event.wait())],
+                tasks_to_wait,
                 return_when=asyncio.FIRST_COMPLETED
             )
 
@@ -176,6 +266,15 @@ class BotShepherd:
             if self.shutdown_event:
                 self.shutdown_event.set()
 
+            # 停止备份任务
+            if self._backup_task:
+                self._backup_task.cancel()
+                try:
+                    await self._backup_task
+                except asyncio.CancelledError:
+                    pass
+                print("备份任务已停止")
+
             # 停止各个服务
             if self.proxy_server:
                 await self.proxy_server.stop()
@@ -184,6 +283,11 @@ class BotShepherd:
             if self.web_server:
                 await self.web_server.stop()
             print("Web服务器已停止")
+
+            # 保存所有配置
+            if self.config_manager:
+                await self.config_manager.shutdown()
+            print("配置已保存")
 
             if self.database_manager:
                 await self.database_manager.close()
