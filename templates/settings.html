@@ -27,15 +27,21 @@
                     <input type="text" class="form-control" id="commandPrefix" value="bs">
                     <div class="form-text">用于触发命令的前缀</div>
                 </div>
-                
+
                 <div class="mb-3">
                     <label for="superusers" class="form-label">超级用户</label>
-                    <textarea class="form-control" id="superusers" rows="3" 
-                              placeholder="每行一个QQ号"></textarea>
-                    <div class="form-text">拥有最高权限的用户QQ号，每行一个</div>
+                    <textarea class="form-control" id="superusers" rows="3"
+                              placeholder="每行一个账号"></textarea>
+                    <div class="form-text">拥有最高权限的用户账号，每行一个</div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="autoSaveInterval" class="form-label">自动保存间隔（分钟）</label>
+                    <input type="number" class="form-control" id="autoSaveInterval" value="10" min="1">
+                    <div class="form-text">配置文件自动保存到磁盘的间隔时间，最小1分钟</div>
                 </div>
             </div>
-            
+
             <div class="col-md-6">
                 <div class="mb-3">
                     <div class="form-check">
@@ -45,7 +51,7 @@
                         </label>
                     </div>
                 </div>
-                
+
                 <div class="mb-3">
                     <div class="form-check">
                         <input class="form-check-input" type="checkbox" id="privateFriendOnly">
@@ -54,61 +60,68 @@
                         </label>
                     </div>
                 </div>
+
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="normalizationEnabled">
+                        <label class="form-check-label" for="normalizationEnabled">
+                            启用消息规范化
+                        </label>
+                        <div class="form-text">对消息进行格式规范化处理</div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="normalizeNapcatSent">
+                        <label class="form-check-label" for="normalizeNapcatSent">
+                            规范化NapCat发送消息
+                        </label>
+                        <div class="form-text">对NapCat发送的消息进行规范化，将message_sent类型重新转为message类型，可使得自身上报兼容如Nonebot等框架</div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="proxy" class="form-label">代理地址</label>
+                    <input type="text" class="form-control" id="proxy" placeholder="http://127.0.0.1:7890">
+                    <div class="form-text">用于访问GitHub检查更新，格式如 http://127.0.0.1:7890，留空则不使用代理</div>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- 数据库设置 -->
+<!-- 数据库与日志设置 -->
 <div class="card mb-4">
     <div class="card-header">
         <h5 class="mb-0">
             <i class="bi bi-database"></i>
-            数据库设置
+            数据库与日志设置
             <span class="badge bg-warning ms-2">需要重启</span>
         </h5>
     </div>
     <div class="card-body">
         <div class="alert alert-warning" role="alert">
             <i class="bi bi-exclamation-triangle"></i>
-            <strong>注意：</strong>数据库设置修改后需要重启系统才能生效！数据库仅记录纯文本消息，但聊天记录量本身较大时，请留意短期数据库大小后再决定保留天数！
+            <strong>注意：</strong>这些设置修改后需要重启系统才能生效！数据库仅记录纯文本消息，但聊天记录量本身较大时，请留意短期数据库大小后再决定保留天数！
         </div>
         <div class="row">
             <div class="col-md-6">
+                <h6 class="mb-3"><i class="bi bi-database"></i> 数据库设置</h6>
                 <div class="mb-3">
                     <label for="dataPath" class="form-label">数据存储路径</label>
                     <input type="text" class="form-control" id="dataPath" value="./data">
                     <div class="form-text">数据库文件存储路径</div>
                 </div>
-            </div>
-
-            <div class="col-md-6">
                 <div class="mb-3">
                     <label for="autoExpireDays" class="form-label">自动过期天数，如数据库过大可改小</label>
                     <input type="number" class="form-control" id="autoExpireDays" value="30" min="1">
                     <div class="form-text">消息数据自动清理的天数</div>
                 </div>
             </div>
-        </div>
-    </div>
-</div>
 
-<!-- 日志设置 -->
-<div class="card mb-4">
-    <div class="card-header">
-        <h5 class="mb-0">
-            <i class="bi bi-file-text"></i>
-            日志设置
-            <span class="badge bg-warning ms-2">需要重启</span>
-        </h5>
-    </div>
-    <div class="card-body">
-        <div class="alert alert-warning" role="alert">
-            <i class="bi bi-exclamation-triangle"></i>
-            <strong>注意：</strong>日志设置修改后需要重启系统才能生效。
-        </div>
-        <div class="row">
-            <div class="col-md-4">
+            <div class="col-md-6">
+                <h6 class="mb-3"><i class="bi bi-file-text"></i> 日志设置</h6>
                 <div class="mb-3">
                     <label for="logLevel" class="form-label">日志级别</label>
                     <select class="form-select" id="logLevel">
@@ -118,19 +131,13 @@
                         <option value="ERROR">ERROR</option>
                     </select>
                 </div>
-            </div>
-
-            <div class="col-md-4">
                 <div class="mb-3">
                     <label for="keepDays" class="form-label">保留天数，如消息量过多可改小</label>
                     <input type="number" class="form-control" id="keepDays" value="7" min="1">
                     <div class="form-text">日志文件保留天数</div>
                 </div>
-            </div>
-
-            <div class="col-md-4">
                 <div class="mb-3">
-                    <div class="form-check mt-4">
+                    <div class="form-check">
                         <input class="form-check-input" type="checkbox" id="fileRotation">
                         <label class="form-check-label" for="fileRotation">
                             启用日志轮转
@@ -142,118 +149,37 @@
     </div>
 </div>
 
-<!-- 消息规范化设置 -->
-<div class="card mb-4">
-    <div class="card-header">
-        <h5 class="mb-0">
-            <i class="bi bi-arrow-repeat"></i>
-            消息规范化设置
-        </h5>
-    </div>
-    <div class="card-body">
-        <div class="row">
-            <div class="col-md-6">
-                <div class="mb-3">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="normalizationEnabled">
-                        <label class="form-check-label" for="normalizationEnabled">
-                            启用消息规范化
-                        </label>
-                        <div class="form-text">对消息进行格式规范化处理</div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="col-md-6">
-                <div class="mb-3">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="normalizeNapcatSent">
-                        <label class="form-check-label" for="normalizeNapcatSent">
-                            规范化NapCat发送消息
-                        </label>
-                        <div class="form-text">对NapCat发送的消息进行规范化，将message_sent类型重新转为message类型，可使得自身上报兼容如Nonebot等框架</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- 高级设置 -->
-<div class="card mb-4">
-    <div class="card-header">
-        <h5 class="mb-0">
-            <i class="bi bi-gear-fill"></i>
-            高级设置
-        </h5>
-    </div>
-    <div class="card-body">
-        <div class="row">
-            <div class="col-md-6">
-                <div class="mb-3">
-                    <label for="autoSaveInterval" class="form-label">自动保存间隔（分钟）</label>
-                    <input type="number" class="form-control" id="autoSaveInterval" value="10" min="1">
-                    <div class="form-text">配置文件自动保存到磁盘的间隔时间，最小1分钟</div>
-                </div>
-            </div>
-
-            <div class="col-md-6">
-                <div class="mb-3">
-                    <label for="proxy" class="form-label">代理地址</label>
-                    <input type="text" class="form-control" id="proxy" placeholder="http://127.0.0.1:7890">
-                    <div class="form-text">用于访问GitHub检查更新，格式如 http://127.0.0.1:7890，留空则不使用代理</div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Web认证设置 -->
+<!-- Web认证与备份设置 -->
 <div class="card mb-4">
     <div class="card-header">
         <h5 class="mb-0">
             <i class="bi bi-shield-lock"></i>
-            Web认证设置
+            Web认证与备份设置
         </h5>
     </div>
     <div class="card-body">
         <div class="row">
             <div class="col-md-6">
+                <h6 class="mb-3"><i class="bi bi-shield-lock"></i> Web认证设置</h6>
                 <div class="mb-3">
                     <label for="webUsername" class="form-label">用户名</label>
                     <input type="text" class="form-control" id="webUsername" value="admin">
                 </div>
-            </div>
-            
-            <div class="col-md-6">
                 <div class="mb-3">
                     <label for="webPassword" class="form-label">密码</label>
                     <input type="password" class="form-control" id="webPassword" value="admin">
                 </div>
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    请及时修改默认的用户名和密码以确保安全
+                </div>
             </div>
-        </div>
-        <div class="alert alert-warning">
-            <i class="bi bi-exclamation-triangle"></i>
-            请及时修改默认的用户名和密码以确保安全
-        </div>
-    </div>
-</div>
 
-<!-- 备份设置 -->
-<div class="card mb-4">
-    <div class="card-header">
-        <h5 class="mb-0">
-            <i class="bi bi-archive"></i>
-            备份设置
-        </h5>
-    </div>
-    <div class="card-body">
-        <div class="alert alert-info">
-            <i class="bi bi-info-circle"></i>
-            系统每天凌晨 3 点自动备份配置文件，备份文件使用 Web 登录密码加密
-        </div>
-        <div class="row">
             <div class="col-md-6">
+                <h6 class="mb-3"><i class="bi bi-archive"></i> 备份设置</h6>
+                <div class="alert alert-info py-2">
+                    <small><i class="bi bi-info-circle"></i> 系统每天凌晨 3 点自动备份配置文件，备份文件使用 Web 登录密码加密</small>
+                </div>
                 <div class="mb-3">
                     <div class="form-check">
                         <input class="form-check-input" type="checkbox" id="backupEnabled" checked>
@@ -263,9 +189,6 @@
                         <div class="form-text">每天凌晨 3 点自动备份配置文件</div>
                     </div>
                 </div>
-            </div>
-
-            <div class="col-md-6">
                 <div class="mb-3">
                     <label for="backupKeepDays" class="form-label">备份保留天数</label>
                     <input type="number" class="form-control" id="backupKeepDays" value="7" min="1">

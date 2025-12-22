@@ -31,7 +31,7 @@ class SumCommand(BaseCommand):
         super()._setup_parser()
         self.parser.add_argument("-d", "--date", type=str, help="指定日期，如 昨天, 2024-06-01，默认今天")
         self.parser.add_argument("-g", "--group", type=str, help="可跟群号，传入all时按群统计，可填写“本群”")
-        self.parser.add_argument("-u", "--user", type=str, help="指定用户QQ号")
+        self.parser.add_argument("-u", "--user", type=str, help="指定用户账号")
         self.parser.add_argument("-c", "--command", type=str, help="指定指令前缀")
         self.parser.add_argument("-k", "--keyword", type=str, help="指定关键词，+隔开为and查询，|隔开为or查询")
         self.parser.add_argument("-t", "--type", type=str, help="消息方向，send/recv/all，默认为send")
@@ -371,7 +371,7 @@ class QueryCommand(BaseCommand):
         """设置参数解析器"""
         super()._setup_parser()
         self.parser.add_argument("-g", "--group", type=str, help="指定群号")
-        self.parser.add_argument("-u", "--user", type=str, help="指定用户QQ号")
+        self.parser.add_argument("-u", "--user", type=str, help="指定用户账号")
         self.parser.add_argument("-c", "--command", type=str, help="指定指令前缀")
         self.parser.add_argument("-k", "--keyword", type=str, help="指定关键词，+隔开为and查询，|隔开为or查询")
         self.parser.add_argument("-t", "--type", type=str, help="消息方向，send/recv/all，默认为all")

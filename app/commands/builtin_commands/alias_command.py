@@ -15,7 +15,7 @@ class AliasCommand(BaseCommand):
         super().__init__()
         self.name = "别名"
         self.description = "管理群组、账号或全局的指令别名"
-        self.usage = "别名 [add/remove/list] [类型] [别名] [目标指令名] [群号/QQ号]"
+        self.usage = "别名 [add/remove/list] [类型] [别名] [目标指令名] [群号/账号]"
         self.example = """
     别名 添加 # yunzai，# echo (当前群，如果保留原指令需要把原指令设为别名，逗号隔开)
     别名 移除 # yunzai echo
@@ -78,7 +78,7 @@ class AliasCommand(BaseCommand):
                         alias_type = parsed_args.type_or_id
                         if parsed_args.id_optional:
                             entity_id = parsed_args.id_optional
-                    elif parsed_args.type_or_id.isdigit(): # 如果只提供一个数字，认为是群号/QQ号，默认为群聊
+                    elif parsed_args.type_or_id.isdigit(): # 如果只提供一个数字，认为是群号/账号，默认为群聊
                         alias_type = "群聊"
                         entity_id = parsed_args.type_or_id
                     else: # 非法的第一个参数

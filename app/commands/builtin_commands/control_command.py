@@ -63,11 +63,11 @@ class SettingCommand(BaseCommand):
 
         # 开启子命令
         enable_parser = subparsers.add_parser("开启", aliases=["enable", "on"], help="开启功能")
-        enable_parser.add_argument("target", nargs="?", help="目标QQ号或 '本账号' (仅限SUPERUSER)")
+        enable_parser.add_argument("target", nargs="?", help="目标账号或 '本账号' (仅限SUPERUSER)")
 
         # 关闭子命令
         disable_parser = subparsers.add_parser("关闭", aliases=["disable", "off"], help="关闭功能")
-        disable_parser.add_argument("target", nargs="?", help="目标QQ号或 '本账号' (可选，仅限SUPERUSER)")
+        disable_parser.add_argument("target", nargs="?", help="目标账号或 '本账号' (可选，仅限SUPERUSER)")
 
     async def execute(self, event: Event, args: List[str], context: Dict[str, Any]) -> CommandResponse:
         """执行设置指令"""
@@ -88,13 +88,13 @@ class SettingCommand(BaseCommand):
                     return None
 
                 if target in ["本账号", "你"]:
-                    account_id = str(event.self_id)  # 假设 event.self_id 是当前机器人的QQ号
+                    account_id = str(event.self_id)  # 假设 event.self_id 是当前机器人的账号
                     return await self._set_account_status(account_id, enabled, config_manager)
                 elif target.isdigit():
                     account_id = target
                     return await self._set_account_status(account_id, enabled, config_manager)
                 else:
-                    return self.format_error("无效的目标，请提供 QQ 号或 '本账号'。", CommandResult.INVALID_ARGS)
+                    return self.format_error("无效的目标，请提供账号或 '本账号'。", CommandResult.INVALID_ARGS)
             else:
                 if not hasattr(event, "group_id"):
                     return self.format_error("使用方法错误！", CommandResult.INVALID_ARGS)
