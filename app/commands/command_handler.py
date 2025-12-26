@@ -142,10 +142,11 @@ class CommandHandler:
             command = command_registry.get_command(command_name)
             if not command:
                 if self.config_manager.is_superuser(event.user_id):
-                    return CommandResponse(
-                        result=CommandResult.NOT_FOUND,
-                        message="未找到指令: {}\n使用 {}帮助 查看可用指令".format(command_name, command_info['prefix'])
-                    )
+                    # return CommandResponse(
+                    #     result=CommandResult.NOT_FOUND,
+                    #     message="未找到指令: {}\n使用 {}帮助 查看可用指令".format(command_name, command_info['prefix'])
+                    # )
+                    return None
                 else:
                     return None
             
