@@ -46,7 +46,7 @@ def install_requirements(proxy: str = "") -> bool:
         if proxy:
             cmd.extend(["--proxy", proxy])
 
-        print(f"正在{"使用代理" if proxy else ""}安装依赖包...如时间过长请尝试换源或手动安装")
+        print(f"正在{'使用代理' if proxy else ''}安装依赖包...如时间过长请尝试换源或手动安装")
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
 
         if result.returncode == 0:
