@@ -81,6 +81,16 @@ class ProxyServer:
             
             # 创建处理器函数
             async def connection_handler(ws):
+                # 记录 WebSocket 连接详细信息
+                ws_info = {
+                    "remote_address": getattr(ws, 'remote_address', None),
+                    "path": getattr(ws, 'path', '/'),
+                    "host": getattr(ws, 'host', None),
+                    "port": getattr(ws, 'port', None),
+                    "id": id(ws),  # Python 对象 ID
+                }
+                self.logger.ws.info(f"[{connection_id}] 收到新的WebSocket连接: {ws_info}")
+
                 # 从WebSocket连接中获取路径
                 path = ws.path if hasattr(ws, 'path') else "/"
                 
@@ -251,8 +261,21 @@ class ProxyConnection:
                     ))
 
             if tasks:
-                # 等待任务完成
-                await asyncio.gather(*tasks, return_exceptions=True)
+                # 等待任务，当任意任务结束时（如客户端断开）立即取消其他任务
+                done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+
+                # 取消所有未完成的任务
+                for task in pending:
+                    task.cancel()
+
+                # 等待所有任务真正结束
+                if pending:
+                    await asyncio.wait(pending, timeout=3.0)
+
+                # 检查是否是客户端断开导致的
+                for task in done:
+                    if task.exception():
+                        self.logger.ws.info(f"[{self.connection_id}] 任务异常退出: {task.exception()}")
             else:
                 self.logger.ws.warning(f"[{self.connection_id}] 没有转发任务，连接将关闭")
             
@@ -362,6 +385,11 @@ class ProxyConnection:
         if not lock.locked():
             async with lock:
                 for _ in range(40):
+                    # 检查客户端连接是否还活着
+                    if not self.running or getattr(self.client_ws, 'closed', True):
+                        self.logger.ws.info(f"[{self.connection_id}] 客户端已断开，停止重连目标 {target_index}")
+                        return
+
                     await asyncio.sleep(3)
                     try:
                         target_ws = await self._connect_to_target(self.config.get("target_endpoints", [])[self.target_index2list_index(target_index)], target_index)
@@ -371,7 +399,7 @@ class ProxyConnection:
                         await self._forward_target_to_client(target_ws, target_index)
                     except Exception as e:
                         self.logger.ws.warning(f"[{self.connection_id}] 尝试重连目标 {target_index} 失败: {e}")
-                while True:
+                while self.running and not getattr(self.client_ws, 'closed', True):
                     await asyncio.sleep(600) # 10分钟后再试
                     try:
                         target_ws = await self._connect_to_target(self.config.get("target_endpoints", [])[self.target_index2list_index(target_index)], target_index)
@@ -382,6 +410,8 @@ class ProxyConnection:
                             await self._forward_target_to_client(target_ws, target_index)
                     except Exception as e:
                         pass
+
+                self.logger.ws.info(f"[{self.connection_id}] 客户端已断开，终止目标 {target_index} 的重连循环")
                         
     async def _process_client_message(self, message: str):
         """处理客户端消息"""
