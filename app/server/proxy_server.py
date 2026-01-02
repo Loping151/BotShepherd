@@ -430,6 +430,8 @@ class ProxyConnection:
                     await asyncio.sleep(3)
                     try:
                         target_ws = await self._connect_to_target(self.config.get("target_endpoints", [])[self.target_index2list_index(target_index)], target_index)
+                        if target_ws is None:
+                            continue
                         await self._process_client_message(self.first_message) # 比如yunzai需要使用first Message重新注册
                         self.logger.ws.info(f"[{self.connection_id}] 目标连接 {target_index} 恢复成功，5秒后重新开始转发。")
                         await asyncio.sleep(5)
