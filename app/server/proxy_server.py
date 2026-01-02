@@ -95,12 +95,21 @@ class ProxyServer:
                 path = ws.path if hasattr(ws, 'path') else "/"
                 
                 if connection_id in self.active_connections:
-                    self.logger.ws.warning(f"[{connection_id}] 已存在连接，正在关闭旧连接以替换为新连接")
-                    try:
-                        await self.active_connections[connection_id].stop()
-                        await asyncio.sleep(1) # 禁止频繁重启
-                    except Exception as e:
-                        self.logger.ws.error(f"[{connection_id}] 关闭旧连接失败: {e}")
+                    old_conn = self.active_connections[connection_id]
+                    old_ws = old_conn.client_ws
+
+                    # 检查旧连接是否真的还活着
+                    is_old_alive = old_ws and not getattr(old_ws, 'closed', True)
+
+                    if is_old_alive:
+                        # 旧连接还活着，拒绝新连接（防止频繁重连）
+                        self.logger.ws.warning(f"[{connection_id}] 已存在活跃连接，拒绝新连接")
+                        await ws.close(1008, "Connection already exists")
+                        return
+                    else:
+                        # 旧连接已死但还在字典中，清理它
+                        self.logger.ws.info(f"[{connection_id}] 清理已断开的旧连接")
+                        del self.active_connections[connection_id]
         
                 return await self._handle_client_connection(ws, path, connection_id, config)
 
