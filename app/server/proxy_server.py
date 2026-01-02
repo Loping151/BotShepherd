@@ -104,8 +104,9 @@ class ProxyServer:
                         old_conn = self.active_connections[connection_id]
                         old_ws = old_conn.client_ws
 
-                        # 检查旧连接是否真的还活着
-                        is_old_alive = old_ws and not getattr(old_ws, 'closed', True)
+                        # 检查旧连接是否真的还活着 - 使用 state 属性
+                        old_state = getattr(old_ws, 'state', None) if old_ws else None
+                        is_old_alive = old_ws and old_state == 1  # 1 = OPEN 状态
 
                         if is_old_alive:
                             # 旧连接还活着，拒绝新连接（防止频繁重连）
