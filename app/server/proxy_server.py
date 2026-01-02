@@ -371,9 +371,19 @@ class ProxyConnection:
     async def _connect_to_targets(self):
         """连接到目标端点"""
         target_endpoints = self.config.get("target_endpoints", [])
-        
+
+        # 先标记哪些目标需要启动重连（避免在循环中启动任务）
+        failed_targets = []
         for idx, endpoint in enumerate(target_endpoints):
-            await self._connect_to_target(endpoint, self.list_index2target_index(idx))
+            target_ws = await self._connect_to_target(endpoint, self.list_index2target_index(idx))
+            # 如果连接失败（返回 None），记录下来稍后启动重连
+            if target_ws is None:
+                failed_targets.append(self.list_index2target_index(idx))
+
+        # 在所有连接尝试完成后，启动失败目标的重连任务
+        for target_index in failed_targets:
+            self.logger.ws.warning(f"[{self.connection_id}] 目标 {target_index} 初始连接失败，启动后台重连")
+            asyncio.create_task(self._start_reconnect_with_delay(target_index))
     
     async def _forward_client_to_targets(self):
         """转发客户端消息到目标"""
@@ -397,16 +407,23 @@ class ProxyConnection:
             await self._reconnect_target(target_index) # 如果是None，也挂一个后台重连
         except Exception as e:
             self.logger.ws.error(f"[{self.connection_id}] 目标消息转发错误 {target_index}: {e}")
-            
+
+    async def _start_reconnect_with_delay(self, target_index: int):
+        """延迟启动重连任务，等待客户端完全初始化"""
+        await asyncio.sleep(5)
+        await self._reconnect_target(target_index)
+
     async def _reconnect_target(self, target_index: int):
         self.logger.ws.info(f"[{self.connection_id}] 目标连接 {target_index} 已关闭。将在120秒内持续尝试重新连接。")
+
         lock = self.reconnect_locks[self.target_index2list_index(target_index)]
         if not lock.locked():
             async with lock:
                 for _ in range(40):
-                    # 检查客户端连接是否还活着
-                    if not self.running or getattr(self.client_ws, 'closed', True):
-                        self.logger.ws.info(f"[{self.connection_id}] 客户端已断开，停止重连目标 {target_index}")
+                    # 检查客户端连接是否还活着 - 使用 state 属性
+                    client_state = getattr(self.client_ws, 'state', None)
+                    if not self.running or client_state != 1:  # 1 = OPEN 状态
+                        self.logger.ws.info(f"[{self.connection_id}] 客户端已断开 (running={self.running}, state={client_state})，停止重连目标 {target_index}")
                         return
 
                     await asyncio.sleep(3)
@@ -418,7 +435,14 @@ class ProxyConnection:
                         await self._forward_target_to_client(target_ws, target_index)
                     except Exception as e:
                         self.logger.ws.warning(f"[{self.connection_id}] 尝试重连目标 {target_index} 失败: {e}")
-                while self.running and not getattr(self.client_ws, 'closed', True):
+
+                # 长期重连循环
+                while self.running:
+                    # 检查客户端状态
+                    client_state = getattr(self.client_ws, 'state', None)
+                    if client_state != 1:  # 1 = OPEN 状态
+                        break
+
                     await asyncio.sleep(600) # 10分钟后再试
                     try:
                         target_ws = await self._connect_to_target(self.config.get("target_endpoints", [])[self.target_index2list_index(target_index)], target_index)
@@ -472,14 +496,22 @@ class ProxyConnection:
             
                 # 转发到所有目标
                 processed_json = json.dumps(processed_message, ensure_ascii=False)
-                
+
                 if message_data.get("echo"):
                     # api请求内容，尽可能保证各框架的发送api都使用了echo。
-                    target_index = self.echo_cache.pop(str(message_data["echo"]), {}).get("target_index")
-                    if target_index is not None and target_index > 0 and self.target_connections[self.target_index2list_index(target_index)]:
-                        self.logger.ws.debug(f"[{self.connection_id}] 发送API请求到目标 {target_index}: {processed_json[:1000]}")
+                    # 尝试从各个 target_index 的缓存中查找
+                    echo_val = str(message_data["echo"])
+                    matched_target_index = None
+                    for idx in range(1, len(self.target_connections) + 1):
+                        echo_key = f"{idx}_{echo_val}"
+                        if echo_key in self.echo_cache:
+                            matched_target_index = self.echo_cache.pop(echo_key, {}).get("target_index")
+                            break
+
+                    if matched_target_index is not None and matched_target_index > 0 and self.target_connections[self.target_index2list_index(matched_target_index)]:
+                        self.logger.ws.debug(f"[{self.connection_id}] 发送API请求到目标 {matched_target_index}: {processed_json[:1000]}")
                         try:
-                            await self.target_connections[self.target_index2list_index(target_index)].send(processed_json)
+                            await self.target_connections[self.target_index2list_index(matched_target_index)].send(processed_json)
                         except websockets.exceptions.ConnectionClosed:
                             return
                         except Exception as e:
@@ -553,17 +585,21 @@ class ProxyConnection:
         echo = str(message_data.get("echo"))
         if not echo:
             return None
-        
+
+        # 将 target_index 加入键值，防止不同连接的 echo 混淆
+        echo_key = f"{target_index}_{echo}"
+
         echo_info = {
             "data": message_data,
             "create_timestamp": int(datetime.now().timestamp()),
-            "target_index": target_index
+            "target_index": target_index,
+            "original_echo": echo
         }
 
-        if echo in self.echo_cache:
-            self.logger.ws.warning(f"[{self.connection_id}] echo {echo} 已经存在，将被覆盖!可能由于单个账号连接多个相同框架！如为此种情况不会导致错误")
-        self.echo_cache[echo] = echo_info
-        self.logger.ws.debug(f"[{self.connection_id}] 收到echo {echo}，缓存大小 {len(self.echo_cache)}")
+        if echo_key in self.echo_cache:
+            self.logger.ws.warning(f"[{self.connection_id}] echo {echo_key} 已存在，将被覆盖")
+        self.echo_cache[echo_key] = echo_info
+        self.logger.ws.debug(f"[{self.connection_id}] 收到echo {echo_key}，缓存大小 {len(self.echo_cache)}")
 
         # 当缓存首次达到100个的时候。该函数阻塞。如网络正常不应该有这么多cache。
         if len(self.echo_cache) % 100 == 0:
@@ -584,7 +620,15 @@ class ProxyConnection:
     def _log_api_call_fail(self, event: Event):
         if isinstance(event, ApiResponse):
             if event.status != "ok" or event.retcode != 0:
-                echo_info = self.echo_cache.get(str(event.echo), None)
+                # echo 现在包含 target_index 前缀，需要查找匹配的键
+                echo_val = str(event.echo)
+                echo_info = None
+                for idx in range(1, len(self.target_connections) + 1):
+                    echo_key = f"{idx}_{echo_val}"
+                    if echo_key in self.echo_cache:
+                        echo_info = self.echo_cache.get(echo_key, None)
+                        break
+
                 if echo_info:
                     # 截断过长的数据（如base64）避免日志爆炸
                     data_str = str(echo_info['data'])
@@ -594,7 +638,15 @@ class ProxyConnection:
                     
     async def _construct_msg_from_echo(self, echo, **kwargs):
         """从api结果中构造模拟收到消息"""
-        echo_info = self.echo_cache.get(str(echo), None)
+        # echo 现在包含 target_index 前缀，需要查找匹配的键
+        echo_val = str(echo)
+        echo_info = None
+        for idx in range(1, len(self.target_connections) + 1):
+            echo_key = f"{idx}_{echo_val}"
+            if echo_key in self.echo_cache:
+                echo_info = self.echo_cache.get(echo_key, None)
+                break
+
         if echo_info:
             return await self._construct_data_as_msg(echo_info["data"], **kwargs)
         return {}
