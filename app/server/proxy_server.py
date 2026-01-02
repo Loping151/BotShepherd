@@ -27,6 +27,7 @@ class ProxyServer:
 
         # 连接管理
         self.active_connections = {}  # connection_id -> ProxyConnection
+        self.connection_locks = {}     # connection_id -> asyncio.Lock (防止竞态条件)
         self.running = False
         
     async def start(self):
@@ -93,25 +94,34 @@ class ProxyServer:
 
                 # 从WebSocket连接中获取路径
                 path = ws.path if hasattr(ws, 'path') else "/"
-                
-                if connection_id in self.active_connections:
-                    old_conn = self.active_connections[connection_id]
-                    old_ws = old_conn.client_ws
 
-                    # 检查旧连接是否真的还活着
-                    is_old_alive = old_ws and not getattr(old_ws, 'closed', True)
+                # 获取或创建该 connection_id 的锁（防止竞态条件）
+                if connection_id not in self.connection_locks:
+                    self.connection_locks[connection_id] = asyncio.Lock()
 
-                    if is_old_alive:
-                        # 旧连接还活着，拒绝新连接（防止频繁重连）
-                        self.logger.ws.warning(f"[{connection_id}] 已存在活跃连接，拒绝新连接")
-                        await ws.close(1008, "Connection already exists")
-                        return
-                    else:
-                        # 旧连接已死但还在字典中，清理它
-                        self.logger.ws.info(f"[{connection_id}] 清理已断开的旧连接")
-                        del self.active_connections[connection_id]
-        
-                return await self._handle_client_connection(ws, path, connection_id, config)
+                async with self.connection_locks[connection_id]:
+                    if connection_id in self.active_connections:
+                        old_conn = self.active_connections[connection_id]
+                        old_ws = old_conn.client_ws
+
+                        # 检查旧连接是否真的还活着
+                        is_old_alive = old_ws and not getattr(old_ws, 'closed', True)
+
+                        if is_old_alive:
+                            # 旧连接还活着，拒绝新连接（防止频繁重连）
+                            old_ip = getattr(old_ws, 'remote_address', 'unknown')
+                            new_ip = getattr(ws, 'remote_address', 'unknown')
+                            self.logger.ws.warning(
+                                f"[{connection_id}] 已存在活跃连接 (旧:{old_ip} vs 新:{new_ip})，拒绝新连接"
+                            )
+                            await ws.close(1008, "Connection already exists")
+                            return
+                        else:
+                            # 旧连接已死但还在字典中，清理它
+                            self.logger.ws.info(f"[{connection_id}] 清理已断开的旧连接")
+                            del self.active_connections[connection_id]
+
+                    return await self._handle_client_connection(ws, path, connection_id, config)
 
             # 启动WebSocket服务器，移除大小和队列限制
             async with websockets.serve(
