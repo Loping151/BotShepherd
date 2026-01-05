@@ -125,23 +125,29 @@ class ProxyServer:
                     return await self._handle_client_connection(ws, path, connection_id, config)
 
             # 启动WebSocket服务器，移除大小和队列限制
-            async with websockets.serve(
-                connection_handler,
-                host,
-                port,
-                max_size=None,  # 移除消息大小限制
-                max_queue=None,  # 移除队列大小限制
-                ping_interval=300,  # 心跳间隔
-                ping_timeout=60,   # 心跳超时
-                close_timeout=None,   # 关闭超时
-                compression='deflate'  # 启用压缩
-            ):
-                self.logger.ws.info(f"连接代理 {connection_id} 已启动在 {client_endpoint}")
+            try:
+                async with websockets.serve(
+                    connection_handler,
+                    host,
+                    port,
+                    max_size=None,  # 移除消息大小限制
+                    max_queue=None,  # 移除队列大小限制
+                    ping_interval=300,  # 心跳间隔
+                    ping_timeout=60,   # 心跳超时
+                    close_timeout=None,   # 关闭超时
+                    compression='deflate'  # 启用压缩
+                ):
+                    self.logger.ws.info(f"连接代理 {connection_id} 已启动在 {client_endpoint}")
 
-                # 保持运行
-                while self.running:
-                    await asyncio.sleep(1)
-                    
+                    # 保持运行
+                    while self.running:
+                        await asyncio.sleep(1)
+            except OSError as e:
+                if "Address already in use" in str(e) or e.errno == 98 or e.errno == 10048:
+                    self.logger.ws.warning(f"连接代理 {connection_id} 端口 {port} 已被占用，跳过启动")
+                else:
+                    raise
+
         except Exception as e:
             self.logger.ws.error(f"启动连接代理失败 {connection_id}: {e}")
     
