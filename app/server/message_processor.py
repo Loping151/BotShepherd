@@ -181,11 +181,12 @@ class MessageProcessor:
             return None
         
         # 更新群组最后消息时间（机器人发送的消息）
-        if isinstance(event, ApiRequest) and event.params.get("group_id"):
-            await self.config_manager.update_group_last_message_time(str(event.params.get("group_id")), self_id)
-            await self.config_manager.update_account_last_activity(self_id, str(event.params.get("group_id")), "send")
-        else:
-            await self.config_manager.update_account_last_activity(self_id, None, "send")
+        if isinstance(event, ApiRequest):
+            if event.params.get("group_id"):
+                await self.config_manager.update_group_last_message_time(str(event.params.get("group_id")), self_id)
+                await self.config_manager.update_account_last_activity(self_id, str(event.params.get("group_id")), "send")
+            elif not "packet" in event.action: # 排除包发送行为
+                await self.config_manager.update_account_last_activity(self_id, None, "send")
         
         return message_data
     
