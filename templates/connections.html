@@ -43,8 +43,8 @@
         <div class="card">
             <div class="card-body text-center">
                 <h5 class="card-title">
-                    <i class="bi bi-x-circle text-danger"></i>
-                    离线连接
+                    <i class="bi bi-dash-circle text-secondary"></i>
+                    空连接数量
                 </h5>
                 <h3 id="offline-connections">0</h3>
                 <small class="text-muted">个连接</small>
@@ -56,7 +56,7 @@
         <div class="card">
             <div class="card-body text-center">
                 <h5 class="card-title">
-                    <i class="bi bi-exclamation-triangle text-warning"></i>
+                    <i class="bi bi-exclamation-triangle text-danger"></i>
                     错误连接
                 </h5>
                 <h3 id="error-connections">0</h3>
@@ -82,7 +82,6 @@
             <small class="text-muted">
                 <strong>客户端端点状态：</strong>
                 <span class="d-inline-block rounded-circle bg-secondary" style="width: 10px; height: 10px; margin-left: 10px;"></span> 禁用
-                <span class="d-inline-block rounded-circle bg-warning" style="width: 10px; height: 10px; margin-left: 10px;"></span> 启动中
                 <span class="d-inline-block rounded-circle bg-info" style="width: 10px; height: 10px; margin-left: 10px;"></span> 监听中
                 <span class="d-inline-block rounded-circle bg-success" style="width: 10px; height: 10px; margin-left: 10px;"></span> 已连接
                 <span class="d-inline-block rounded-circle bg-danger" style="width: 10px; height: 10px; margin-left: 10px;"></span> 错误
@@ -251,13 +250,11 @@ async function loadConnections() {
 // 更新连接统计
 function updateConnectionStats() {
     const total = Object.keys(connections).length;
-    let connected = 0, enabled = 0, offline = 0, error = 0;
+    let connected = 0, enabled = 0, empty = 0, error = 0;
 
     Object.values(connections).forEach(conn => {
         if (conn.enabled) {
             enabled++;
-        } else {
-            offline++;
         }
         if (conn.status && conn.status.client_status === 'connected') {
             connected++;
@@ -265,11 +262,15 @@ function updateConnectionStats() {
         if (conn.status && conn.status.client_status === 'error') {
             error++;
         }
+        // 检查是否为空连接（没有对应账号）
+        if (!conn.status || !conn.status.self_id) {
+            empty++;
+        }
     });
 
     document.getElementById('total-connections').textContent = total;
     document.getElementById('active-connections').textContent = `${connected}/${enabled}`;
-    document.getElementById('offline-connections').textContent = offline;
+    document.getElementById('offline-connections').textContent = empty;
     document.getElementById('error-connections').textContent = error;
 }
 

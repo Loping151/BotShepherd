@@ -73,7 +73,8 @@
 
 2025-07-15 v0.0.0 画饼
 
-碎碎念：虽然有些地方看上去有点AI，但实际上试了几次以后就放弃用AI写了，虽然一开始AI构建了基本框架，但后面除了webui几乎没有用上AI。框架其实也还行，就是指令框架写的比较烂。改着改着实际上只剩指令框架的基础和webui是AI写的了，而且AI还造成了大部分的bug。。
+碎碎念：虽然有些地方看上去有点AI，但实际上试了几次以后就放弃用AI写了，虽然一开始AI构建了基本框架，但后面除了webui几乎没有用上AI。框架其实也还行，就是指令框架写的比较烂。改着改着实际上只剩指令框架的基础和webui是AI写的了，而且AI还造成了大部分的bug。。。
+
 </details>
 
 ## 🌟 核心特性
@@ -176,6 +177,14 @@ http://localhost:5100
 注意多个客户端不能公用一个连接配置（客户端端点），因为需要拿这个ws连接头去连接下游框架。按照标准，self_id，如QQ号，就在连接头中，一号一头。
 
 创建完第一个连接配置后，可以点击复制快速创建多个连接配置。
+
+### 主要功能展示：
+
+![static/imgs/pipeline.png](static/imgs/connection.png)
+
+![static/imgs/pipeline.png](static/imgs/group.png)
+
+![static/imgs/pipeline.png](static/imgs/statistics.png)
 
 ### 后台运行
 示例：使用Tmux(Linux)
