@@ -466,7 +466,7 @@ async def main():
 
     args = parser.parse_args()
 
-    if args.setup:
+    if args.setup or not os.path.exists("./venv"):
         await setup_initial_config()
         
     import_app_modules()
