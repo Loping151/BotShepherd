@@ -132,6 +132,11 @@ class DatabaseManager:
                     else: # 其他类型
                         text_parts.append(f"[{msg_part.get('type', '未知消息类型')}]")
                 message_content = "".join(text_parts)
+            elif isinstance(message_data["message"], dict):
+                if message_data["message"].get("type") == "image":
+                    message_content = "[图片]"
+                else:
+                    message_content = f"[{message_data['message'].get('type', '未知消息类型')}]: {str(message_data['message'])[:1000]}"
             else:
                 message_content = str(message_data["message"])[:1000]  # 限制长度为1000字符
 
