@@ -212,10 +212,10 @@ document.addEventListener('DOMContentLoaded', function() {
     loadAccounts();
     loadStatistics();
 
-    // 定时刷新
-    setInterval(() => {
-        loadStatistics();
-    }, 60000); // 每分钟刷新
+    // 定时刷新已禁用，请使用刷新按钮手动刷新
+    // setInterval(() => {
+    //     loadStatistics();
+    // }, 60000); // 每分钟刷新
 });
 
 // 初始化图表

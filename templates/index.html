@@ -31,14 +31,14 @@
             <div class="card-body text-center">
                 <h5 class="card-title">
                     <i class="bi bi-diagram-3 text-primary"></i>
-                    活动连接
+                    连接状态
                 </h5>
                 <h3 id="active-connections">0</h3>
-                <small class="text-muted">个连接</small>
+                <small class="text-muted">已连接/启用</small>
             </div>
         </div>
     </div>
-    
+
     <div class="col-md-3">
         <div class="card">
             <div class="card-body text-center">
@@ -47,7 +47,7 @@
                     账号状态
                 </h5>
                 <h3 id="account-status">0/0</h3>
-                <small class="text-muted">活跃/总数</small>
+                <small class="text-muted">活跃账号/启用账号</small>
             </div>
         </div>
     </div>
@@ -60,7 +60,7 @@
                     群组状态
                 </h5>
                 <h3 id="group-status">0/0</h3>
-                <small class="text-muted">活跃/总数</small>
+                <small class="text-muted">活跃群组/启用群组</small>
             </div>
         </div>
     </div>
@@ -306,16 +306,40 @@ let systemStartTime = Date.now();
 // 加载系统状态
 async function loadSystemStatus() {
     try {
-        // 获取基本状态
-        const statusResponse = await apiRequest('/api/status');
-        document.getElementById('active-connections').textContent = statusResponse.active_connections || 0;
+        // 获取连接信息
+        const connectionsResponse = await apiRequest('/api/connections');
+        const connections = connectionsResponse;
+
+        // 统计已连接和启用的连接数
+        let connectedCount = 0;
+        let enabledCount = 0;
+
+        Object.values(connections).forEach(conn => {
+            if (conn.enabled) {
+                enabledCount++;
+            }
+            if (conn.status && conn.status.client_status === 'connected') {
+                connectedCount++;
+            }
+        });
+
+        document.getElementById('active-connections').textContent = `${connectedCount}/${enabledCount}`;
 
         // 获取全局配置
         const configResponse = await apiRequest('/api/global-config');
-        console.log(configResponse); 
+        console.log(configResponse);
         document.getElementById('command-prefix').textContent = configResponse.command_prefix || 'bs';
         document.getElementById('superuser-count').textContent = (configResponse.superusers || []).length;
         document.getElementById('global-aliases').textContent = Object.keys(configResponse.global_aliases || {}).length;
+
+        // 检查是否使用默认密码
+        const webAuth = configResponse.web_auth || {};
+        if (webAuth.username === 'admin' && webAuth.password === 'admin') {
+            // 弹框警告
+            if (confirm('警告：您正在使用默认密码（admin/admin），这存在安全风险！\n\n是否立即跳转到系统设置页面修改密码？')) {
+                window.location.href = '/settings';
+            }
+        }
 
         // 数据库配置
         const dbConfig = configResponse.database || {};
@@ -325,7 +349,7 @@ async function loadSystemStatus() {
         // 获取版本信息
         const versionResponse = await apiRequest('/api/version');
         document.getElementById('system-version').textContent = `v${versionResponse.version || '0.1.0'}`;
-        
+
     } catch (error) {
         console.error('加载系统状态失败:', error);
     }
@@ -501,12 +525,12 @@ document.addEventListener('DOMContentLoaded', function() {
     loadDashboardContent();
     loadRemoteVersion(); // 只在页面加载时执行一次
 
-    // 定时更新
+    // 定时更新（仅保留时间更新和资源监控）
     setInterval(updateTime, 1000);
-    setInterval(loadSystemStatus, 60000);
-    setInterval(loadAccountGroupStatus, 30000);
-    setInterval(loadDatabaseStatus, 60000);
-    setInterval(updateSystemResources, 10000);
+    setInterval(updateSystemResources, 1000);
+    // setInterval(loadSystemStatus, 60000);
+    // setInterval(loadAccountGroupStatus, 30000);
+    // setInterval(loadDatabaseStatus, 60000);
 });
 </script>
 {% endblock %}

@@ -40,7 +40,7 @@
                 </div>
                 <div class="col-md-2">
                     <label for="groupId" class="form-label small text-muted">群组ID</label>
-                    <input type="text" class="form-control form-control-sm" id="groupId" name="group_id" placeholder="输入群号">
+                    <input type="text" class="form-control form-control-sm" id="groupId" name="group_id" placeholder="输入群号（输入 私聊 查询私聊消息）">
                 </div>
                 <div class="col-md-2">
                     <label for="prefix" class="form-label small text-muted">消息前缀</label>
@@ -222,7 +222,10 @@ async function performQuery() {
         for (let [key, value] of formData.entries()) {
             const trimmedValue = value.trim();
             if (trimmedValue) {
-                if (key === 'keywords' && trimmedValue.includes(',')) {
+                if (key === 'group_id' && trimmedValue === '私聊') {
+                    // 将"私聊"转换为特殊标识
+                    params.append(key, '__private__');
+                } else if (key === 'keywords' && trimmedValue.includes(',')) {
                     // 处理多个关键词
                     const keywords = trimmedValue.split(/[,，]/).map(k => k.trim()).filter(k => k);
                     keywords.forEach(keyword => params.append('keywords', keyword));
@@ -419,7 +422,10 @@ async function exportResults() {
             for (let [key, value] of formData.entries()) {
                 const trimmedValue = value.trim();
                 if (trimmedValue) {
-                    if (key === 'keywords' && trimmedValue.includes(',')) {
+                    if (key === 'group_id' && trimmedValue === '私聊') {
+                        // 将"私聊"转换为特殊标识
+                        params.append(key, '__private__');
+                    } else if (key === 'keywords' && trimmedValue.includes(',')) {
                         const keywords = trimmedValue.split(/[,，]/).map(k => k.trim()).filter(k => k);
                         keywords.forEach(keyword => params.append('keywords', keyword));
                     } else if (key === 'start_time' || key === 'end_time') {

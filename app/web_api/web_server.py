@@ -309,8 +309,8 @@ class WebServer:
 
                 # 获取当前进程和系统资源占用
                 process = psutil.Process()
-                app_cpu = process.cpu_percent(interval=3)
-                total_cpu = psutil.cpu_percent(interval=3)
+                app_cpu = process.cpu_percent(interval=1)
+                total_cpu = psutil.cpu_percent(interval=1)
                 app_mem = process.memory_info().rss / (1024 * 1024)  # MB
 
                 # 获取内存信息
@@ -414,6 +414,17 @@ class WebServer:
                 # 重新加载连接配置以获取最新数据
                 asyncio.run(self.config_manager._load_connections_config())
                 connections = self.config_manager.get_connections_config()
+
+                # 获取连接状态
+                connection_statuses = {}
+                if hasattr(self, 'proxy_server') and self.proxy_server:
+                    connection_statuses = self.proxy_server.get_connection_statuses()
+
+                # 将状态信息合并到连接配置中
+                for connection_id, status in connection_statuses.items():
+                    if connection_id in connections:
+                        connections[connection_id]['status'] = status
+
                 return jsonify(connections)
             except Exception as e:
                 self.logger.web.error(f"获取连接配置失败: {e}")
@@ -428,34 +439,43 @@ class WebServer:
             try:
                 config = request.get_json()
 
-                # 获取原配置以比较enabled状态
+                # 获取原配置以比较
                 old_config = self.config_manager.get_connection_config(connection_id)
                 old_enabled = old_config.get('enabled', False) if old_config else False
+                old_targets = old_config.get('target_endpoints', []) if old_config else []
                 new_enabled = config.get('enabled', False)
+                new_targets = config.get('target_endpoints', [])
 
                 # 保存配置
                 asyncio.run(
                     self.config_manager.save_connection_config(connection_id, config)
                 )
 
-                # 如果enabled状态发生变化，立即生效
-                if old_enabled != new_enabled:
-                    if new_enabled:
-                        # 启用连接：启动新的连接代理
-                        self.logger.web.info(f"启用连接 {connection_id}，正在启动连接代理...")
-                        # asyncio.create_task(
-                        #     self.proxy_server._start_connection_proxy(connection_id, config)
-                        # )
-                        if self.loop:
-                            self.loop.call_soon_threadsafe(lambda: asyncio.create_task(
-                                self.proxy_server._start_connection_proxy(connection_id, config)
-                            ))
-                        else:
-                            asyncio.run(self.proxy_server._start_connection_proxy(connection_id, config))
+                # 判断是否需要重启连接
+                # 1. enabled状态发生变化
+                # 2. 目标端点发生变化
+                # 3. 客户端端点发生变化（需要重启监听）
+                old_client_endpoint = old_config.get('client_endpoint', '') if old_config else ''
+                new_client_endpoint = config.get('client_endpoint', '')
+
+                needs_restart = (
+                    old_enabled != new_enabled or
+                    old_targets != new_targets or
+                    old_client_endpoint != new_client_endpoint
+                )
+
+                if needs_restart and hasattr(self, 'proxy_server') and self.proxy_server:
+                    self.logger.web.info(f"连接 {connection_id} 配置已更改，正在重启连接代理...")
+
+                    # 使用事件循环重启连接
+                    if self.loop:
+                        self.loop.call_soon_threadsafe(
+                            lambda: asyncio.create_task(
+                                self.proxy_server.restart_connection(connection_id)
+                            )
+                        )
                     else:
-                        # 禁用连接：停止现有连接
-                        self.logger.web.info(f"禁用连接 {connection_id}，正在重启")
-                        asyncio.run(reboot())
+                        asyncio.run(self.proxy_server.restart_connection(connection_id))
 
                 return jsonify({'success': True})
             except ValueError as e:
@@ -858,6 +878,12 @@ class WebServer:
                 self_id = request.args.get('self_id') or None
                 user_id = request.args.get('user_id') or None
                 group_id = request.args.get('group_id') or None
+
+                # 处理特殊值：__private__ 表示只查询私聊消息（group_id为None）
+                private_only = False
+                if group_id == '__private__':
+                    private_only = True
+                    group_id = None
                 start_time = request.args.get('start_time')
                 end_time = request.args.get('end_time')
                 keywords = request.args.getlist('keywords')
@@ -884,7 +910,8 @@ class WebServer:
                         prefix=prefix,
                         direction=direction,
                         limit=limit,
-                        offset=offset
+                        offset=offset,
+                        private_only=private_only
                     )
                 )
 
@@ -899,7 +926,8 @@ class WebServer:
                         keywords=keywords if keywords else None,
                         keyword_type=keyword_type,
                         prefix=prefix,
-                        direction=direction
+                        direction=direction,
+                        private_only=private_only
                     )
                 )
 
@@ -1147,6 +1175,7 @@ class WebServer:
             try:
                 data = request.get_json()
                 new_connection_id = data.get('new_id')
+                new_name = data.get('new_name')
 
                 if not new_connection_id:
                     return jsonify({'error': '缺少新连接ID'}), 400
@@ -1158,7 +1187,11 @@ class WebServer:
 
                 # 复制配置并修改名称
                 new_config = original_config.copy()
-                new_config['name'] = "{} - 副本".format(original_config.get('name', '连接'))
+                # 使用传入的新名称，如果没有则使用默认格式
+                if new_name:
+                    new_config['name'] = new_name
+                else:
+                    new_config['name'] = "{} - 副本".format(original_config.get('name', '连接'))
                 new_config['enabled'] = False
 
                 # 保存新配置

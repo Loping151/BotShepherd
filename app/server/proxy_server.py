@@ -29,15 +29,40 @@ class ProxyServer:
         self.active_connections = {}  # connection_id -> ProxyConnection
         self.connection_locks = {}     # connection_id -> asyncio.Lock (防止竞态条件)
         self.running = False
+
+        # 连接状态跟踪
+        self.connection_statuses = {}  # connection_id -> status info
+        self.connection_tasks = {}     # connection_id -> asyncio.Task (跟踪每个连接的服务器任务)
         
     async def start(self):
         """启动代理服务器"""
         self.running = True
         self.logger.ws.info("启动WebSocket代理服务器...")
-        
+
         # 获取连接配置
         connections_config = self.config_manager.get_connections_config()
-        
+
+        # 初始化所有连接的状态
+        for connection_id, config in connections_config.items():
+            if config.get("enabled", False):
+                self.connection_statuses[connection_id] = {
+                    'enabled': True,
+                    'client_status': 'starting',
+                    'client_endpoint': config.get('client_endpoint', ''),
+                    'target_statuses': {},
+                    'error': None,
+                    'self_id': None
+                }
+            else:
+                self.connection_statuses[connection_id] = {
+                    'enabled': False,
+                    'client_status': 'disabled',
+                    'client_endpoint': config.get('client_endpoint', ''),
+                    'target_statuses': {},
+                    'error': None,
+                    'self_id': None
+                }
+
         # 为每个连接配置启动代理
         tasks = []
         for connection_id, config in connections_config.items():
@@ -45,8 +70,9 @@ class ProxyServer:
                 task = asyncio.create_task(
                     self._start_connection_proxy(connection_id, config)
                 )
+                self.connection_tasks[connection_id] = task
                 tasks.append(task)
-        
+
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
         else:
@@ -68,7 +94,7 @@ class ProxyServer:
                 else:
                     host_port = url_part
                     path = ""
-                
+
                 if ":" in host_port:
                     host, port = host_port.split(":", 1)
                     port = int(port)
@@ -77,9 +103,14 @@ class ProxyServer:
                     port = 80
             else:
                 raise ValueError(f"不支持的客户端端点格式: {client_endpoint}")
-            
+
             self.logger.ws.info(f"启动连接代理 {connection_id}: {host}:{port}")
-            
+
+            # 更新状态为正在启动
+            if connection_id in self.connection_statuses:
+                self.connection_statuses[connection_id]['client_status'] = 'starting'
+                self.connection_statuses[connection_id]['error'] = None
+
             # 创建处理器函数
             async def connection_handler(ws):
                 # 记录 WebSocket 连接详细信息
@@ -91,6 +122,11 @@ class ProxyServer:
                     "id": id(ws),  # Python 对象 ID
                 }
                 self.logger.ws.info(f"[{connection_id}] 收到新的WebSocket连接: {ws_info}")
+
+                # 更新状态为已连接
+                if connection_id in self.connection_statuses:
+                    self.connection_statuses[connection_id]['client_status'] = 'connected'
+                    self.connection_statuses[connection_id]['client_address'] = str(ws_info.get('remote_address', 'unknown'))
 
                 # 从WebSocket连接中获取路径
                 path = ws.path if hasattr(ws, 'path') else "/"
@@ -138,19 +174,40 @@ class ProxyServer:
                     compression='deflate'  # 启用压缩
                 ):
                     self.logger.ws.info(f"连接代理 {connection_id} 已启动在 {client_endpoint}")
+                    # 更新状态为监听中
+                    if connection_id in self.connection_statuses:
+                        self.connection_statuses[connection_id]['client_status'] = 'listening'
 
                     # 保持运行
                     while self.running:
                         await asyncio.sleep(1)
             except OSError as e:
+                # 处理端口被占用的情况，不抛出异常，只记录状态
+                error_msg = f"端口 {port} 已被占用"
                 if "Address already in use" in str(e) or e.errno == 98 or e.errno == 10048:
                     self.logger.ws.warning(f"连接代理 {connection_id} 端口 {port} 已被占用，跳过启动")
+                    if connection_id in self.connection_statuses:
+                        self.connection_statuses[connection_id]['client_status'] = 'error'
+                        self.connection_statuses[connection_id]['error'] = error_msg
                 else:
-                    raise
+                    error_msg = str(e)
+                    self.logger.ws.error(f"连接代理 {connection_id} 启动失败: {error_msg}")
+                    if connection_id in self.connection_statuses:
+                        self.connection_statuses[connection_id]['client_status'] = 'error'
+                        self.connection_statuses[connection_id]['error'] = error_msg
 
         except Exception as e:
-            self.logger.ws.error(f"启动连接代理失败 {connection_id}: {e}")
+            error_msg = str(e)
+            self.logger.ws.error(f"启动连接代理失败 {connection_id}: {error_msg}")
+            if connection_id in self.connection_statuses:
+                self.connection_statuses[connection_id]['client_status'] = 'error'
+                self.connection_statuses[connection_id]['error'] = error_msg
     
+    def _update_connection_status(self, connection_id: str, key: str, value: Any):
+        """更新连接状态的某个字段"""
+        if connection_id in self.connection_statuses:
+            self.connection_statuses[connection_id][key] = value
+
     async def _handle_client_connection(self, client_ws, path, connection_id: str, config: Dict[str, Any]):
         """处理客户端连接"""
         client_ip = client_ws.remote_address
@@ -165,14 +222,19 @@ class ProxyServer:
                 config_manager=self.config_manager,
                 database_manager=self.database_manager,
                 logger=self.logger,
-                backup_manager=self.backup_manager
+                backup_manager=self.backup_manager,
+                status_callback=lambda key, value: self._update_connection_status(connection_id, key, value)
             )
             
             # 保存活动连接
             self.active_connections[connection_id] = proxy_connection
-            
+
             # 启动代理
             await proxy_connection.start_proxy()
+
+            # 代理结束后，保存账号ID到状态中
+            if proxy_connection.self_id and connection_id in self.connection_statuses:
+                self.connection_statuses[connection_id]['self_id'] = proxy_connection.self_id
             
         except Exception as e:
             self.logger.ws.error(f"[{connection_id}] 处理客户端连接失败: {e}")
@@ -181,12 +243,105 @@ class ProxyServer:
             if connection_id in self.active_connections:
                 del self.active_connections[connection_id]
             self.logger.ws.info(f"[{connection_id}] 客户端连接已关闭: {client_ip}")
-    
-    
+
+
+    def get_connection_statuses(self):
+        """获取所有连接的状态"""
+        return self.connection_statuses.copy()
+
+    async def restart_connection(self, connection_id: str):
+        """重启指定的连接配置
+
+        Args:
+            connection_id: 要重启的连接ID
+        """
+        self.logger.ws.info(f"重启连接配置: {connection_id}")
+
+        # 取消旧的服务器任务（如果有）
+        if connection_id in self.connection_tasks:
+            old_task = self.connection_tasks[connection_id]
+            if not old_task.done():
+                old_task.cancel()
+                try:
+                    await old_task
+                except asyncio.CancelledError:
+                    self.logger.ws.info(f"[{connection_id}] 旧连接任务已取消")
+                except Exception as e:
+                    self.logger.ws.warning(f"[{connection_id}] 取消任务时出错: {e}")
+            del self.connection_tasks[connection_id]
+
+        # 停止该连接的所有活动连接
+        if connection_id in self.active_connections:
+            connection = self.active_connections[connection_id]
+            try:
+                await connection.stop()
+                self.logger.ws.info(f"[{connection_id}] 已停止旧连接")
+            except Exception as e:
+                self.logger.ws.error(f"[{connection_id}] 停止连接时出错: {e}")
+
+        # 重新加载配置
+        await self.config_manager._load_connections_config()
+        config = self.config_manager.get_connections_config().get(connection_id)
+
+        if not config:
+            self.logger.ws.warning(f"[{connection_id}] 连接配置不存在")
+            # 更新状态为禁用
+            self.connection_statuses[connection_id] = {
+                'enabled': False,
+                'client_status': 'disabled',
+                'client_endpoint': '',
+                'target_statuses': {},
+                'error': '连接配置不存在',
+                'self_id': None
+            }
+            return
+
+        # 启动新连接
+        if config.get("enabled", False):
+            # 更新状态为启动中
+            self.connection_statuses[connection_id] = {
+                'enabled': True,
+                'client_status': 'starting',
+                'client_endpoint': config.get('client_endpoint', ''),
+                'target_statuses': {},
+                'error': None,
+                'self_id': None
+            }
+
+            # 创建并保存新的启动任务
+            task = asyncio.create_task(
+                self._start_connection_proxy(connection_id, config)
+            )
+            self.connection_tasks[connection_id] = task
+            self.logger.ws.info(f"[{connection_id}] 启动新连接任务")
+        else:
+            # 更新状态为禁用
+            self.connection_statuses[connection_id] = {
+                'enabled': False,
+                'client_status': 'disabled',
+                'client_endpoint': config.get('client_endpoint', ''),
+                'target_statuses': {},
+                'error': None,
+                'self_id': None
+            }
+            self.logger.ws.info(f"[{connection_id}] 连接已禁用，不启动")
+
     async def stop(self):
         """停止代理服务器"""
         self.running = False
         self.logger.ws.info("正在停止WebSocket代理服务器...")
+
+        # 取消所有连接服务器任务
+        for connection_id, task in list(self.connection_tasks.items()):
+            if not task.done():
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    self.logger.ws.info(f"[{connection_id}] 连接任务已取消")
+                except Exception as e:
+                    self.logger.ws.warning(f"[{connection_id}] 取消任务时出错: {e}")
+        self.connection_tasks.clear()
 
         # 关闭所有活动连接
         stop_tasks = []
@@ -215,7 +370,7 @@ class ProxyServer:
 class ProxyConnection:
     """单个代理连接"""
 
-    def __init__(self, connection_id, config, client_ws, config_manager, database_manager, logger, backup_manager=None):
+    def __init__(self, connection_id, config, client_ws, config_manager, database_manager, logger, backup_manager=None, status_callback=None):
         self.connection_id = connection_id
         self.config = config
         self.client_ws = client_ws
@@ -223,6 +378,7 @@ class ProxyConnection:
         self.database_manager = database_manager
         self.logger = logger
         self.backup_manager = backup_manager
+        self.status_callback = status_callback
 
         self.target_connections = []
         self.echo_cache = {}
@@ -475,6 +631,9 @@ class ProxyConnection:
                     # 但是，不论是通过头注册还是yunzai的方式都不能支持账号的热切换
                     self.logger.ws.warning("[{}] 客户端账号已切换到 {}，请重启该连接！".format(self.connection_id, message_data['self_id']))
                 self.self_id = message_data["self_id"]
+                # 通过回调更新状态中的self_id
+                if self.status_callback:
+                    self.status_callback('self_id', self.self_id)
             
             # 消息预处理
             message_data = await self.command_handler.preprocesser(message_data)

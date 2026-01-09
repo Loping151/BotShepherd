@@ -189,7 +189,8 @@ class DatabaseManager:
                                 keywords: Optional[List[str]] = None,
                                 keyword_type: str = "and",
                                 prefix: Optional[str] = None,
-                                direction: Optional[str] = "SEND") -> List[Any]:
+                                direction: Optional[str] = "SEND",
+                                private_only: bool = False) -> List[Any]:
         """构建通用的查询条件"""
         conditions = []
 
@@ -199,6 +200,9 @@ class DatabaseManager:
             conditions.append(Message.user_id == user_id)
         if group_id:
             conditions.append(Message.group_id == group_id)
+        elif private_only:
+            # 只查询私聊消息（group_id为None或空）
+            conditions.append(Message.group_id.is_(None))
         if start_time:
             conditions.append(Message.timestamp >= start_time)
         if end_time:
@@ -239,13 +243,14 @@ class DatabaseManager:
                                     prefix: str = None,
                                     direction: str = "SEND",
                                     limit: int = 20,
-                                    offset: int = 0) -> List[MessageRecord]:
+                                    offset: int = 0,
+                                    private_only: bool = False) -> List[MessageRecord]:
         """组合查询消息"""
         async with self.session_factory() as session:
             try:
                 conditions = self._build_message_conditions(
                     self_id, user_id, group_id, start_time, end_time,
-                    keywords, keyword_type, prefix, direction
+                    keywords, keyword_type, prefix, direction, private_only
                 )
 
                 stmt = select(Message)
@@ -269,13 +274,14 @@ class DatabaseManager:
                             keywords: List[str] = None,
                             keyword_type: str = "and",
                             prefix: str = None,
-                            direction: str = "SEND") -> int:
+                            direction: str = "SEND",
+                            private_only: bool = False) -> int:
         """统计消息数量"""
         async with self.session_factory() as session:
             try:
                 conditions = self._build_message_conditions(
                     self_id, user_id, group_id, start_time, end_time,
-                    keywords, keyword_type, prefix, direction
+                    keywords, keyword_type, prefix, direction, private_only
                 )
 
                 stmt = select(func.count(Message.id))

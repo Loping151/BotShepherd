@@ -27,14 +27,14 @@
             <div class="card-body text-center">
                 <h5 class="card-title">
                     <i class="bi bi-check-circle text-success"></i>
-                    启用账号
+                    活跃账号/启用账号
                 </h5>
                 <h3 id="active-accounts">0</h3>
-                <small class="text-muted">个账号</small>
+                <small class="text-muted">今日活跃/启用</small>
             </div>
         </div>
     </div>
-    
+
     <div class="col-md-3">
         <div class="card">
             <div class="card-body text-center">
@@ -47,7 +47,7 @@
             </div>
         </div>
     </div>
-    
+
     <div class="col-md-3">
         <div class="card">
             <div class="card-body text-center">
@@ -65,22 +65,51 @@
 <!-- 账号列表 -->
 <div class="card">
     <div class="card-header">
-        <h5 class="mb-0">
-            <i class="bi bi-list"></i>
-            账号列表
-        </h5>
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="bi bi-list"></i>
+                账号列表
+            </h5>
+            <div class="col-md-3">
+                <input type="text" class="form-control" id="accountSearchInput" placeholder="按ID/名称/描述搜索..." onkeyup="filterAccountTable()">
+            </div>
+        </div>
     </div>
     <div class="card-body">
         <div class="table-responsive">
             <table class="table table-hover" id="accounts-table">
                 <thead>
                     <tr>
-                        <th>账号ID</th>
-                        <th>名称</th>
-                        <th>描述</th>
-                        <th>状态</th>
-                        <th>最后接收</th>
-                        <th>最后发送</th>
+                        <th>
+                            <button class="btn btn-link btn-sm p-0 text-decoration-none sort-header" type="button" data-sort="account_id">
+                                账号ID <span class="sort-indicator"></span>
+                            </button>
+                        </th>
+                        <th>
+                            <button class="btn btn-link btn-sm p-0 text-decoration-none sort-header" type="button" data-sort="name">
+                                名称 <span class="sort-indicator"></span>
+                            </button>
+                        </th>
+                        <th>
+                            <button class="btn btn-link btn-sm p-0 text-decoration-none sort-header" type="button" data-sort="description">
+                                描述 <span class="sort-indicator"></span>
+                            </button>
+                        </th>
+                        <th>
+                            <button class="btn btn-link btn-sm p-0 text-decoration-none sort-header" type="button" data-sort="enabled">
+                                状态 <span class="sort-indicator"></span>
+                            </button>
+                        </th>
+                        <th>
+                            <button class="btn btn-link btn-sm p-0 text-decoration-none sort-header" type="button" data-sort="last_receive_time">
+                                最后接收 <span class="sort-indicator"></span>
+                            </button>
+                        </th>
+                        <th>
+                            <button class="btn btn-link btn-sm p-0 text-decoration-none sort-header" type="button" data-sort="last_send_time">
+                                最后发送 <span class="sort-indicator"></span>
+                            </button>
+                        </th>
                         <th>操作</th>
                     </tr>
                 </thead>
@@ -183,10 +212,12 @@
 <script>
 let accounts = {};
 let editingAccountId = null;
+let sortState = { key: 'account_id', dir: 'asc' };
 
 // 页面加载完成后初始化
 document.addEventListener('DOMContentLoaded', function() {
     loadAccounts();
+    initSortHandlers();
     // setInterval(loadAccounts, 30000); // 每30秒刷新
 });
 
@@ -233,7 +264,7 @@ function updateAccountStats() {
     });
 
     document.getElementById('total-accounts').textContent = total;
-    document.getElementById('active-accounts').textContent = enabled;
+    document.getElementById('active-accounts').textContent = `${todayActive}/${enabled}`;
     document.getElementById('disabled-accounts').textContent = disabled;
     document.getElementById('today-active').textContent = todayActive;
 }
@@ -242,8 +273,9 @@ function updateAccountStats() {
 function updateAccountTable() {
     const tbody = document.querySelector('#accounts-table tbody');
     tbody.innerHTML = '';
-    
-    Object.entries(accounts).forEach(([accountId, account]) => {
+
+    const sortedEntries = getSortedAccountEntries();
+    sortedEntries.forEach(([accountId, account]) => {
         const row = document.createElement('tr');
         
         const statusBadge = account.enabled ? 
@@ -283,6 +315,9 @@ function updateAccountTable() {
         
         tbody.appendChild(row);
     });
+
+    updateSortIndicators();
+    filterAccountTable();
 }
 
 // 格式化日期时间
@@ -520,6 +555,118 @@ function loadAccountAliasesToForm(aliases) {
     // 如果没有别名，至少显示一个空的输入框
     if (list.children.length === 0) {
         resetAccountAliasesList();
+    }
+}
+
+// 账号排序相关函数
+function initSortHandlers() {
+    document.querySelectorAll('[data-sort]').forEach((element) => {
+        element.addEventListener('click', () => {
+            setSort(element.dataset.sort);
+        });
+    });
+    updateSortIndicators();
+}
+
+function defaultSortDir(key) {
+    return ['last_receive_time', 'last_send_time'].includes(key) ? 'desc' : 'asc';
+}
+
+function setSort(key) {
+    if (sortState.key === key) {
+        sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortState.key = key;
+        sortState.dir = defaultSortDir(key);
+    }
+    updateAccountTable();
+}
+
+function parseDateValue(value) {
+    const ts = Date.parse(value);
+    return Number.isNaN(ts) ? 0 : ts;
+}
+
+function getSortValue(accountId, account, key) {
+    if (key === 'account_id') {
+        const num = Number(accountId);
+        return Number.isFinite(num) ? num : String(accountId);
+    }
+    if (key === 'name') {
+        return account.name || '';
+    }
+    if (key === 'description') {
+        return account.description || '';
+    }
+    if (key === 'last_receive_time') {
+        return account.last_receive_time ? parseDateValue(account.last_receive_time) : 0;
+    }
+    if (key === 'last_send_time') {
+        return account.last_send_time ? parseDateValue(account.last_send_time) : 0;
+    }
+    if (key === 'enabled') {
+        return account.enabled ? 1 : 0;
+    }
+    return 0;
+}
+
+function getSortedAccountEntries() {
+    const entries = Object.entries(accounts);
+    const key = sortState.key;
+    entries.sort((a, b) => {
+        const [aId, aAccount] = a;
+        const [bId, bAccount] = b;
+        const aVal = getSortValue(aId, aAccount, key);
+        const bVal = getSortValue(bId, bAccount, key);
+        let result = 0;
+
+        if (typeof aVal === 'string' || typeof bVal === 'string') {
+            result = String(aVal).localeCompare(String(bVal), 'zh-CN', { numeric: true, sensitivity: 'base' });
+        } else {
+            result = aVal - bVal;
+        }
+
+        return sortState.dir === 'asc' ? result : -result;
+    });
+    return entries;
+}
+
+function updateSortIndicators() {
+    document.querySelectorAll('[data-sort]').forEach((element) => {
+        const indicator = element.querySelector('.sort-indicator');
+        if (!indicator) {
+            return;
+        }
+        if (element.dataset.sort === sortState.key) {
+            indicator.textContent = sortState.dir === 'asc' ? '^' : 'v';
+        } else {
+            indicator.textContent = '';
+        }
+    });
+}
+
+// 账号搜索过滤函数
+function filterAccountTable() {
+    const searchInput = document.getElementById('accountSearchInput');
+    const filter = searchInput.value.toLowerCase();
+    const table = document.getElementById('accounts-table');
+    const rows = table.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
+
+    for (let i = 0; i < rows.length; i++) {
+        const cells = rows[i].getElementsByTagName('td');
+        if (cells.length >= 3) {
+            const accountId = (cells[0].textContent || cells[0].innerText).toLowerCase();
+            const name = (cells[1].textContent || cells[1].innerText).toLowerCase();
+            const description = (cells[2].textContent || cells[2].innerText).toLowerCase();
+
+            if (accountId.indexOf(filter) > -1 ||
+                name.indexOf(filter) > -1 ||
+                description.indexOf(filter) > -1) {
+                rows[i].style.display = '';
+            } else {
+                rows[i].style.display = 'none';
+            }
+        }
     }
 }
 </script>

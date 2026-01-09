@@ -136,19 +136,41 @@ BotShepherd Web API 提供了完整的系统管理功能，包括连接管理、
 ### 获取连接配置列表
 - **URL**: `/api/connections`
 - **方法**: GET
-- **描述**: 获取所有连接配置
+- **描述**: 获取所有连接配置及其状态
 - **响应**:
   ```json
   {
     "connection_1": {
       "name": "连接1",
+      "description": "连接描述信息",
       "enabled": true,
-      "type": "websocket",
-      "host": "localhost",
-      "port": 6700
+      "client_endpoint": "ws://localhost:6100/OneBotv11",
+      "target_endpoints": ["ws://localhost:2536/OneBotv11"],
+      "status": {
+        "enabled": true,
+        "client_status": "listening",
+        "client_endpoint": "ws://localhost:6100/OneBotv11",
+        "target_statuses": {},
+        "error": null,
+        "client_address": "127.0.0.1:52341",
+        "self_id": 1234567890
+      }
     }
   }
   ```
+- **status字段说明**:
+  - `enabled`: 是否启用
+  - `client_status`: 客户端连接状态，可选值：
+    - `disabled`: 已禁用
+    - `starting`: 正在启动
+    - `listening`: 监听中（等待客户端连接）
+    - `connected`: 已连接（客户端已连接）
+    - `error`: 错误状态
+  - `client_endpoint`: 客户端端点配置
+  - `target_statuses`: 目标端点状态（预留字段）
+  - `error`: 错误信息（如果有）
+  - `client_address`: 客户端连接地址（如果已连接）
+  - `self_id`: Bot账号ID（从WebSocket消息中获取，如果未连接则为null）
 
 ### 更新连接配置
 - **URL**: `/api/connections/{connection_id}`
@@ -158,10 +180,10 @@ BotShepherd Web API 提供了完整的系统管理功能，包括连接管理、
   ```json
   {
     "name": "更新的连接名",
+    "description": "连接描述信息",
     "enabled": true,
-    "type": "websocket",
-    "host": "localhost",
-    "port": 6700
+    "client_endpoint": "ws://localhost:6100/OneBotv11",
+    "target_endpoints": ["ws://localhost:2536/OneBotv11"]
   }
   ```
 - **响应**:
@@ -170,6 +192,12 @@ BotShepherd Web API 提供了完整的系统管理功能，包括连接管理、
     "success": true
   }
   ```
+- **字段说明**:
+  - `name`: 连接名称
+  - `description`: 连接描述信息（可选）
+  - `enabled`: 是否启用连接
+  - `client_endpoint`: 客户端监听端点（WebSocket地址）
+  - `target_endpoints`: 目标端点列表（WebSocket地址数组）
 
 ### 复制连接配置
 - **URL**: `/api/connections/{connection_id}/copy`
@@ -178,9 +206,12 @@ BotShepherd Web API 提供了完整的系统管理功能，包括连接管理、
 - **请求体**:
   ```json
   {
-    "new_id": "new_connection_id"
+    "new_id": "new_connection_id",
+    "new_name": "连接名称-1"
   }
   ```
+  - `new_id`: 必填，新连接的ID
+  - `new_name`: 可选，新连接的名称（如果未提供则使用"原名称 - 副本"格式）
 - **响应**:
   ```json
   {
@@ -212,13 +243,24 @@ BotShepherd Web API 提供了完整的系统管理功能，包括连接管理、
   ```json
   {
     "123456": {
-      "nickname": "机器人昵称",
+      "name": "机器人名称",
+      "description": "账号描述信息",
       "enabled": true,
-      "auto_accept_friend": true,
-      "auto_accept_group": false
+      "aliases": {
+        "#": ["#", "yun"]
+      },
+      "last_receive_time": "2025-01-10T12:00:00",
+      "last_send_time": "2025-01-10T12:05:00"
     }
   }
   ```
+- **字段说明**:
+  - `name`: 账号名称
+  - `description`: 账号描述信息
+  - `enabled`: 是否启用
+  - `aliases`: 指令别名映射（目标指令 -> 别名列表）
+  - `last_receive_time`: 最后接收消息时间
+  - `last_send_time`: 最后发送消息时间
 
 ### 更新账号配置
 - **URL**: `/api/accounts/{account_id}`
@@ -227,9 +269,13 @@ BotShepherd Web API 提供了完整的系统管理功能，包括连接管理、
 - **请求体**:
   ```json
   {
-    "nickname": "新昵称",
+    "name": "新账号名称",
+    "description": "账号描述信息",
     "enabled": true,
-    "auto_accept_friend": false
+    "aliases": {
+      "#": ["#", "yun"],
+      "yz": ["yunzai"]
+    }
   }
   ```
 - **响应**:
@@ -238,6 +284,11 @@ BotShepherd Web API 提供了完整的系统管理功能，包括连接管理、
     "success": true
   }
   ```
+- **字段说明**:
+  - `name`: 账号名称
+  - `description`: 账号描述信息（可选）
+  - `enabled`: 是否启用
+  - `aliases`: 指令别名配置，格式为 `{目标指令: [别名列表]}`
 - **备注**: 更新后会立即将脏数据写入磁盘
 
 ### 删除账号配置
@@ -521,7 +572,7 @@ BotShepherd Web API 提供了完整的系统管理功能，包括连接管理、
 - **查询参数**:
   - `self_id`: 账号ID
   - `user_id`: 用户ID
-  - `group_id`: 群组ID
+  - `group_id`: 群组ID（特殊值：`__private__` 表示只查询私聊消息，即group_id为None的消息）
   - `start_time`: 开始时间戳
   - `end_time`: 结束时间戳
   - `keywords`: 关键词列表
@@ -530,6 +581,7 @@ BotShepherd Web API 提供了完整的系统管理功能，包括连接管理、
   - `direction`: 消息方向 (SEND/RECV)
   - `limit`: 返回数量限制 (默认20)
   - `offset`: 偏移量 (默认0)
+  - `private_only`: 是否只查询私聊消息（布尔值，与group_id=__private__效果相同）
 
 - **响应**:
   ```json
@@ -643,6 +695,8 @@ BotShepherd Web API 提供了完整的系统管理功能，包括连接管理、
 4. **文件安全**: 日志文件访问有路径遍历保护
 5. **数据格式**: 时间戳使用Unix时间戳格式
 6. **编码**: 所有文本数据使用UTF-8编码
+7. **连接状态**: 连接配置的WebSocket服务器启动失败（如端口被占用）不会影响系统启动，状态会通过API返回
+8. **私聊查询**: 查询私聊消息时，可使用`group_id=__private__`或`private_only=true`参数
 
 ---
 
@@ -662,5 +716,82 @@ BotShepherd Web API 提供了完整的系统管理功能，包括连接管理、
 - `/api/connections/{connection_id}`：更新内存并立即写盘
 
 ### 说明
-- 账号/群组配置使用“脏数据”机制，内存更新后可通过定时保存或 `/api/config/flush` 落盘
+- 账号/群组配置使用"脏数据"机制，内存更新后可通过定时保存或 `/api/config/flush` 落盘
 - 连接/全局配置不使用脏数据机制，修改即写盘
+
+---
+
+## 新功能说明
+
+### 1. 连接状态监控
+
+系统现在实时监控每个连接配置的WebSocket连接状态：
+
+**状态类型**:
+- `disabled`: 连接已禁用
+- `starting`: 正在启动WebSocket服务器
+- `listening`: WebSocket服务器正在监听，等待客户端连接
+- `connected`: 客户端已连接到WebSocket服务器
+- `error`: 启动或连接过程中发生错误
+
+**错误处理**:
+- 当连接配置的端口被占用时，系统不会崩溃，而是将该连接状态标记为`error`
+- 错误信息会通过API的`status.error`字段返回
+- 其他连接配置不受影响，继续正常运行
+
+**使用场景**:
+- 通过`/api/connections` API获取所有连接的实时状态
+- 前端界面会以不同颜色徽章显示连接状态
+- 详情页面显示完整的连接状态和错误信息
+
+### 2. 私聊消息查询
+
+系统支持查询私聊消息（group_id为None的消息）：
+
+**方法一：使用特殊group_id值**
+```
+GET /api/query_messages?group_id=__private__
+```
+
+**方法二：使用private_only参数**
+```
+GET /api/query_messages?private_only=true
+```
+
+**前端使用**:
+在消息查询页面的"群组ID"输入框中输入"私聊"二字，系统会自动将其转换为`__private__`参数。
+
+**注意事项**:
+- 私聊消息的`group_id`字段为None或空
+- 该查询会返回所有非群组的消息（包括私聊和临时会话）
+- 可以与其他查询条件组合使用（如用户ID、时间范围等）
+
+### 3. 连接描述字段
+
+连接配置新增`description`字段用于记录连接的用途和说明：
+
+- 在创建/编辑连接时可以添加描述信息
+- 描述字段为可选字段，支持任意文本
+- 在连接列表和详情页面都会显示描述信息
+- 描述信息会持久化保存到配置文件中
+
+### 4. 前端搜索和排序增强
+
+所有管理页面（账号、群组、连接）现在都支持：
+
+**搜索功能**:
+- 账号管理：支持按ID、名称、描述搜索
+- 群组管理：支持按群号搜索
+- 连接管理：支持按ID、名称、描述搜索
+
+**排序功能**:
+- 账号管理：支持按ID、状态、最后接收时间、最后发送时间排序
+- 群组管理：支持按群号、最后发送时间、过期时间、过滤词数量、状态排序
+- 连接管理：支持按连接ID、名称、启用状态排序
+
+**使用方法**:
+- 点击列表表头的排序按钮进行升序/降序切换
+- 排序指示器显示当前排序的列（^升序，v降序）
+- 在搜索框输入关键词实时过滤结果
+
+---

@@ -437,6 +437,15 @@
                 if (typeof loadDatabaseStatus === 'function') {
                     await loadDatabaseStatus();
                 }
+                if (typeof updateSystemResources === 'function') {
+                    await updateSystemResources();
+                }
+                if (typeof loadDashboardContent === 'function') {
+                    await loadDashboardContent();
+                }
+                if (typeof loadRemoteVersion === 'function') {
+                    await loadRemoteVersion();
+                }
                 if (typeof loadStatistics === 'function') {
                     await loadStatistics();
                 }

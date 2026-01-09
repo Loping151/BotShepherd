@@ -31,10 +31,10 @@
             <div class="card-body text-center">
                 <h5 class="card-title">
                     <i class="bi bi-check-circle text-success"></i>
-                    活动连接
+                    连接状态
                 </h5>
                 <h3 id="active-connections">0</h3>
-                <small class="text-muted">个连接</small>
+                <small class="text-muted">已连接/启用</small>
             </div>
         </div>
     </div>
@@ -69,21 +69,62 @@
 <!-- 连接列表 -->
 <div class="card">
     <div class="card-header">
-        <h5 class="mb-0">
-            <i class="bi bi-list"></i>
-            连接列表（禁用立即生效，其余需重启生效）
-        </h5>
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="bi bi-list"></i>
+                连接列表
+            </h5>
+            <div class="col-md-3">
+                <input type="text" class="form-control" id="connectionSearchInput" placeholder="按ID/名称/描述搜索..." onkeyup="filterConnectionTable()">
+            </div>
+        </div>
+        <div class="mt-3">
+            <small class="text-muted">
+                <strong>客户端端点状态：</strong>
+                <span class="d-inline-block rounded-circle bg-secondary" style="width: 10px; height: 10px; margin-left: 10px;"></span> 禁用
+                <span class="d-inline-block rounded-circle bg-warning" style="width: 10px; height: 10px; margin-left: 10px;"></span> 启动中
+                <span class="d-inline-block rounded-circle bg-info" style="width: 10px; height: 10px; margin-left: 10px;"></span> 监听中
+                <span class="d-inline-block rounded-circle bg-success" style="width: 10px; height: 10px; margin-left: 10px;"></span> 已连接
+                <span class="d-inline-block rounded-circle bg-danger" style="width: 10px; height: 10px; margin-left: 10px;"></span> 错误
+                <br>
+                <strong>目标端点状态：</strong>
+                <span class="d-inline-block rounded-circle bg-secondary" style="width: 10px; height: 10px; margin-left: 10px;"></span> 未连接
+                <span class="d-inline-block rounded-circle bg-success" style="width: 10px; height: 10px; margin-left: 10px;"></span> 已连接
+            </small>
+        </div>
     </div>
     <div class="card-body">
         <div class="table-responsive">
             <table class="table table-hover" id="connections-table">
                 <thead>
                     <tr>
-                        <th>连接ID</th>
-                        <th>名称</th>
+                        <th>
+                            <button class="btn btn-link btn-sm p-0 text-decoration-none sort-header" type="button" data-sort="connection_id">
+                                连接ID <span class="sort-indicator"></span>
+                            </button>
+                        </th>
+                        <th>
+                            <button class="btn btn-link btn-sm p-0 text-decoration-none sort-header" type="button" data-sort="self_id">
+                                连接账号 <span class="sort-indicator"></span>
+                            </button>
+                        </th>
+                        <th>
+                            <button class="btn btn-link btn-sm p-0 text-decoration-none sort-header" type="button" data-sort="name">
+                                名称 <span class="sort-indicator"></span>
+                            </button>
+                        </th>
+                        <th style="width: 15%">
+                            <button class="btn btn-link btn-sm p-0 text-decoration-none sort-header" type="button" data-sort="description">
+                                描述 <span class="sort-indicator"></span>
+                            </button>
+                        </th>
                         <th>客户端端点</th>
                         <th>目标端点</th>
-                        <th>状态</th>
+                        <th>
+                            <button class="btn btn-link btn-sm p-0 text-decoration-none sort-header" type="button" data-sort="enabled">
+                                启用状态 <span class="sort-indicator"></span>
+                            </button>
+                        </th>
                         <th>操作</th>
                     </tr>
                 </thead>
@@ -186,10 +227,12 @@
 <script>
 let connections = {};
 let editingConnectionId = null;
+let sortState = { key: 'connection_id', dir: 'asc' };
 
 // 页面加载完成后初始化
 document.addEventListener('DOMContentLoaded', function() {
     loadConnections();
+    initSortHandlers();
     // setInterval(loadConnections, 10000); // 每10秒刷新
 });
 
@@ -208,18 +251,24 @@ async function loadConnections() {
 // 更新连接统计
 function updateConnectionStats() {
     const total = Object.keys(connections).length;
-    let active = 0, offline = 0, error = 0;
-    
+    let connected = 0, enabled = 0, offline = 0, error = 0;
+
     Object.values(connections).forEach(conn => {
         if (conn.enabled) {
-            active++;
+            enabled++;
         } else {
             offline++;
         }
+        if (conn.status && conn.status.client_status === 'connected') {
+            connected++;
+        }
+        if (conn.status && conn.status.client_status === 'error') {
+            error++;
+        }
     });
-    
+
     document.getElementById('total-connections').textContent = total;
-    document.getElementById('active-connections').textContent = active;
+    document.getElementById('active-connections').textContent = `${connected}/${enabled}`;
     document.getElementById('offline-connections').textContent = offline;
     document.getElementById('error-connections').textContent = error;
 }
@@ -228,32 +277,97 @@ function updateConnectionStats() {
 function updateConnectionTable() {
     const tbody = document.querySelector('#connections-table tbody');
     tbody.innerHTML = '';
-    
-    Object.entries(connections).forEach(([connectionId, connection]) => {
+
+    const sortedEntries = getSortedConnectionEntries();
+
+    // 获取搜索关键词
+    const searchInput = document.getElementById('connectionSearchInput');
+    const filter = searchInput ? searchInput.value.toLowerCase() : '';
+
+    sortedEntries.forEach(([connectionId, connection]) => {
+        // 搜索过滤：检查ID、名称、描述
+        if (filter) {
+            const idMatch = connectionId.toLowerCase().indexOf(filter) > -1;
+            const nameMatch = connection.name.toLowerCase().indexOf(filter) > -1;
+            const descMatch = connection.description && connection.description.toLowerCase().indexOf(filter) > -1;
+
+            if (!idMatch && !nameMatch && !descMatch) {
+                return; // 跳过不匹配的连接
+            }
+        }
+
         const row = document.createElement('tr');
-        
-        const statusBadge = connection.enabled ? 
-            '<span class="badge bg-success">启用</span>' : 
+
+        const statusBadge = connection.enabled ?
+            '<span class="badge bg-success">启用</span>' :
             '<span class="badge bg-secondary">禁用</span>';
-        
-        const targetEndpoints = connection.target_endpoints.join('<br>');
-        
+
+        // 获取客户端连接状态颜色
+        let clientDotColor = 'bg-secondary';
+        if (connection.status) {
+            const clientStatus = connection.status.client_status;
+            switch (clientStatus) {
+                case 'disabled':
+                    clientDotColor = 'bg-secondary';
+                    break;
+                case 'starting':
+                    clientDotColor = 'bg-warning';
+                    break;
+                case 'listening':
+                    clientDotColor = 'bg-info';
+                    break;
+                case 'connected':
+                    clientDotColor = 'bg-success';
+                    break;
+                case 'error':
+                    clientDotColor = 'bg-danger';
+                    break;
+            }
+        }
+
+        // 构建客户端端点HTML（带状态圆点）
+        const clientEndpointHtml = `<span class="d-inline-block rounded-circle ${clientDotColor}" style="width: 8px; height: 8px; margin-right: 5px;"></span><code>${connection.client_endpoint}</code>`;
+
+        // 构建目标端点HTML（每个端点带状态圆点）
+        let targetEndpointsHtml = '';
+        const targetCount = connection.target_endpoints.length;
+        for (let i = 0; i < targetCount; i++) {
+            // 目标端点状态：仅当客户端已连接时显示在线（绿色），否则离线（灰色）
+            let targetDotColor = 'bg-secondary';
+            if (connection.status && connection.status.client_status === 'connected') {
+                targetDotColor = 'bg-success';
+            }
+
+            if (i > 0) {
+                targetEndpointsHtml += '<br>';
+            }
+            targetEndpointsHtml += `<span class="d-inline-block rounded-circle ${targetDotColor}" style="width: 8px; height: 8px; margin-right: 5px;"></span><code>${connection.target_endpoints[i]}</code>`;
+        }
+
+        // 获取账号ID
+        const selfId = connection.status && connection.status.self_id ? connection.status.self_id : '未连接';
+
         row.innerHTML = `
             <td><code>${connectionId}</code></td>
+            <td><code>${selfId}</code></td>
             <td>${connection.name}</td>
-            <td><code>${connection.client_endpoint}</code></td>
-            <td><small>${targetEndpoints}</small></td>
+            <td><small>${connection.description || '无描述'}</small></td>
+            <td>${clientEndpointHtml}</td>
+            <td>${targetEndpointsHtml}</td>
             <td>${statusBadge}</td>
             <td>
                 <div class="btn-group" role="group">
+                    <button class="btn btn-sm btn-outline-${connection.enabled ? 'warning' : 'success'}" onclick="toggleConnectionEnabled('${connectionId}')" title="${connection.enabled ? '禁用' : '启用'}">
+                        <i class="bi bi-${connection.enabled ? 'pause' : 'play'}"></i>
+                    </button>
                     <button class="btn btn-sm btn-outline-primary" onclick="showConnectionDetail('${connectionId}')" title="查看详情">
                         <i class="bi bi-eye"></i>
                     </button>
-                    <button class="btn btn-sm btn-outline-warning" onclick="editConnection('${connectionId}')" title="编辑">
-                        <i class="bi bi-pencil"></i>
-                    </button>
                     <button class="btn btn-sm btn-outline-secondary" onclick="copyConnection('${connectionId}')" title="复制">
                         <i class="bi bi-clipboard"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-warning" onclick="editConnection('${connectionId}')" title="编辑">
+                        <i class="bi bi-pencil"></i>
                     </button>
                     <button class="btn btn-sm btn-outline-danger" onclick="deleteConnection('${connectionId}')" title="删除">
                         <i class="bi bi-trash"></i>
@@ -261,9 +375,11 @@ function updateConnectionTable() {
                 </div>
             </td>
         `;
-        
+
         tbody.appendChild(row);
     });
+
+    updateSortIndicators();
 }
 
 // 显示添加连接模态框
@@ -414,12 +530,12 @@ async function deleteConnection(connectionId) {
     if (!confirm('确定要删除这个连接吗？')) {
         return;
     }
-    
+
     try {
         await apiRequest(`/api/connections/${connectionId}`, {
             method: 'DELETE'
         });
-        
+
         showToast('连接删除成功', 'success');
         loadConnections();
     } catch (error) {
@@ -427,9 +543,62 @@ async function deleteConnection(connectionId) {
     }
 }
 
+// 切换连接启用状态
+async function toggleConnectionEnabled(connectionId) {
+    try {
+        const connection = connections[connectionId];
+        const newEnabled = !connection.enabled;
+
+        const updateData = {
+            name: connection.name,
+            description: connection.description || '',
+            client_endpoint: connection.client_endpoint,
+            target_endpoints: connection.target_endpoints,
+            enabled: newEnabled
+        };
+
+        await apiRequest(`/api/connections/${connectionId}`, {
+            method: 'PUT',
+            body: JSON.stringify(updateData)
+        });
+
+        const statusText = newEnabled ? '启用' : '禁用';
+        showToast(`连接已${statusText}`, 'success');
+        loadConnections();
+    } catch (error) {
+        showToast(`切换连接状态失败: ${error.message}`, 'danger');
+    }
+}
+
 // 复制连接
 async function copyConnection(connectionId) {
-    const newId = prompt('请输入新连接的ID:', connectionId + '_copy');
+    const connection = connections[connectionId];
+    const name = connection.name || connectionId;
+
+    // 检查名称是否已经以 "-数字" 结尾
+    const match = name.match(/-(\d+)$/);
+    let baseName;
+    let startSuffix;
+
+    if (match) {
+        // 如果已经带编号，提取基础名称和当前编号
+        baseName = name.substring(0, name.lastIndexOf('-'));
+        startSuffix = parseInt(match[1]) + 1;  // 从下一个编号开始
+    } else {
+        // 如果没有编号，使用完整名称作为基础，从1开始
+        baseName = name;
+        startSuffix = 1;
+    }
+
+    // 查找可用的编号
+    let suffix = startSuffix;
+    let newName = `${baseName}-${suffix}`;
+    while (Object.values(connections).some(conn => conn.name === newName)) {
+        suffix++;
+        newName = `${baseName}-${suffix}`;
+    }
+
+    const newId = prompt('请输入新连接的ID:', `${connectionId}-${suffix}`);
     if (!newId || newId.trim() === '') {
         return;
     }
@@ -443,7 +612,8 @@ async function copyConnection(connectionId) {
         await apiRequest(`/api/connections/${connectionId}/copy`, {
             method: 'POST',
             body: JSON.stringify({
-                new_id: newId.trim()
+                new_id: newId.trim(),
+                new_name: newName
             })
         });
 
@@ -458,7 +628,89 @@ async function copyConnection(connectionId) {
 // 显示连接详情
 function showConnectionDetail(connectionId) {
     const connection = connections[connectionId];
-    
+
+    // 获取客户端状态圆点颜色
+    let clientDotColor = 'bg-secondary';
+    let clientStatusText = '未知';
+    let clientErrorInfo = '';
+    let clientAddressInfo = '';
+
+    if (connection.status) {
+        const clientStatus = connection.status.client_status;
+        switch (clientStatus) {
+            case 'disabled':
+                clientDotColor = 'bg-secondary';
+                clientStatusText = '已禁用';
+                break;
+            case 'starting':
+                clientDotColor = 'bg-warning';
+                clientStatusText = '启动中';
+                break;
+            case 'listening':
+                clientDotColor = 'bg-info';
+                clientStatusText = '监听中';
+                break;
+            case 'connected':
+                clientDotColor = 'bg-success';
+                clientStatusText = '已连接';
+                break;
+            case 'error':
+                clientDotColor = 'bg-danger';
+                clientStatusText = '错误';
+                break;
+        }
+
+        if (connection.status.error) {
+            clientErrorInfo = `<br><small class="text-danger">${connection.status.error}</small>`;
+        }
+
+        if (connection.status.client_address) {
+            clientAddressInfo = `<tr><td>客户端地址</td><td>${connection.status.client_address}</td></tr>`;
+        }
+    }
+
+    const clientStatusInfo = `<span class="d-inline-block rounded-circle ${clientDotColor}" style="width: 10px; height: 10px; margin-right: 5px;"></span>${clientStatusText}${clientErrorInfo}`;
+
+    // 构建客户端端点HTML（带状态圆点）
+    const clientEndpointHtml = `<span class="d-inline-block rounded-circle ${clientDotColor}" style="width: 10px; height: 10px; margin-right: 5px;"></span><code>${connection.client_endpoint}</code>`;
+
+    // 构建目标端点HTML（每个端点带状态圆点）
+    let targetEndpointsHtml = '';
+    let targetStatusInfo = '';
+
+    if (connection.target_endpoints && connection.target_endpoints.length > 0) {
+        targetEndpointsHtml = '<td valign="top">';
+        targetStatusInfo = '<tr><td valign="top">目标状态</td><td>';
+
+        connection.target_endpoints.forEach((endpoint, index) => {
+            // 获取目标端点状态颜色
+            let targetDotColor = 'bg-secondary';
+            let targetStatusText = '未知';
+
+            if (connection.status && connection.status.client_status === 'connected') {
+                targetDotColor = 'bg-success';
+                targetStatusText = '已连接';
+            } else if (connection.status && connection.status.client_status === 'listening') {
+                targetDotColor = 'bg-warning';
+                targetStatusText = '等待连接';
+            } else if (connection.status && connection.status.client_status === 'disabled') {
+                targetDotColor = 'bg-secondary';
+                targetStatusText = '已禁用';
+            }
+
+            if (index > 0) {
+                targetEndpointsHtml += '<br>';
+                targetStatusInfo += '<br>';
+            }
+
+            targetEndpointsHtml += `<span class="d-inline-block rounded-circle ${targetDotColor}" style="width: 10px; height: 10px; margin-right: 5px;"></span><code>${endpoint}</code>`;
+            targetStatusInfo += `<span class="d-inline-block rounded-circle ${targetDotColor}" style="width: 10px; height: 10px; margin-right: 5px;"></span>${targetStatusText}`;
+        });
+
+        targetEndpointsHtml += '</td>';
+        targetStatusInfo += '</td></tr>';
+    }
+
     const content = `
         <div class="row">
             <div class="col-md-6">
@@ -467,21 +719,112 @@ function showConnectionDetail(connectionId) {
                     <tr><td>连接ID</td><td><code>${connectionId}</code></td></tr>
                     <tr><td>名称</td><td>${connection.name}</td></tr>
                     <tr><td>描述</td><td>${connection.description || '无'}</td></tr>
-                    <tr><td>状态</td><td>${connection.enabled ? '启用' : '禁用'}</td></tr>
+                    <tr><td>启用状态</td><td>${connection.enabled ? '启用' : '禁用'}</td></tr>
+                </table>
+
+                <h6 class="mt-3">连接状态</h6>
+                <table class="table table-sm">
+                    <tr><td>客户端状态</td><td>${clientStatusInfo}</td></tr>
+                    ${clientAddressInfo}
                 </table>
             </div>
             <div class="col-md-6">
                 <h6>端点信息</h6>
                 <table class="table table-sm">
-                    <tr><td>客户端端点</td><td><code>${connection.client_endpoint}</code></td></tr>
-                    <tr><td>目标端点</td><td>${connection.target_endpoints.map(ep => `<code>${ep}</code>`).join('<br>')}</td></tr>
+                    <tr><td>客户端端点</td><td>${clientEndpointHtml}</td></tr>
+                    <tr><td valign="top">目标端点</td>${targetEndpointsHtml}</tr>
+                    ${targetStatusInfo}
                 </table>
             </div>
         </div>
     `;
-    
+
     document.getElementById('connectionDetailContent').innerHTML = content;
     new bootstrap.Modal(document.getElementById('connectionDetailModal')).show();
+}
+
+// 连接排序相关函数
+function initSortHandlers() {
+    document.querySelectorAll('[data-sort]').forEach((element) => {
+        element.addEventListener('click', () => {
+            setSort(element.dataset.sort);
+        });
+    });
+    updateSortIndicators();
+}
+
+function defaultSortDir(key) {
+    return 'asc';
+}
+
+function setSort(key) {
+    if (sortState.key === key) {
+        sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortState.key = key;
+        sortState.dir = defaultSortDir(key);
+    }
+    updateConnectionTable();
+}
+
+function getSortValue(connectionId, connection, key) {
+    if (key === 'connection_id') {
+        return String(connectionId);
+    }
+    if (key === 'self_id') {
+        const selfId = connection.status && connection.status.self_id ? connection.status.self_id : '未连接';
+        return String(selfId);
+    }
+    if (key === 'name') {
+        return connection.name || '';
+    }
+    if (key === 'description') {
+        return connection.description || '';
+    }
+    if (key === 'enabled') {
+        return connection.enabled ? 1 : 0;
+    }
+    return 0;
+}
+
+function getSortedConnectionEntries() {
+    const entries = Object.entries(connections);
+    const key = sortState.key;
+    entries.sort((a, b) => {
+        const [aId, aConnection] = a;
+        const [bId, bConnection] = b;
+        const aVal = getSortValue(aId, aConnection, key);
+        const bVal = getSortValue(bId, bConnection, key);
+        let result = 0;
+
+        if (typeof aVal === 'string' || typeof bVal === 'string') {
+            result = String(aVal).localeCompare(String(bVal), 'zh-CN', { numeric: true, sensitivity: 'base' });
+        } else {
+            result = aVal - bVal;
+        }
+
+        return sortState.dir === 'asc' ? result : -result;
+    });
+    return entries;
+}
+
+function updateSortIndicators() {
+    document.querySelectorAll('[data-sort]').forEach((element) => {
+        const indicator = element.querySelector('.sort-indicator');
+        if (!indicator) {
+            return;
+        }
+        if (element.dataset.sort === sortState.key) {
+            indicator.textContent = sortState.dir === 'asc' ? '^' : 'v';
+        } else {
+            indicator.textContent = '';
+        }
+    });
+}
+
+// 连接搜索过滤函数
+function filterConnectionTable() {
+    updateConnectionTable();
 }
 </script>
 {% endblock %}

@@ -31,10 +31,10 @@
             <div class="card-body text-center">
                 <h5 class="card-title">
                     <i class="bi bi-check-circle text-success"></i>
-                    启用群组
+                    活跃群组/启用群组
                 </h5>
                 <h3 id="enabled-groups">0</h3>
-                <small class="text-muted">个群组</small>
+                <small class="text-muted">今日活跃/启用</small>
             </div>
         </div>
     </div>
@@ -75,7 +75,7 @@
                 群组列表
             </h5>
             <div class="col-md-3">
-                <input type="text" class="form-control" id="groupSearchInput" placeholder="按群号搜索..." onkeyup="filterGroupTable()">
+                <input type="text" class="form-control" id="groupSearchInput" placeholder="按群号/描述搜索..." onkeyup="filterGroupTable()">
             </div>
         </div>
     </div>
@@ -89,7 +89,11 @@
                                 群组ID <span class="sort-indicator"></span>
                             </button>
                         </th>
-                        <th>描述</th>
+                        <th>
+                            <button class="btn btn-link btn-sm p-0 text-decoration-none sort-header" type="button" data-sort="description">
+                                描述 <span class="sort-indicator"></span>
+                            </button>
+                        </th>
                         <th>
                             <button class="btn btn-link btn-sm p-0 text-decoration-none sort-header" type="button" data-sort="last_message_time">
                                 最后发送时间 <span class="sort-indicator"></span>
@@ -275,7 +279,7 @@ async function loadGroups() {
 }
 
 // 更新群组统计
-function updateGroupStats() {
+async function updateGroupStats() {
     const total = Object.keys(groups).length;
     let enabled = 0, filtered = 0, expired = 0;
 
@@ -288,8 +292,17 @@ function updateGroupStats() {
         }
     });
 
+    // 获取今日活跃群组数
+    let todayActive = 0;
+    try {
+        const recentlyActiveResponse = await apiRequest('/api/recently-active-groups');
+        todayActive = recentlyActiveResponse.length || 0;
+    } catch (error) {
+        console.error('获取今日活跃群组失败:', error);
+    }
+
     document.getElementById('total-groups').textContent = total;
-    document.getElementById('enabled-groups').textContent = enabled;
+    document.getElementById('enabled-groups').textContent = `${todayActive}/${enabled}`;
     document.getElementById('filtered-groups').textContent = filtered;
     document.getElementById('expired-groups').textContent = expired;
 }
@@ -380,6 +393,7 @@ function showAddGroupModal() {
     editingGroupId = null;
     document.getElementById('groupModalTitle').textContent = '添加群组配置';
     document.getElementById('groupForm').reset();
+    document.getElementById('groupId').disabled = false; // 新建时启用ID输入
     resetFilterLists();
     new bootstrap.Modal(document.getElementById('groupModal')).show();
 }
@@ -391,6 +405,7 @@ function editGroup(groupId) {
 
     document.getElementById('groupModalTitle').textContent = '编辑群组配置';
     document.getElementById('groupId').value = groupId;
+    document.getElementById('groupId').disabled = true; // 编辑时禁用ID输入
     document.getElementById('groupDescription').value = group.description || '';
 
     // 处理过期时间 - 转换为日期格式
@@ -549,6 +564,9 @@ function getSortValue(groupId, group, key) {
     if (key === 'group_id') {
         const num = Number(groupId);
         return Number.isFinite(num) ? num : String(groupId);
+    }
+    if (key === 'description') {
+        return group.description || '';
     }
     if (key === 'last_message_time') {
         return group.last_message_time ? parseDateValue(group.last_message_time) : 0;
@@ -822,10 +840,12 @@ function filterGroupTable() {
     const rows = table.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
 
     for (let i = 0; i < rows.length; i++) {
-        const groupIdCell = rows[i].getElementsByTagName('td')[0];
-        if (groupIdCell) {
-            const groupId = groupIdCell.textContent || groupIdCell.innerText;
-            if (groupId.toLowerCase().indexOf(filter) > -1) {
+        const cells = rows[i].getElementsByTagName('td');
+        if (cells.length >= 2) {
+            const groupId = (cells[0].textContent || cells[0].innerText).toLowerCase();
+            const description = (cells[1].textContent || cells[1].innerText).toLowerCase();
+
+            if (groupId.indexOf(filter) > -1 || description.indexOf(filter) > -1) {
                 rows[i].style.display = '';
             } else {
                 rows[i].style.display = 'none';
