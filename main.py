@@ -41,10 +41,7 @@ if not success and import_err:
         print("如已经完成初始化，请使用 ./venv/Scripts/python.exe main.py")
     else:
         print("如已经完成初始化，请使用 ./venv/bin/python main.py")
-    sys.exit(1)
-    
-import_app_modules()
-
+            
 class BotShepherd:
     """BotShepherd主应用类"""
 
@@ -471,7 +468,8 @@ async def main():
 
     if args.setup:
         await setup_initial_config()
-        return
+        
+    import_app_modules()
 
     # 检查配置文件是否存在
     if not check_config_exists():
