@@ -317,6 +317,25 @@ BotShepherd Web API 提供了完整的系统管理功能，包括连接管理、
   ]
   ```
 
+### 检查账号在线状态
+- **URL**: `/api/accounts/{account_id}/online-status`
+- **方法**: GET
+- **描述**: 通过向连接的客户端发送get_status API检查账号是否在线
+- **响应**:
+  ```json
+  {
+    "online": true
+  }
+  ```
+- **字段说明**:
+  - `online`: 布尔值，true表示在线，false表示离线
+- **备注**:
+  - 该API会向匹配该账号ID的连接发送OneBot v11的`get_status`请求
+  - 如果没有匹配的连接，直接返回离线
+  - 请求超时时间为5秒
+  - 通过检查响应中的`data.online`字段判断在线状态（true=在线，false或不存在=离线）
+  - 详细的请求和响应日志会记录在WebSocket日志中（DEBUG级别）
+
 ---
 
 ## 群组管理API

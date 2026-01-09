@@ -100,7 +100,11 @@
                                 状态 <span class="sort-indicator"></span>
                             </button>
                         </th>
-                        <th>在线状态</th>
+                        <th>
+                            <button class="btn btn-link btn-sm p-0 text-decoration-none sort-header" type="button" data-sort="online_status">
+                                在线状态 <span class="sort-indicator"></span>
+                            </button>
+                        </th>
                         <th>
                             <button class="btn btn-link btn-sm p-0 text-decoration-none sort-header" type="button" data-sort="last_receive_time">
                                 最后接收 <span class="sort-indicator"></span>
@@ -213,6 +217,7 @@
 <script>
 let accounts = {};
 let connections = {};
+let accountOnlineStatus = {}; // 缓存账号在线状态：无连接=0, 离线=1, 在线=2
 let editingAccountId = null;
 let sortState = { key: 'account_id', dir: 'asc' };
 
@@ -226,6 +231,9 @@ document.addEventListener('DOMContentLoaded', function() {
 // 加载账号列表
 async function loadAccounts() {
     try {
+        // 清空在线状态缓存
+        accountOnlineStatus = {};
+
         const response = await apiRequest('/api/accounts');
         accounts = response;
 
@@ -296,16 +304,30 @@ async function updateAccountTable() {
             '<span class="badge bg-success">启用</span>' :
             '<span class="badge bg-secondary">禁用</span>';
 
-        // 检查账号是否在线（通过API调用）
-        let onlineStatus = '<span class="text-muted"><i class="bi bi-circle"></i> 离线</span>';
-        try {
-            const statusResponse = await apiRequest(`/api/accounts/${accountId}/online-status`);
-            if (statusResponse.online) {
-                onlineStatus = '<span class="text-success"><i class="bi bi-circle-fill"></i> 在线</span>';
+        // 检查账号是否有对应的连接
+        const hasConnection = Object.values(connections).some(conn =>
+            conn.status && conn.status.self_id == accountId
+        );
+
+        let onlineStatus;
+        if (!hasConnection) {
+            // 无连接配置
+            onlineStatus = '<span class="text-secondary"><i class="bi bi-dash-circle"></i> 无连接</span>';
+            accountOnlineStatus[accountId] = 0; // 缓存：无连接
+        } else {
+            // 有连接，检查在线状态
+            onlineStatus = '<span class="text-muted"><i class="bi bi-circle"></i> 离线</span>';
+            accountOnlineStatus[accountId] = 1; // 缓存：离线（默认）
+            try {
+                const statusResponse = await apiRequest(`/api/accounts/${accountId}/online-status`);
+                if (statusResponse.online) {
+                    onlineStatus = '<span class="text-success"><i class="bi bi-circle-fill"></i> 在线</span>';
+                    accountOnlineStatus[accountId] = 2; // 缓存：在线
+                }
+            } catch (error) {
+                // API调用失败，保持离线状态
+                console.error(`检查账号${accountId}在线状态失败:`, error);
             }
-        } catch (error) {
-            // API调用失败，保持离线状态
-            console.error(`检查账号${accountId}在线状态失败:`, error);
         }
 
         const lastReceive = account.last_receive_time ?
@@ -627,6 +649,10 @@ function getSortValue(accountId, account, key) {
     }
     if (key === 'description') {
         return account.description || '';
+    }
+    if (key === 'online_status') {
+        // 使用缓存的在线状态：无连接=0, 离线=1, 在线=2
+        return accountOnlineStatus[accountId] ?? 0;
     }
     if (key === 'last_receive_time') {
         return account.last_receive_time ? parseDateValue(account.last_receive_time) : 0;
