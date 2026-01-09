@@ -1,23 +1,31 @@
 # 🐑 BotShepherd
 
+话说，到底是谁在使用本项目？
+
 **BotShepherd** 是一个基于OneBot v11协议WebSocket代理和管理系统，统一管理和协调多个Bot实例，实现一对多的连接管理、消息统计、跨框架黑名单、全框架分群组功能开关和别名防冲突。
 
 **人话：一个账号只需要一个ws连接接入本系统，就可以自由的连接到下游框架。本系统可以方便的统计单个账号消息量，管理黑名单，进行指令转化等。你不再需要为每个账号创建一个Nonebot或配置 账号数量x框架数量 个ws连接**
 
 #### 核心Feature
 
-- 每账号消息量，跨框架黑名单，每Bot、每群、全局可以将原有指令别名，不同名称的Bot不再需要为了一个指令名称单开框架
-- 触发指令：自己上号或主人在群里，通过指令帮助其他用户执行任何指令（bs触发 123456 some_command），避免红温
+- 每账号消息量，跨框架黑名单，每Bot、每群、全局可以将原有指令别名，支持不更改后端就能按Bot区分不同业务（使用不同别名），支持群管理员通过过滤词的方式自助禁用指令。
+- 触发指令：自己上号或主人在群里，通过指令帮助其他用户执行任何指令（bs触发 123456 some_command），避免红温，现已支持at。
 - 支持对接其他系统，可自动化更新群组到期时间等 [API文档](./README_API.md)
 
 ![static/imgs/pipeline.png](static/imgs/pipeline.png)
 
 ## 📝 更新记录
 
-### 2026-01-09 v0.5.4 排除包发送行为
+### 2026-01-10 v1.0.0 完善了最初设想的所有功能
+
+- 连接配置的更改不再需要重启
+- 优化显示，完整易用的webui
+- 新压力测试：每日收20W消息、发1.8W消息，占用R9 9950x的单核约2%，内存150M
 
 <details>
 <summary>点此展开历史版本</summary>
+
+2026-01-09 v0.5.4 排除包发送行为
 
 2026-01-03 v0.5.3 改用state判断ws状态
 
@@ -108,14 +116,11 @@
 
 ## ✅ 已测试兼容性
 
-|                | Nonebot | Yunzai/TRSS | AstrBot | Koishi |
-|----------------|:-------:|:-----------:|:-------:|:------:|
-| Lagrange.Onebot|   ✔️    |     ✔️      |   ✔️   |   ✔️   |
-| Napcat         |   ✔️    |     ✔️      |   ✔️   |   ✔️   |
-| LLOneBot       |   ✔️    |     ✔️      |   ✔️   |   ✔️   |
-| LLTwoBot       |   ✔️    |     ✔️      |   ✔️   |   ✔️   |
-
-PS：Koishi似乎仍然需要每id配置一份配置文件，所以没啥大用（指统一管理）。然后LLOneBot和LLTwoBot怎么好像是一个东西。。
+|                      | Nonebot | Yunzai/TRSS | AstrBot | Koishi |
+|----------------------|:-------:|:-----------:|:-------:|:------:|
+| Lagrange.Onebot      |   ✔️    |     ✔️      |   ✔️   |   ✔️   |
+| Napcat               |   ✔️    |     ✔️      |   ✔️   |   ✔️   |
+| LuckyLilliaBot(obv11)|   ✔️    |     ✔️      |   ✔️   |   ✔️   |
 
 ## 🚀 快速开始
 
@@ -144,6 +149,9 @@ python main.py --setup
 3. **启动系统**
 ```bash
 # 如果使用虚拟环境（推荐）
+# 如果是Windows
+./venv/Scripts/python.exe main.py
+# 如果是Linux
 ./venv/bin/python main.py
 
 # 或者直接使用系统Python
@@ -163,9 +171,11 @@ http://localhost:5100
 
 ![static/imgs/pipeline.png](static/imgs/example.png)
 
-注意多个客户端不能公用一个入口（客户端端点），因为需要拿这个ws连接头去连接下游框架。按照标准，self_id，如QQ号，就在连接头中，一号一头。
+其中：客户端端点 是 bs监听的端口，bs代替了框架成为了server，所以bs的客户端端点填写localhost即可。如果目标框架和bs不在同一台机器上，需要填写目标框架所在机器的ip。而nc的客户端端点则填写bs所在机器的ip。如果需要token，可以使用ws连接的参数，例如`ws://127.0.0.1:1212?token=123456`。
 
-创建完第一个连接配置后，可以点击复制快速创建多个连接头。
+注意多个客户端不能公用一个连接配置（客户端端点），因为需要拿这个ws连接头去连接下游框架。按照标准，self_id，如QQ号，就在连接头中，一号一头。
+
+创建完第一个连接配置后，可以点击复制快速创建多个连接配置。
 
 ### 后台运行
 示例：使用Tmux(Linux)
@@ -239,7 +249,7 @@ BotShepherd内置了简单的指令系统，默认前缀为 `bs`：
 ```
 BotShepherd/
 ├── app/                   # 核心应用代码
-│   ├── onebotv11/         # OneBot协议解析
+│   ├── onebotv11/         # OneBotv11协议解析
 │   ├── config/            # 配置管理
 │   ├── database/          # 数据库操作
 │   ├── server/            # WebSocket代理
@@ -247,12 +257,12 @@ BotShepherd/
 │   ├── commands/          # 指令系统
 │   ├── plugins/           # 插件系统
 │   └── utils/             # 工具类
-├── config/                # 配置文件目录
-├── data/                  # 数据库文件目录
+├── config/                # 配置文件目录，备份此处即可
+├── data/                  # 数据库文件目录，用于储存聊天记录
 ├── logs/                  # 日志文件目录
 ├── templates/             # HTML模板
-├── static/                # 没放东西
-└── main.py               # 主程序入口
+├── static/                # 结果变成assets了
+└── main.py                # 主程序入口，包含环境初始化
 ```
 
 ### 添加自定义指令
@@ -287,4 +297,6 @@ class MyCommand(Command):
 - [Bootstrap](https://getbootstrap.com/) - UI框架，这个是AI自己加的，前端不会写喵
 ---
 
-**BotShepherd** - 让Bot管理变得简单而强大 🐑✨
+**BotShepherd** - 让Bot管理变得简单而强大 🐑✨ By Loping151 and 小维
+
+![static/imgs/verina.png](static/imgs/verina.jpg)
