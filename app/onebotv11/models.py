@@ -5,7 +5,6 @@ OneBot v11 数据模型
 
 from typing import Dict, List, Any, Optional, Union, Literal
 from pydantic import BaseModel, Field
-from datetime import datetime
 from enum import Enum
 
 # 基础枚举类型

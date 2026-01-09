@@ -5,8 +5,7 @@ OneBot v11 API处理器
 
 from typing import Dict, Any, List, Optional, Union
 import uuid
-from .models import ApiRequest, ApiResponse, MessageSegment
-from .message_segment import MessageSegmentBuilder
+from .models import ApiRequest, MessageSegment
 
 class ApiHandler:
     """API处理器"""

@@ -100,6 +100,7 @@
                                 状态 <span class="sort-indicator"></span>
                             </button>
                         </th>
+                        <th>在线状态</th>
                         <th>
                             <button class="btn btn-link btn-sm p-0 text-decoration-none sort-header" type="button" data-sort="last_receive_time">
                                 最后接收 <span class="sort-indicator"></span>
@@ -211,6 +212,7 @@
 {% block extra_js %}
 <script>
 let accounts = {};
+let connections = {};
 let editingAccountId = null;
 let sortState = { key: 'account_id', dir: 'asc' };
 
@@ -226,8 +228,18 @@ async function loadAccounts() {
     try {
         const response = await apiRequest('/api/accounts');
         accounts = response;
+
+        // 同时加载连接数据用于判断在线状态
+        try {
+            const connectionsResponse = await apiRequest('/api/connections');
+            connections = connectionsResponse;
+        } catch (error) {
+            console.error('加载连接失败:', error);
+            connections = {};
+        }
+
         updateAccountStats();
-        updateAccountTable();
+        await updateAccountTable();
     } catch (error) {
         console.error('加载账号失败:', error);
     }
@@ -270,28 +282,43 @@ function updateAccountStats() {
 }
 
 // 更新账号表格
-function updateAccountTable() {
+async function updateAccountTable() {
     const tbody = document.querySelector('#accounts-table tbody');
     tbody.innerHTML = '';
 
     const sortedEntries = getSortedAccountEntries();
-    sortedEntries.forEach(([accountId, account]) => {
+
+    // 先渲染基本表格
+    const accountPromises = sortedEntries.map(async ([accountId, account]) => {
         const row = document.createElement('tr');
-        
-        const statusBadge = account.enabled ? 
-            '<span class="badge bg-success">启用</span>' : 
+
+        const statusBadge = account.enabled ?
+            '<span class="badge bg-success">启用</span>' :
             '<span class="badge bg-secondary">禁用</span>';
-        
-        const lastReceive = account.last_receive_time ? 
+
+        // 检查账号是否在线（通过API调用）
+        let onlineStatus = '<span class="text-muted"><i class="bi bi-circle"></i> 离线</span>';
+        try {
+            const statusResponse = await apiRequest(`/api/accounts/${accountId}/online-status`);
+            if (statusResponse.online) {
+                onlineStatus = '<span class="text-success"><i class="bi bi-circle-fill"></i> 在线</span>';
+            }
+        } catch (error) {
+            // API调用失败，保持离线状态
+            console.error(`检查账号${accountId}在线状态失败:`, error);
+        }
+
+        const lastReceive = account.last_receive_time ?
             formatDateTime(account.last_receive_time) : '从未';
-        const lastSend = account.last_send_time ? 
+        const lastSend = account.last_send_time ?
             formatDateTime(account.last_send_time) : '从未';
-        
+
         row.innerHTML = `
             <td><code>${accountId}</code></td>
             <td>${account.name}</td>
             <td><small>${account.description || '无描述'}</small></td>
             <td>${statusBadge}</td>
+            <td>${onlineStatus}</td>
             <td><small>${lastReceive}</small></td>
             <td><small>${lastSend}</small></td>
             <td>
@@ -302,7 +329,7 @@ function updateAccountTable() {
                     <button class="btn btn-sm btn-outline-warning" onclick="editAccount('${accountId}')" title="编辑">
                         <i class="bi bi-pencil"></i>
                     </button>
-                    <button class="btn btn-sm btn-outline-${account.enabled ? 'warning' : 'success'}" 
+                    <button class="btn btn-sm btn-outline-${account.enabled ? 'warning' : 'success'}"
                             onclick="toggleAccount('${accountId}')" title="${account.enabled ? '禁用' : '启用'}">
                         <i class="bi bi-${account.enabled ? 'pause' : 'play'}"></i>
                     </button>
@@ -312,9 +339,12 @@ function updateAccountTable() {
                 </div>
             </td>
         `;
-        
+
         tbody.appendChild(row);
     });
+
+    // 等待所有账号的在线状态检查完成
+    await Promise.all(accountPromises);
 
     updateSortIndicators();
     filterAccountTable();

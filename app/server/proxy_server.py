@@ -33,6 +33,9 @@ class ProxyServer:
         # 连接状态跟踪
         self.connection_statuses = {}  # connection_id -> status info
         self.connection_tasks = {}     # connection_id -> asyncio.Task (跟踪每个连接的服务器任务)
+
+        # API响应等待（用于在线状态检查等）
+        self.pending_api_requests = {}  # echo -> asyncio.Future
         
     async def start(self):
         """启动代理服务器"""
@@ -208,6 +211,63 @@ class ProxyServer:
         if connection_id in self.connection_statuses:
             self.connection_statuses[connection_id][key] = value
 
+    def _handle_api_response(self, echo: str, response_data: dict) -> bool:
+        """处理API响应，检查是否有待处理的请求"""
+        if echo in self.pending_api_requests:
+            future = self.pending_api_requests[echo]
+            if not future.done():
+                future.set_result(response_data)
+            # 注意：不在这里删除，让请求方法自己清理，以防超时等异常情况
+            return True  # 表示这是待处理的请求，应该停止处理
+        return False  # 不是待处理的请求，继续处理
+
+    async def check_account_online_status(self, account_id: int) -> bool:
+        """通过向连接发送get_status API检查账号是否在线"""
+        echo = None
+        try:
+            matched_connection = None
+            for conn_id, conn in self.active_connections.items():
+                if conn.self_id == account_id:
+                    matched_connection = conn
+                    break
+
+            if not matched_connection:
+                self.logger.ws.debug(f"账号{account_id}没有匹配的连接，返回离线")
+                return False
+
+            echo = f"status_check_{account_id}_{int(datetime.now().timestamp())}"
+
+            future = asyncio.Future()
+            self.pending_api_requests[echo] = future
+
+            get_status_request = {
+                "action": "get_status",
+                "params": {},
+                "echo": echo
+            }
+
+            request_json = json.dumps(get_status_request, ensure_ascii=False)
+            await matched_connection.client_ws.send(request_json)
+
+            try:
+                response = await asyncio.wait_for(future, timeout=5.0)
+                self.logger.ws.debug(f"账号{account_id}收到get_status响应: {json.dumps(response, ensure_ascii=False)}")
+                if isinstance(response, dict):
+                    online = response.get("data", {}).get("online")
+                    # 根据OneBot v11文档，get_status返回的data.online字段为true表示在线
+                    return online == True
+                return False
+            except asyncio.TimeoutError:
+                self.logger.ws.warning(f"检查账号{account_id}在线状态超时")
+                return False
+
+        except Exception as e:
+            self.logger.ws.error(f"检查账号{account_id}在线状态失败: {e}")
+            return False
+        finally:
+            if echo and echo in self.pending_api_requests:
+                del self.pending_api_requests[echo]
+
     async def _handle_client_connection(self, client_ws, path, connection_id: str, config: Dict[str, Any]):
         """处理客户端连接"""
         client_ip = client_ws.remote_address
@@ -223,7 +283,8 @@ class ProxyServer:
                 database_manager=self.database_manager,
                 logger=self.logger,
                 backup_manager=self.backup_manager,
-                status_callback=lambda key, value: self._update_connection_status(connection_id, key, value)
+                status_callback=lambda key, value: self._update_connection_status(connection_id, key, value),
+                api_response_callback=self._handle_api_response
             )
             
             # 保存活动连接
@@ -370,7 +431,7 @@ class ProxyServer:
 class ProxyConnection:
     """单个代理连接"""
 
-    def __init__(self, connection_id, config, client_ws, config_manager, database_manager, logger, backup_manager=None, status_callback=None):
+    def __init__(self, connection_id, config, client_ws, config_manager, database_manager, logger, backup_manager=None, status_callback=None, api_response_callback=None):
         self.connection_id = connection_id
         self.config = config
         self.client_ws = client_ws
@@ -379,6 +440,7 @@ class ProxyConnection:
         self.logger = logger
         self.backup_manager = backup_manager
         self.status_callback = status_callback
+        self.api_response_callback = api_response_callback
 
         self.target_connections = []
         self.echo_cache = {}
@@ -635,6 +697,14 @@ class ProxyConnection:
                 if self.status_callback:
                     self.status_callback('self_id', self.self_id)
             
+            # 检查是否是API响应（有echo字段）
+            if message_data.get("echo"):
+                echo_val = str(message_data["echo"])
+                # 调用API响应回调（用于处理待处理的API请求，如在线状态检查）
+                if self.api_response_callback:
+                    if self.api_response_callback(echo_val, message_data):
+                        return
+
             # 消息预处理
             message_data = await self.command_handler.preprocesser(message_data)
             processed_message, parsed_event = await self._preprocess_message(message_data)

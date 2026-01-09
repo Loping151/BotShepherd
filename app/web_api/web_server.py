@@ -6,13 +6,13 @@ Web服务器
 import asyncio
 import re
 import time
+import concurrent.futures
 from datetime import datetime, timedelta, timezone
 from flask import Flask, request, jsonify, render_template, session, redirect, url_for
 from flask_cors import CORS
 import requests
 from waitress import serve
 import threading
-from typing import Dict, Any
 
 from app.utils.reboot import reboot
 
@@ -1059,6 +1059,30 @@ class WebServer:
                 return jsonify(accounts)
             except Exception as e:
                 return jsonify({'error': str(e)}), 500
+
+        @self.app.route('/api/accounts/<account_id>/online-status', methods=['GET'])
+        def api_account_online_status(account_id):
+            """检查账号在线状态（通过向连接发送get_status API）"""
+            if not self._check_auth():
+                return jsonify({'error': '未授权'}), 401
+
+            try:
+                if not self.proxy_server:
+                    return jsonify({'online': False}), 200
+
+                future = asyncio.run_coroutine_threadsafe(
+                    self.proxy_server.check_account_online_status(int(account_id)),
+                    self.loop
+                )
+                online = future.result(timeout=5.0)
+                return jsonify({'online': online}), 200
+
+            except concurrent.futures.TimeoutError:
+                self.logger.web.warning(f"检查账号{account_id}在线状态超时")
+                return jsonify({'online': False, 'error': 'timeout'}), 200
+            except Exception as e:
+                self.logger.web.error(f"检查账号在线状态失败: {e}")
+                return jsonify({'online': False, 'error': str(e)}), 200
 
         @self.app.route('/api/accounts/<account_id>', methods=['PUT'])
         def api_update_account(account_id):
