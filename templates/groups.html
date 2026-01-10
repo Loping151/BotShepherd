@@ -75,7 +75,7 @@
                 群组列表
             </h5>
             <div class="col-md-3">
-                <input type="text" class="form-control" id="groupSearchInput" placeholder="按群号/描述搜索..." onkeyup="filterGroupTable()">
+                <input type="text" class="form-control" id="groupSearchInput" placeholder="按群号/描述/Bot ID搜索..." onkeyup="filterGroupTable()">
             </div>
         </div>
     </div>
@@ -841,11 +841,12 @@ function filterGroupTable() {
 
     for (let i = 0; i < rows.length; i++) {
         const cells = rows[i].getElementsByTagName('td');
-        if (cells.length >= 2) {
+        if (cells.length >= 3) {
             const groupId = (cells[0].textContent || cells[0].innerText).toLowerCase();
             const description = (cells[1].textContent || cells[1].innerText).toLowerCase();
+            const lastActiveTime = (cells[2].textContent || cells[2].innerText).toLowerCase();
 
-            if (groupId.indexOf(filter) > -1 || description.indexOf(filter) > -1) {
+            if (groupId.indexOf(filter) > -1 || description.indexOf(filter) > -1 || lastActiveTime.indexOf(filter) > -1) {
                 rows[i].style.display = '';
             } else {
                 rows[i].style.display = 'none';
