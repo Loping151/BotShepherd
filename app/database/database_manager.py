@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
-from sqlalchemy import case, select, and_, or_, func, desc
+from sqlalchemy import case, select, and_, or_, func, desc, delete, event
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import text
@@ -21,6 +21,9 @@ class DatabaseManager:
     """数据库管理器"""
     MAX_RETRY = 3
     RETRY_DELAY = 0.1
+    WRITE_QUEUE_MAX = 20000   # 写队列上限,满则丢弃告警
+    WRITE_BATCH_MAX = 200     # 单事务最多批量写入条数
+    CLEANUP_BATCH = 5000      # 过期清理每批删除行数
 
     def __init__(self, config_manager):
         self.config_manager = config_manager
@@ -28,6 +31,9 @@ class DatabaseManager:
         self.engine = None
         self.session_factory = None
         self.db_path = None
+        self._write_queue = None   # asyncio.Queue,save_message 入队,后台 writer 落库
+        self._writer_task = None
+        self._cleanup_task = None
 
     async def initialize(self):
         """初始化数据库"""
@@ -45,9 +51,19 @@ class DatabaseManager:
         # 创建异步数据库引擎
         db_url = f"sqlite+aiosqlite:///{self.db_path}"
         self.engine = create_async_engine(db_url, echo=False)
-        
+
+        # busy_timeout/synchronous 是连接级,需逐连接设;在建连接前注册
+        @event.listens_for(self.engine.sync_engine, "connect")
+        def _set_sqlite_pragma(dbapi_conn, conn_record):
+            cur = dbapi_conn.cursor()
+            cur.execute("PRAGMA busy_timeout=10000")   # 写锁最多等10s,不立即报 database is locked
+            cur.execute("PRAGMA synchronous=NORMAL")    # WAL 下安全且少 fsync 卡顿
+            cur.close()
+
         async with self.engine.begin() as conn:
-            await conn.execute(text("PRAGMA journal_mode=WAL"))
+            row = (await conn.execute(text("PRAGMA journal_mode=WAL"))).fetchone()
+            if not row or str(row[0]).lower() != "wal":
+                print(f"[DB] 警告: journal_mode 未切到 WAL,当前={row}")
 
         # 创建会话工厂
         self.session_factory = sessionmaker(
@@ -57,8 +73,12 @@ class DatabaseManager:
         # 创建数据表
         await self._create_tables()
 
+        # 启动后台写入任务(save_message 入队,DB 慢不再卡转发热路径)
+        self._write_queue = asyncio.Queue(maxsize=self.WRITE_QUEUE_MAX)
+        self._writer_task = asyncio.create_task(self._writer_loop())
+
         # 启动数据清理任务
-        asyncio.create_task(self._start_cleanup_task())
+        self._cleanup_task = asyncio.create_task(self._start_cleanup_task())
     
     async def _create_tables(self):
         """创建数据表"""
@@ -164,27 +184,84 @@ class DatabaseManager:
             processed=False
         )
 
+        # 入队即返回,DB 慢/被锁不再卡转发热路径;后台 _writer_loop 批量落库
+        if self._write_queue is None:
+            return
+        try:
+            self._write_queue.put_nowait(message_record)
+        except asyncio.QueueFull:
+            print(f"[DB] 写队列已满({self.WRITE_QUEUE_MAX})，丢弃消息记录 direction={direction}")
+
+    async def _writer_loop(self):
+        """后台批量落库,降低事务数与 fsync 次数"""
+        while True:
+            try:
+                record = await self._write_queue.get()
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                print(f"[DB] writer 取队列异常: {e}")
+                continue
+
+            batch = [record]
+            for _ in range(self.WRITE_BATCH_MAX - 1):
+                try:
+                    batch.append(self._write_queue.get_nowait())
+                except asyncio.QueueEmpty:
+                    break
+
+            try:
+                await self._persist_batch(batch)
+            except Exception as e:
+                # CancelledError 是 BaseException,不会被这里捕获,会穿过 finally 正常传播
+                print(f"[DB] 批量落库异常(丢弃{len(batch)}条): {e}")
+            finally:
+                for _ in batch:
+                    self._write_queue.task_done()
+
+    async def _persist_batch(self, records: List[Any]):
+        """批量提交;锁冲突整批重试,其它错误回退逐条写,避免单条坏记录拖垮整批"""
         for attempt in range(self.MAX_RETRY):
             async with self.session_factory() as session:
                 try:
-                    session.add(message_record)
+                    session.add_all(records)
                     await session.commit()
                     return
-
                 except OperationalError as e:
-                    if "database is locked" in str(e):
-                        print(f"[警告] 数据库被锁定，尝试重试 {attempt + 1}/{self.MAX_RETRY}")
-                        await session.rollback()
+                    await session.rollback()
+                    if "database is locked" in str(e) and attempt < self.MAX_RETRY - 1:
                         await asyncio.sleep(self.RETRY_DELAY * (attempt + 1))
-                    else:
-                        await session.rollback()
-                        print(f"[错误] 数据库写入失败: {e}")
-                        raise
+                        continue
+                    print(f"[错误] 批量写入失败(OperationalError),回退逐条: {e}")
+                    break
                 except Exception as e:
                     await session.rollback()
-                    print(f"[错误] 保存消息失败: {e}")
-                    raise
-                
+                    print(f"[错误] 批量保存消息失败,回退逐条: {e}")
+                    break
+        # 整批失败:逐条写,隔离单条坏记录,尽量不丢好记录
+        for record in records:
+            await self._persist_one(record)
+
+    async def _persist_one(self, record: Any):
+        """单条写入(带 database is locked 重试),失败则丢弃该条并告警"""
+        for attempt in range(self.MAX_RETRY):
+            async with self.session_factory() as session:
+                try:
+                    session.add(record)
+                    await session.commit()
+                    return
+                except OperationalError as e:
+                    await session.rollback()
+                    if "database is locked" in str(e) and attempt < self.MAX_RETRY - 1:
+                        await asyncio.sleep(self.RETRY_DELAY * (attempt + 1))
+                        continue
+                    print(f"[错误] 单条写入失败,丢弃: {e}")
+                    return
+                except Exception as e:
+                    await session.rollback()
+                    print(f"[错误] 单条保存消息失败,丢弃: {e}")
+                    return
+
     def _build_message_conditions(self,
                                 self_id: Optional[str] = None,
                                 user_id: Optional[str] = None,
@@ -464,39 +541,58 @@ class DatabaseManager:
                 await asyncio.sleep(60 * 60)  # 出错后1小时重试
     
     async def _cleanup_expired_data(self):
-        """清理过期数据"""
+        """分批删除过期消息(小事务+批间让锁),避免一次性巨型事务长时间独占写锁导致全局假死"""
         expire_days = self.db_config.get("auto_expire_days", 30)
         if int(expire_days) <= 1:
             return
         cutoff_date = int((datetime.now() - timedelta(days=expire_days)).timestamp())
 
-        async with self.session_factory() as session:
+        total_deleted = 0
+        while True:
+            async with self.session_factory() as session:
+                try:
+                    subq = select(Message.id).where(Message.timestamp < cutoff_date).limit(self.CLEANUP_BATCH)
+                    result = await session.execute(delete(Message).where(Message.id.in_(subq)))
+                    await session.commit()
+                    n = result.rowcount or 0
+                except Exception as e:
+                    await session.rollback()
+                    print(f"数据清理失败: {e}")
+                    return
+            total_deleted += n
+            if n < self.CLEANUP_BATCH:
+                break
+            await asyncio.sleep(0.5)
+
+        if total_deleted > 0:
+            print(f"清理了 {total_deleted} 条过期消息记录")
             try:
-                # 查询要删除的消息数量
-                count_stmt = select(func.count(Message.id)).where(Message.timestamp < cutoff_date)
-                result = await session.execute(count_stmt)
-                deleted_count = result.scalar() or 0
-
-                # 删除过期消息
-                if deleted_count > 0:
-                    delete_stmt = select(Message).where(Message.timestamp < cutoff_date)
-                    result = await session.execute(delete_stmt)
-                    messages_to_delete = result.scalars().all()
-
-                    for message in messages_to_delete:
-                        await session.delete(message)
-
-                await session.commit()
-
-                if deleted_count > 0:
-                    print(f"清理了 {deleted_count} 条过期消息记录")
-
+                async with self.engine.begin() as conn:
+                    row = (await conn.execute(text("PRAGMA wal_checkpoint(TRUNCATE)"))).fetchone()
+                    if row and row[0] != 0:
+                        print(f"[DB] 清理后 WAL 未完全截断(busy): {tuple(row)}")
             except Exception as e:
-                await session.rollback()
-                print(f"数据清理失败: {e}")
+                print(f"清理后 checkpoint 失败: {e}")
 
 
     async def close(self):
-        """关闭数据库连接"""
+        """关闭数据库连接(先停清理、再尽量把写队列清空)"""
+        if self._cleanup_task:
+            self._cleanup_task.cancel()
+            try:
+                await self._cleanup_task
+            except (asyncio.CancelledError, Exception):
+                pass
+        if self._write_queue is not None:
+            try:
+                await asyncio.wait_for(self._write_queue.join(), timeout=10)
+            except asyncio.TimeoutError:
+                print("[DB] 关闭时写队列未在10s内清空")
+        if self._writer_task:
+            self._writer_task.cancel()
+            try:
+                await self._writer_task
+            except (asyncio.CancelledError, Exception):
+                pass
         if self.engine:
             await self.engine.dispose()
