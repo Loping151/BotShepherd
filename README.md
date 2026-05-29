@@ -20,20 +20,20 @@
 
 - initialize() 启动时跑一次 wal_checkpoint(TRUNCATE)，无流量时能拿独占锁截断；每次(重)启动自动回收历史遗留的超大 WAL（in-app os.execv 重启不 close DB，靠此清理）
 
-### 2026-05-29 v1.1.1 修复 DB 层假死
+<details>
+<summary>点此展开历史版本</summary>
+
+2026-05-29 v1.1.1 修复 DB 层假死
 
 - 每日清理改分批删除（小事务+批间让锁），消除巨型删除事务独占写锁导致的全局假死
 - save_message 移出转发热路径（入队后台批量落库），DB 慢/锁不再卡消息转发
 - 连接级 PRAGMA：busy_timeout=10000 + synchronous=NORMAL
 
-### 2026-05-29 v1.1.0 修复 ws 假死
+2026-05-29 v1.1.0 修复 ws 假死
 
 - 心跳间隔 300s→20s，半死连接探测从最坏 ~6 分钟缩短到 ~40s
 - 新连接接入时主动 ping 探活旧连接，假死则由新连接接管（不再被锁在门外）
 - target 发送加超时，防止单个卡死 target 造成队头阻塞
-
-<details>
-<summary>点此展开历史版本</summary>
 
 2026-01-12 v1.0.2 文案，拆分文件，log
 

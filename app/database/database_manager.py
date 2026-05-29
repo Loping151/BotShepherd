@@ -73,8 +73,7 @@ class DatabaseManager:
         # 创建数据表
         await self._create_tables()
 
-        # 启动时回收 WAL:此刻无消息流量能拿到独占锁截断;in-app reboot(os.execv)不 close DB,
-        # 只有这里能让每次(重)启动都清掉历史遗留的超大 WAL
+        # 启动时回收 WAL:无流量能拿独占锁截断(execv 自重启不 close DB,靠此清理)
         try:
             async with self.engine.begin() as conn:
                 row = (await conn.execute(text("PRAGMA wal_checkpoint(TRUNCATE)"))).fetchone()
