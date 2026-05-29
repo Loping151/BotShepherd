@@ -73,6 +73,16 @@ class DatabaseManager:
         # 创建数据表
         await self._create_tables()
 
+        # 启动时回收 WAL:此刻无消息流量能拿到独占锁截断;in-app reboot(os.execv)不 close DB,
+        # 只有这里能让每次(重)启动都清掉历史遗留的超大 WAL
+        try:
+            async with self.engine.begin() as conn:
+                row = (await conn.execute(text("PRAGMA wal_checkpoint(TRUNCATE)"))).fetchone()
+                if row and row[0] != 0:
+                    print(f"[DB] 启动时 WAL 未完全截断(busy): {tuple(row)}")
+        except Exception as e:
+            print(f"[DB] 启动时 checkpoint 失败: {e}")
+
         # 启动后台写入任务(save_message 入队,DB 慢不再卡转发热路径)
         self._write_queue = asyncio.Queue(maxsize=self.WRITE_QUEUE_MAX)
         self._writer_task = asyncio.create_task(self._writer_loop())
