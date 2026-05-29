@@ -179,37 +179,70 @@ class ProxyServer:
                     self.connection_statuses[connection_id]['client_status'] = 'connected'
                     self.connection_statuses[connection_id]['client_address'] = str(ws_info.get('remote_address', 'unknown'))
 
-                # 从WebSocket连接中获取路径
-                path = ws.path if hasattr(ws, 'path') else "/"
-
                 # 获取或创建该 connection_id 的锁（防止竞态条件）
                 if connection_id not in self.connection_locks:
                     self.connection_locks[connection_id] = asyncio.Lock()
 
+                # 锁只覆盖"接管决策 + 注册新连接"；start_proxy 必须在释放锁后再跑，
+                # 否则锁被整条连接生命周期占用，旧连接半死时新连接拿不到锁、无法接管。
+                proxy_connection = None
                 async with self.connection_locks[connection_id]:
                     if connection_id in self.active_connections:
                         old_conn = self.active_connections[connection_id]
                         old_ws = old_conn.client_ws
 
-                        # 检查旧连接是否真的还活着 - 使用 state 属性
+                        # 半死的 TCP 连接 state 仍是 OPEN，不能只看 state；主动 ping 探活。
+                        # 两段 await 都加超时：ping() 的发送本身也可能因写背压阻塞。
                         old_state = getattr(old_ws, 'state', None) if old_ws else None
-                        is_old_alive = old_ws and old_state == 1  # 1 = OPEN 状态
+                        old_really_alive = False
+                        if old_ws and old_state == 1:  # 1 = OPEN
+                            try:
+                                pong_waiter = await asyncio.wait_for(old_ws.ping(), timeout=5)
+                                await asyncio.wait_for(pong_waiter, timeout=5)
+                                old_really_alive = True
+                            except Exception as e:
+                                self.logger.ws.warning(
+                                    f"[{connection_id}] 旧连接探活失败({e})，判定为假死，由新连接接管"
+                                )
 
-                        if is_old_alive:
-                            # 旧连接还活着，拒绝新连接（防止频繁重连）
+                        if old_really_alive:
+                            # 旧连接确认还活着，拒绝新连接（防止频繁重连）
                             old_ip = getattr(old_ws, 'remote_address', 'unknown')
                             new_ip = getattr(ws, 'remote_address', 'unknown')
                             self.logger.ws.warning(
                                 f"[{connection_id}] 已存在活跃连接 (旧:{old_ip} vs 新:{new_ip})，拒绝新连接"
                             )
-                            await ws.close(1008, "Connection already exists")
+                            # close_timeout=None，给关闭加超时，避免异常客户端拖住该 id 的锁
+                            try:
+                                await asyncio.wait_for(ws.close(1008, "Connection already exists"), timeout=5)
+                            except Exception as e:
+                                self.logger.ws.warning(f"[{connection_id}] 关闭被拒绝的新连接出错: {e}")
                             return
                         else:
-                            # 旧连接已死但还在字典中，清理它
-                            self.logger.ws.info(f"[{connection_id}] 清理已断开的旧连接")
-                            del self.active_connections[connection_id]
+                            # 旧连接已断开或探活失败(假死)，停止它，让新连接接管
+                            self.logger.ws.info(f"[{connection_id}] 清理旧连接（已断开或探活失败），新连接接管")
+                            try:
+                                await old_conn.stop()
+                            except Exception as e:
+                                self.logger.ws.warning(f"[{connection_id}] 停止旧连接出错: {e}")
 
-                    return await self._handle_client_connection(ws, path, connection_id, config)
+                    # 锁内原子注册：同一 connection_id 同时只有一个登记；
+                    # 旧 task 的 finally 有身份校验，不会误删此处登记的新连接。
+                    proxy_connection = ProxyConnection(
+                        connection_id=connection_id,
+                        config=config,
+                        client_ws=ws,
+                        config_manager=self.config_manager,
+                        database_manager=self.database_manager,
+                        logger=self.logger,
+                        backup_manager=self.backup_manager,
+                        status_callback=lambda key, value: self._update_connection_status(connection_id, key, value),
+                        api_response_callback=self._handle_api_response
+                    )
+                    self.active_connections[connection_id] = proxy_connection
+
+                # 锁已释放：在锁外运行代理（长生命周期），让后续新连接仍能抢锁接管
+                return await self._run_proxy_connection(proxy_connection, ws, connection_id)
 
             # 启动WebSocket服务器，移除大小和队列限制
             try:
@@ -219,8 +252,8 @@ class ProxyServer:
                     port,
                     max_size=None,  # 移除消息大小限制
                     max_queue=None,  # 移除队列大小限制
-                    ping_interval=300,  # 心跳间隔
-                    ping_timeout=60,   # 心跳超时
+                    ping_interval=20,  # 心跳间隔：20s 主动 ping 一次客户端(NapCat)
+                    ping_timeout=20,   # 心跳超时：20s 收不到 pong 即判定半死并关闭(最坏 ~40s 探测到假死连接)
                     close_timeout=None,   # 关闭超时
                     compression='deflate'  # 启用压缩
                 ):
@@ -316,40 +349,28 @@ class ProxyServer:
             if echo and echo in self.pending_api_requests:
                 del self.pending_api_requests[echo]
 
-    async def _handle_client_connection(self, client_ws, path, connection_id: str, config: Dict[str, Any]):
-        """处理客户端连接"""
+    async def _run_proxy_connection(self, proxy_connection, client_ws, connection_id: str):
+        """运行已注册的代理连接（长生命周期，调用方不应持有 connection_locks）。
+
+        创建与注册由调用方在锁内完成，本方法只负责运行 start_proxy 与收尾清理。
+        """
         client_ip = client_ws.remote_address
         self.logger.ws.info(f"[{connection_id}] 新的客户端连接: {client_ip}")
-        
-        try:
-            # 创建代理连接对象
-            proxy_connection = ProxyConnection(
-                connection_id=connection_id,
-                config=config,
-                client_ws=client_ws,
-                config_manager=self.config_manager,
-                database_manager=self.database_manager,
-                logger=self.logger,
-                backup_manager=self.backup_manager,
-                status_callback=lambda key, value: self._update_connection_status(connection_id, key, value),
-                api_response_callback=self._handle_api_response
-            )
-            
-            # 保存活动连接
-            self.active_connections[connection_id] = proxy_connection
 
+        try:
             # 启动代理
             await proxy_connection.start_proxy()
 
             # 代理结束后，保存账号ID到状态中
             if proxy_connection.self_id and connection_id in self.connection_statuses:
                 self.connection_statuses[connection_id]['self_id'] = proxy_connection.self_id
-            
+
         except Exception as e:
             self.logger.ws.error(f"[{connection_id}] 处理客户端连接失败: {e}")
         finally:
-            # 清理连接
-            if connection_id in self.active_connections:
+            # 清理连接：仅当字典中仍是本连接对象时才删除，
+            # 避免新连接接管(takeover)后，旧连接的 finally 误删掉新连接的注册
+            if self.active_connections.get(connection_id) is proxy_connection:
                 del self.active_connections[connection_id]
             self.logger.ws.info(f"[{connection_id}] 客户端连接已关闭: {client_ip}")
 

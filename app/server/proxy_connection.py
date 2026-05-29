@@ -16,6 +16,10 @@ from .message_processor import MessageProcessor
 from ..utils.reboot import construct_reboot_message
 
 
+# 向 target 发送的单次超时：防止某个卡住/假死的 target 阻塞整条 client→targets 转发循环
+TARGET_SEND_TIMEOUT = 10
+
+
 class ProxyConnection:
     """单个代理连接"""
 
@@ -136,8 +140,8 @@ class ProxyConnection:
             connection_params = {
                 'max_size': None,  # 移除消息大小限制
                 'max_queue': None,  # 移除队列大小限制
-                'ping_interval': 300,  # 心跳间隔
-                'ping_timeout': 60,   # 心跳超时
+                'ping_interval': 20,  # 心跳间隔：20s 发一次 ping
+                'ping_timeout': 20,   # 心跳超时：20s 收不到 pong 判定半死并关闭（最坏 ~40s 探测到死连接）
                 'close_timeout': None,   # 关闭超时
                 'compression': 'deflate'
             }
@@ -337,8 +341,14 @@ class ProxyConnection:
                     if matched_target_index is not None and matched_target_index > 0 and self.target_connections[self.target_index2list_index(matched_target_index)]:
                         self.logger.ws.debug(f"[{self.connection_id}] 发送API请求到目标 {matched_target_index}: {processed_json[:1000]}")
                         try:
-                            await self.target_connections[self.target_index2list_index(matched_target_index)].send(processed_json)
+                            await asyncio.wait_for(
+                                self.target_connections[self.target_index2list_index(matched_target_index)].send(processed_json),
+                                timeout=TARGET_SEND_TIMEOUT,
+                            )
                         except websockets.exceptions.ConnectionClosed:
+                            return
+                        except asyncio.TimeoutError:
+                            self.logger.ws.warning(f"[{self.connection_id}] API请求发送到目标 {matched_target_index} 超时({TARGET_SEND_TIMEOUT}s)，目标可能假死，丢弃")
                             return
                         except Exception as e:
                             self.logger.ws.error(f"[{self.connection_id}] 发送到目标失败: {e}")
@@ -347,9 +357,14 @@ class ProxyConnection:
                     for target_index, target_ws in enumerate(self.target_connections):
                         if target_ws:
                             try:
-                                await target_ws.send(processed_json)
+                                await asyncio.wait_for(target_ws.send(processed_json), timeout=TARGET_SEND_TIMEOUT)
                             except websockets.exceptions.ConnectionClosed:
                                 continue # 发送时不再捕捉
+                            except asyncio.TimeoutError:
+                                # 避免单个卡死 target 阻塞其它 target（队头阻塞）。取消 send 后该连接
+                                # 多半已坏，由接收侧 ConnectionClosed 触发重连（不保证即时，期间消息丢弃）。
+                                self.logger.ws.warning(f"[{self.connection_id}] 广播到目标 {self.list_index2target_index(target_index)} 超时({TARGET_SEND_TIMEOUT}s)，跳过，目标可能假死")
+                                continue
                             except Exception as e:
                                 self.logger.ws.error(f"[{self.connection_id}] 发送到目标失败: {e}")
                                 raise
