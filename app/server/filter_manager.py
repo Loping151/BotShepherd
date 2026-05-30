@@ -73,7 +73,37 @@ class FilterManager:
             self.logger.message.error(f"过滤发送消息失败: {e}，将拦截！{message_data}"[:1000])
             return None
     
-    async def _apply_global_receive_filters(self, event: Event, 
+    @staticmethod
+    def _term_match(term: str, message_text: str) -> bool:
+        """单个词匹配：^ 锚定开头、$ 锚定结尾(仅支持这两个锚点,非完整正则)；无锚点则子串。
+        ^abc=以abc开头  abc$=以abc结尾  ^abc$=整条等于abc  abc=包含abc
+        """
+        anchor_start = term.startswith("^")
+        anchor_end = term.endswith("$")
+        core = term[1:] if anchor_start else term
+        if anchor_end:
+            core = core[:-1]
+        if anchor_start and anchor_end:
+            return message_text == core
+        if anchor_start:
+            return message_text.startswith(core)
+        if anchor_end:
+            return message_text.endswith(core)
+        return core in message_text
+
+    def _match_filter(self, filter_word: str, *candidates: str) -> bool:
+        """命中判定：a+b(与)/a|b(或),每词支持 ^/$ 锚点；二选一不混用。
+        多候选(群过滤传 文本/self_id/user_id)各自独立匹配,使 $ 只锚真实文本末尾、不被拼接的账号ID带偏。
+        """
+        def hit(term: str) -> bool:
+            return any(self._term_match(term, c) for c in candidates)
+        if "+" in filter_word:
+            return all(hit(p) for p in filter_word.split("+"))
+        if "|" in filter_word:
+            return any(hit(p) for p in filter_word.split("|"))
+        return hit(filter_word)
+
+    async def _apply_global_receive_filters(self, event: Event,
                                           message_data: Dict[str, Any]) -> bool:
         """应用全局接收过滤词"""
         global_config = self.config_manager.get_global_config()
@@ -92,9 +122,7 @@ class FilterManager:
         
         # 检查过滤词
         for filter_word in receive_filters:
-            if filter_word in message_text or \
-                ("+" in filter_word and all(part in message_text for part in filter_word.split("+"))) or \
-                    ("|" in filter_word and any(part in message_text for part in filter_word.split("|"))):
+            if self._match_filter(filter_word, message_text):
                 await self._log_filter_action(
                     event, FilterType.RECEIVE_FILTER, 
                     f"包含全局接收过滤词: {filter_word}", FilterAction.BLOCK
@@ -119,9 +147,7 @@ class FilterManager:
         
         # 检查过滤词
         for filter_word in send_filters:
-            if filter_word in message_text or \
-                ("+" in filter_word and all(part in message_text for part in filter_word.split("+"))) or \
-                    ("|" in filter_word and any(part in message_text for part in filter_word.split("|"))):
+            if self._match_filter(filter_word, message_text):
                 await self._log_filter_action(
                     event, FilterType.SEND_FILTER, 
                     f"包含全局发送过滤词: {filter_word}", FilterAction.BLOCK
@@ -188,19 +214,17 @@ class FilterManager:
         self_id = str(event.self_id)
         user_id = str(event.user_id) if hasattr(event, "user_id") else ""
         
-        # 提取消息文本
-        message_text = self._extract_message_text(message_data) if isinstance(event, MessageEvent) else ""
-        message_text = message_text + self_id + user_id # NoticeEvent时只检查账号过滤
-                        
-        if message_text.startswith(global_config.get("command_prefix")):
+        # 真实消息文本与账号ID作为独立候选(锚点各自生效);NoticeEvent 无文本,只按账号过滤
+        real_text = self._extract_message_text(message_data) if isinstance(event, MessageEvent) else ""
+        candidates = (real_text, self_id, user_id)
+
+        if real_text.startswith(global_config.get("command_prefix")):
             return False
-        
+
         # 先检查超级用户设置的过滤词
         superuser_filters = filters.get("superuser_filters", [])
         for filter_word in superuser_filters:
-            if filter_word in message_text or \
-                ("+" in filter_word and all(part in message_text for part in filter_word.split("+"))) or \
-                    ("|" in filter_word and any(part in message_text for part in filter_word.split("|"))):
+            if self._match_filter(filter_word, *candidates):
                 await self._log_filter_action(
                     event, FilterType.GROUP_FILTER, 
                     f"包含群组超级用户过滤词: {filter_word}", FilterAction.BLOCK
@@ -211,9 +235,7 @@ class FilterManager:
         if not self.config_manager.is_superuser(event.user_id):
             admin_filters = filters.get("admin_filters", [])
             for filter_word in admin_filters:
-                if filter_word in message_text or \
-                    ("+" in filter_word and all(part in message_text for part in filter_word.split("+"))) or \
-                        ("|" in filter_word and any(part in message_text for part in filter_word.split("|"))):
+                if self._match_filter(filter_word, *candidates):
                     await self._log_filter_action(
                         event, FilterType.GROUP_FILTER, 
                         f"包含群组管理员过滤词: {filter_word}", FilterAction.BLOCK

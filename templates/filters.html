@@ -55,7 +55,7 @@
     </div>
     <div class="card-body" style="max-height: 400px; overflow-y: auto;">
         <div class="alert alert-info py-2">
-            <small><i class="bi bi-info-circle"></i> 支持 + 连接（and）和 | 连接（or）。不要使用空字符串作为过滤词</small>
+            <small><i class="bi bi-info-circle"></i> 支持 + 连接（and）和 | 连接（or），二选一。每个词另支持 ^ 锚定开头、$ 锚定结尾（仅这两种锚点，非完整正则）：^abc=以abc开头、abc$=以abc结尾、^abc$=整条等于abc。不要使用空字符串作为过滤词</small>
         </div>
         <div class="row">
             <div class="col-md-4">
@@ -227,7 +227,7 @@ function addGlobalFilter(type) {
     div.className = 'input-group mb-2';
     div.innerHTML = `
         <input type="text" class="form-control global-${type}-filter" 
-               placeholder="${type === 'prefix' ? '保护前缀' : '过滤关键词或正则表达式'}">
+               placeholder="${type === 'prefix' ? '保护前缀' : '过滤词，支持 ^开头 / 结尾$ 及 +与 |或'}">
         <button class="btn btn-outline-danger btn-sm" onclick="removeGlobalFilterElement(this)">
             <i class="bi bi-trash"></i>
         </button>

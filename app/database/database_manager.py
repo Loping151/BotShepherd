@@ -174,6 +174,8 @@ class DatabaseManager:
 
         # 时间戳
         timestamp = int(message_data.get("time", datetime.now().timestamp()))
+        if timestamp > 1_000_000_000_000:  # 个别来源把毫秒当 time 上报,归一化为秒
+            timestamp //= 1000
 
         # 创建消息记录
         message_record = Message(

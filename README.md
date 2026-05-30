@@ -16,12 +16,16 @@
 
 ## 📝 更新记录
 
-### 2026-05-30 v1.1.2 启动时回收 WAL
+### 2026-05-30 v1.1.3 过滤词支持 ^/$ 锚点
 
-- initialize() 启动时跑一次 wal_checkpoint(TRUNCATE)，无流量时能拿独占锁截断；每次(重)启动自动回收历史遗留的超大 WAL（in-app os.execv 重启不 close DB，靠此清理）
+- 过滤词新增 `^` 锚定开头、`$` 锚定结尾（仅这两种锚点，非完整正则）：`^abc`=以abc开头、`abc$`=以abc结尾、`^abc$`=整条等于abc；可与 `+`/`|` 组合，默认仍为子串匹配，向后兼容
+- 群过滤改为对「消息文本 / self_id / user_id」分别匹配，使 `$` 结尾锚点只锚真实文本、并消除拼接产生的跨边界误命中
+- 修复个别来源把毫秒当 time 上报：save_message 落库前归一化为秒
 
 <details>
 <summary>点此展开历史版本</summary>
+
+2026-05-30 v1.1.2 启动时回收 WAL：initialize() 跑一次 wal_checkpoint(TRUNCATE)，每次(重)启动自动回收遗留的超大 WAL
 
 2026-05-29 v1.1.1 修复 DB 层假死
 
