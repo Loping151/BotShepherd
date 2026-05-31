@@ -255,19 +255,22 @@ class ProxyConnection:
                     except Exception as e:
                         self.logger.ws.warning(f"[{self.connection_id}] 尝试重连目标 {target_index} 失败: {e}")
 
-                # 长期重连循环
+                # 长期重连:间隔 4s 起每次 +1s,封顶 300s
+                delay = 4
                 while self.running:
                     # 检查客户端状态
                     client_state = getattr(self.client_ws, 'state', None)
                     if client_state != 1:  # 1 = OPEN 状态
                         break
 
-                    await asyncio.sleep(600) # 10分钟后再试
+                    await asyncio.sleep(delay)
+                    delay = min(delay + 1, 300)
                     try:
                         target_ws = await self._connect_to_target(self.config.get("target_endpoints", [])[self.target_index2list_index(target_index)], target_index)
                         if target_ws:
                             await self._process_client_message(self.first_message)
                             self.logger.ws.info(f"[{self.connection_id}] 目标连接 {target_index} 恢复成功，5秒后重新开始转发。")
+                            delay = 4  # 恢复后退避归位
                             await asyncio.sleep(5)
                             await self._forward_target_to_client(target_ws, target_index)
                     except Exception:

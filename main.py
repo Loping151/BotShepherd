@@ -120,7 +120,7 @@ class BotShepherd:
 
     async def _daily_backup_task(self):
         """每日备份任务"""
-        from datetime import datetime, time
+        from datetime import datetime, time, timedelta
 
         while self.running:
             try:
@@ -137,10 +137,9 @@ class BotShepherd:
                 now = datetime.now()
                 target_time = datetime.combine(now.date(), time(hour=3, minute=0))
 
-                # 如果已经过了今天的3点，设置为明天的3点
+                # 如果已经过了今天的3点，设置为明天的3点(用 timedelta,正确跨月末/年末)
                 if now.time() > time(hour=3, minute=0):
-                    target_time = datetime.combine(now.date(), time(hour=3, minute=0))
-                    target_time = target_time.replace(day=target_time.day + 1)
+                    target_time = target_time + timedelta(days=1)
 
                 wait_seconds = (target_time - now).total_seconds()
 

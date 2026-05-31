@@ -2,7 +2,7 @@
 BotShepherd应用核心模块
 """
 
-__version__ = "1.1.3"
+__version__ = "1.1.4"
 __author__ = "Loping151"
 __github__ = "https://github.com/Loping151/BotShepherd"
 __description__ = "星星花与牧羊人 - 多框架统一管理平台"
