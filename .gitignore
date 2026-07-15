@@ -6,3 +6,6 @@ __pycache__
 devnote.md
 venv
 *.zip
+app/plugins/
+data/*
+!data/do_not_remove_db.txt

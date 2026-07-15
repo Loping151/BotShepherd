@@ -22,6 +22,7 @@ from .parse import parse_expr
 
 CACHE_DIR = Path("./data/talkrank/cache")
 LIVE_TTL = 600  # 进行中周期的缓存时效
+CACHE_TTL = 7 * 86400  # 缓存文件最长保留
 TOP_N = 50
 
 
@@ -55,6 +56,19 @@ def _cache_valid(path: Path, window_end: datetime) -> bool:
     return time.time() - mtime < LIVE_TTL
 
 
+def _cleanup_cache():
+    """启动和每次指令都执行,缓存不依赖渲染路径也总会过期"""
+    if not CACHE_DIR.exists():
+        return
+    cutoff = time.time() - CACHE_TTL
+    for old in CACHE_DIR.glob("*.png"):
+        try:
+            if old.stat().st_mtime < cutoff:
+                old.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
 class TalkRankCommand(BaseCommand):
     """发言榜指令"""
 
@@ -72,6 +86,7 @@ class TalkRankCommand(BaseCommand):
         super()._setup_parser()
 
     async def execute(self, event: Event, args: List[str], context: Dict[str, Any]) -> CommandResponse:
+        _cleanup_cache()
         force = "刷新" in args
         expr = " ".join(a for a in args if a != "刷新")
         window = parse_expr(expr, datetime.now())
@@ -143,12 +158,9 @@ class TalkRankCommand(BaseCommand):
 
         img = await loop.run_in_executor(None, draw_rank_card, payload)
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        cutoff = time.time() - 7 * 86400
-        for old in CACHE_DIR.glob("*.png"):
-            if old.stat().st_mtime < cutoff:
-                old.unlink(missing_ok=True)
         cache_file.write_bytes(img)
         return img
 
 
+_cleanup_cache()
 command_registry.register(TalkRankCommand())
