@@ -4,7 +4,11 @@ Web服务器
 """
 
 import asyncio
+import hashlib
+import hmac
+import os
 import re
+import secrets
 import time
 import concurrent.futures
 from datetime import datetime, timedelta, timezone
@@ -15,6 +19,79 @@ from waitress import serve
 import threading
 
 from app.utils.reboot import reboot
+from app.utils.backup_manager import get_or_create_backup_password
+
+
+PBKDF2_ITERATIONS = 200000
+
+
+def hash_password(password: str) -> str:
+    """使用随机盐和 PBKDF2 生成可持久化的密码摘要。"""
+    salt = secrets.token_bytes(16)
+    password_hash = hashlib.pbkdf2_hmac(
+        'sha256', password.encode('utf-8'), salt, PBKDF2_ITERATIONS
+    )
+    return f"pbkdf2_sha256${PBKDF2_ITERATIONS}${salt.hex()}${password_hash.hex()}"
+
+
+def _parse_password_hash(stored: str):
+    """解析并校验 PBKDF2 密码摘要格式。"""
+    try:
+        algorithm, iterations, salt_hex, hash_hex = stored.split('$')
+        if algorithm != 'pbkdf2_sha256' or int(iterations) != PBKDF2_ITERATIONS:
+            return None
+        salt = bytes.fromhex(salt_hex)
+        expected_hash = bytes.fromhex(hash_hex)
+        if not salt or len(expected_hash) != hashlib.sha256().digest_size:
+            return None
+        return salt, expected_hash
+    except (AttributeError, TypeError, ValueError):
+        return None
+
+
+def verify_password(password: str, stored: str) -> bool:
+    """校验密码，并使用常量时间比较避免时序泄漏。"""
+    parsed = _parse_password_hash(stored)
+    if parsed is None or not isinstance(password, str):
+        return False
+    salt, expected_hash = parsed
+    actual_hash = hashlib.pbkdf2_hmac(
+        'sha256', password.encode('utf-8'), salt, PBKDF2_ITERATIONS
+    )
+    return hmac.compare_digest(actual_hash, expected_hash)
+
+
+def _load_or_create_secret_key() -> str:
+    """加载每个安装独立的 Flask 密钥，失败时仅使用本次运行的随机密钥。"""
+    secret_path = os.path.abspath(os.path.join(
+        os.path.dirname(__file__), '..', '..', 'config', 'flask_secret.key'
+    ))
+    try:
+        os.makedirs(os.path.dirname(secret_path), exist_ok=True)
+        try:
+            with open(secret_path, 'r', encoding='utf-8') as secret_file:
+                secret_key = secret_file.read().strip()
+            if not secret_key:
+                raise ValueError("Flask 密钥文件为空")
+            return secret_key
+        except FileNotFoundError:
+            secret_key = secrets.token_hex(32)
+            # O_EXCL 避免并发启动时覆盖其他进程已生成的密钥。
+            try:
+                fd = os.open(secret_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            except FileExistsError:
+                with open(secret_path, 'r', encoding='utf-8') as secret_file:
+                    existing_key = secret_file.read().strip()
+                if not existing_key:
+                    raise ValueError("Flask 密钥文件为空")
+                return existing_key
+            with os.fdopen(fd, 'w', encoding='utf-8') as secret_file:
+                secret_file.write(secret_key)
+            return secret_key
+    except (OSError, ValueError):
+        # 不回退到公开固定值；最坏情况下仅使当前进程的会话有效。
+        return secrets.token_hex(32)
+
 
 class WebServer:
     """Web服务器"""
@@ -31,7 +108,11 @@ class WebServer:
         self.app = Flask(__name__, 
                         template_folder="../../templates",
                         static_folder="../../static")
-        self.app.secret_key = "botshepherd_secret_key_change_me"
+        self.app.secret_key = _load_or_create_secret_key()
+
+        # Waitress 使用多线程，登录失败记录需要加锁保护。
+        self._login_attempts = {}
+        self._login_attempts_lock = threading.Lock()
         
         # 启用CORS
         CORS(self.app)
@@ -56,18 +137,50 @@ class WebServer:
         def login():
             """登录页面"""
             if request.method == 'POST':
-                username = request.form.get('username')
-                password = request.form.get('password')
+                username = request.form.get('username', '')
+                password = request.form.get('password', '')
                 
                 # 验证登录
                 global_config = self.config_manager.get_global_config()
                 web_auth = global_config.get('web_auth', {})
-                
-                if (username == web_auth.get('username', 'admin') and 
-                    password == web_auth.get('password', 'admin')):
+                max_attempts, lockout_seconds, window_seconds = self._get_login_limits(web_auth)
+                client_ip = self._get_client_ip()
+                now = time.time()
+
+                remaining = self._get_lockout_remaining(client_ip, now, window_seconds)
+                if remaining:
+                    return render_template(
+                        'login.html', error=f'尝试次数过多，请 {remaining} 秒后再试'
+                    )
+
+                expected_username = web_auth.get('username', 'admin')
+                username_matches = (
+                    isinstance(expected_username, str)
+                    and hmac.compare_digest(username, expected_username)
+                )
+                stored_hash = web_auth.get('password_hash')
+                if _parse_password_hash(stored_hash) is not None:
+                    password_matches = verify_password(password, stored_hash)
+                else:
+                    # 仅供首次启动迁移完成前兼容旧的明文配置。
+                    plaintext_password = web_auth.get('password')
+                    password_matches = (
+                        isinstance(plaintext_password, str)
+                        and hmac.compare_digest(password, plaintext_password)
+                    )
+
+                if username_matches and password_matches:
+                    self._clear_login_attempts(client_ip)
                     session['authenticated'] = True
                     return redirect(url_for('index'))
                 else:
+                    remaining = self._record_login_failure(
+                        client_ip, now, max_attempts, lockout_seconds, window_seconds
+                    )
+                    if remaining:
+                        return render_template(
+                            'login.html', error=f'尝试次数过多，请 {remaining} 秒后再试'
+                        )
                     return render_template('login.html', error='用户名或密码错误')
             
             return render_template('login.html')
@@ -506,6 +619,20 @@ class WebServer:
 
             try:
                 updates = request.get_json()
+                if isinstance(updates, dict) and updates.get('backup_password') == '':
+                    # 备份密码留空时保留当前值，不覆盖已保存的解密密钥。
+                    updates.pop('backup_password')
+                if isinstance(updates, dict) and isinstance(updates.get('web_auth'), dict):
+                    # 设置页保存时立即哈希新密码；留空则保留当前密码摘要。
+                    current_auth = self.config_manager.get_global_config().get('web_auth', {})
+                    web_auth_update = current_auth.copy()
+                    submitted_auth = updates['web_auth'].copy()
+                    new_password = submitted_auth.pop('password', None)
+                    web_auth_update.update(submitted_auth)
+                    if isinstance(new_password, str) and new_password:
+                        web_auth_update['password_hash'] = hash_password(new_password)
+                    web_auth_update.pop('password', None)
+                    updates['web_auth'] = web_auth_update
                 asyncio.run(
                     self.config_manager.update_global_config(updates)
                 )
@@ -1384,9 +1511,7 @@ class WebServer:
                     return jsonify({'error': '备份管理器未初始化'}), 500
 
                 # 获取密码
-                global_config = self.config_manager.get_global_config()
-                web_auth = global_config.get("web_auth", {})
-                password = web_auth.get("password", "admin")
+                password = get_or_create_backup_password(self.config_manager)
 
                 # 创建备份
                 backup_path = backup_manager.create_backup(password)
@@ -1435,15 +1560,101 @@ class WebServer:
     def _check_auth(self) -> bool:
         """检查认证状态"""
         return session.get('authenticated', False)
+
+    @staticmethod
+    def _get_client_ip() -> str:
+        """获取客户端 IP，兼容反向代理传递的首个地址。"""
+        forwarded_for = request.headers.get('X-Forwarded-For', '')
+        if forwarded_for:
+            return forwarded_for.split(',', 1)[0].strip() or 'unknown'
+        return request.remote_addr or 'unknown'
+
+    @staticmethod
+    def _get_login_limits(web_auth):
+        """读取登录限制参数，非正整数配置回退到安全默认值。"""
+        def positive_int(value, default):
+            if isinstance(value, bool):
+                return default
+            try:
+                parsed = int(value)
+                return parsed if parsed > 0 else default
+            except (TypeError, ValueError):
+                return default
+
+        return (
+            positive_int(web_auth.get('max_attempts'), 5),
+            positive_int(web_auth.get('lockout_seconds'), 300),
+            positive_int(web_auth.get('window_seconds'), 300),
+        )
+
+    def _get_lockout_remaining(self, client_ip, now, window_seconds):
+        """返回当前 IP 剩余锁定秒数，并顺便清理过期记录。"""
+        with self._login_attempts_lock:
+            for ip, record in list(self._login_attempts.items()):
+                lock_until = record.get('lock_until', 0)
+                window_start = record.get('window_start', now)
+                if (lock_until and lock_until <= now) or (
+                    not lock_until and now - window_start >= window_seconds
+                ):
+                    self._login_attempts.pop(ip, None)
+
+            record = self._login_attempts.get(client_ip)
+            if record and now < record.get('lock_until', 0):
+                return int(record['lock_until'] - now) + 1
+            return 0
+
+    def _record_login_failure(
+        self, client_ip, now, max_attempts, lockout_seconds, window_seconds
+    ):
+        """记录一次登录失败，达到阈值时临时锁定该 IP。"""
+        with self._login_attempts_lock:
+            record = self._login_attempts.setdefault(client_ip, {
+                'fails': 0,
+                'lock_until': 0,
+                'window_start': now,
+            })
+            if now - record.get('window_start', now) >= window_seconds:
+                record.update(fails=0, lock_until=0, window_start=now)
+            record['fails'] += 1
+            if record['fails'] >= max_attempts:
+                record['fails'] = 0
+                record['lock_until'] = now + lockout_seconds
+                record['window_start'] = now
+                return lockout_seconds
+            return 0
+
+    def _clear_login_attempts(self, client_ip):
+        """登录成功后清除该 IP 的失败记录。"""
+        with self._login_attempts_lock:
+            self._login_attempts.pop(client_ip, None)
+
+    async def _migrate_web_password(self):
+        """将旧的 Web 明文密码一次性迁移为 PBKDF2 摘要。"""
+        global_config = self.config_manager.get_global_config()
+        web_auth = global_config.get('web_auth', {})
+        plaintext_password = web_auth.get('password')
+        if not isinstance(plaintext_password, str) or not plaintext_password:
+            return
+
+        migrated_auth = web_auth.copy()
+        if _parse_password_hash(migrated_auth.get('password_hash')) is None:
+            migrated_auth['password_hash'] = hash_password(plaintext_password)
+        migrated_auth.pop('password', None)
+        await self.config_manager.update_global_config({'web_auth': migrated_auth})
+        self.logger.web.info("Web 登录密码已迁移为 PBKDF2 摘要")
     
     async def start(self):
         """启动Web服务器"""
         self.running = True
         self.logger.web.info("启动Web服务器...")
+
+        # 先完成密码迁移，再对外接受登录请求。
+        await self._migrate_web_password()
         
         # 在单独线程中运行Flask应用
         def run_server():
-            serve(self.app, host='0.0.0.0', port=self.port, threads=4)
+            web_host = self.config_manager.get_global_config().get('web_host', '0.0.0.0')
+            serve(self.app, host=web_host, port=self.port, threads=4)
         
         self.server_thread = threading.Thread(target=run_server, daemon=True)
         self.server_thread.start()

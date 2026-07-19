@@ -115,10 +115,24 @@ class ConfigValidator:
         if "web_auth" in config:
             web_auth = config["web_auth"]
             if isinstance(web_auth, dict):
-                for field in ["username", "password"]:
+                for field in ["username", "password", "password_hash"]:
                     if field in web_auth:
                         if not isinstance(web_auth[field], str) or len(web_auth[field]) == 0:
                             errors.append(f"web_auth.{field} 不能为空")
+                for field in ["max_attempts", "lockout_seconds", "window_seconds"]:
+                    if field in web_auth:
+                        value = web_auth[field]
+                        if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+                            errors.append(f"web_auth.{field} 必须是正整数")
+
+        # Web 监听地址可选，默认保持对外监听以兼容旧配置。
+        if "web_host" in config:
+            if not isinstance(config["web_host"], str) or len(config["web_host"]) == 0:
+                errors.append("web_host 不能为空")
+
+        # 独立备份密码允许初始为空，启动时会自动生成并持久化。
+        if "backup_password" in config and not isinstance(config["backup_password"], str):
+            errors.append("backup_password 必须是字符串")
 
         # 验证备份配置（可选字段，向后兼容）
         if "backup" in config:
@@ -363,11 +377,16 @@ class ConfigTemplate:
             "sendcount_notifications": True,
             "web_auth": {
                 "username": "admin",
-                "password": "admin"
+                "password": "admin",  # 首次启动后自动迁移为 password_hash
+                "max_attempts": 5,
+                "lockout_seconds": 300,
+                "window_seconds": 300
             },
+            "web_host": "0.0.0.0",
             "web_port": 5111,
             "auto_save_interval": 10,  # 自动保存间隔（分钟），最小1分钟
             "proxy": "",  # 代理地址，格式如 http://127.0.0.1:7890，为空则不使用代理
+            "backup_password": "",  # 启动时自动生成并持久化独立备份密码
             "backup": {
                 "enabled": True,  # 是否启用自动备份
                 "keep_days": 7  # 备份保留天数

@@ -3,6 +3,8 @@ logs
 *.db-*
 __pycache__
 *.json
+config/global_config.json
+config/flask_secret.key
 devnote.md
 venv
 *.zip

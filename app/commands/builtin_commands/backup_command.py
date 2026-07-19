@@ -7,6 +7,7 @@ import base64
 from typing import Dict, Any, List
 from ...onebotv11.message_segment import MessageSegmentBuilder
 from ...onebotv11.models import Event, PrivateMessageEvent
+from ...utils.backup_manager import get_or_create_backup_password
 from ..permission_manager import PermissionLevel
 from ..base_command import BaseCommand, CommandResponse, CommandResult, command_registry
 
@@ -40,9 +41,7 @@ class BackupCommand(BaseCommand):
             config_manager = context["config_manager"]
 
             # 获取密码
-            global_config = config_manager.get_global_config()
-            web_auth = global_config.get("web_auth", {})
-            password = web_auth.get("password", "admin")
+            password = get_or_create_backup_password(config_manager)
 
             # 执行备份
             backup_path = backup_manager.create_backup(password)

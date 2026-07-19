@@ -8,6 +8,7 @@ import os
 import shutil
 import asyncio
 import signal
+import threading
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Set
 from datetime import datetime, timedelta, timezone
@@ -25,6 +26,7 @@ class ConfigManager:
 
         # 配置缓存
         self._global_config = None
+        self._global_config_lock = threading.RLock()
         self._connections_config = {}
         self._account_configs = {}
         self._group_configs = {}
@@ -258,28 +260,40 @@ class ConfigManager:
     # 全局配置相关方法
     def get_global_config(self) -> Dict[str, Any]:
         """获取全局配置"""
-        return self._global_config.copy()
+        with self._global_config_lock:
+            return self._global_config.copy()
     
     def get_superuser(self) -> List:
         """获取超级用户列表"""
         return self._global_config.get("superusers", [])
     
+    def update_global_config_sync(self, updates: Dict[str, Any]):
+        """同步更新全局配置，供同步入口安全持久化使用"""
+        with self._global_config_lock:
+            # 创建临时配置进行验证
+            temp_config = self._global_config.copy()
+            temp_config.update(updates)
+
+            # 验证配置
+            is_valid, errors = self._validator.validate_global_config(temp_config)
+            if not is_valid:
+                raise ValueError("全局配置验证失败: {}".format(', '.join(errors)))
+
+            previous_config = self._global_config.copy()
+            self._global_config.update(updates)
+            try:
+                self._save_global_config_sync()
+            except Exception:
+                # 持久化失败时恢复内存状态，避免误以为配置已保存。
+                self._global_config = previous_config
+                raise
+
     async def update_global_config(self, updates: Dict[str, Any]):
-        """更新全局配置"""
-        # 创建临时配置进行验证
-        temp_config = self._global_config.copy()
-        temp_config.update(updates)
+        """异步更新全局配置"""
+        self.update_global_config_sync(updates)
 
-        # 验证配置
-        is_valid, errors = self._validator.validate_global_config(temp_config)
-        if not is_valid:
-            raise ValueError("全局配置验证失败: {}".format(', '.join(errors)))
-
-        self._global_config.update(updates)
-        await self._save_global_config()
-    
-    async def _save_global_config(self):
-        """保存全局配置"""
+    def _save_global_config_sync(self):
+        """同步保存全局配置"""
         global_config_file = self.config_dir / "global_config.json"
         try:
             with open(str(global_config_file).replace(".json", "_tmp.json"), 'w', encoding='utf-8') as f:
@@ -287,6 +301,11 @@ class ConfigManager:
             os.replace(str(global_config_file).replace(".json", "_tmp.json"), global_config_file)
         except Exception as e:
             self.log(f"保存全局配置失败: {e}", "error")
+            raise
+
+    async def _save_global_config(self):
+        """保存全局配置"""
+        self._save_global_config_sync()
     
     # 连接配置相关方法
     def get_connections_config(self) -> Dict[str, Dict[str, Any]]:

@@ -4,6 +4,7 @@
 """
 
 import os
+import secrets
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 from pathlib import Path
@@ -12,6 +13,18 @@ import pyzipper as zipfile
 import zipfile as std_zipfile
 
 logger = logging.getLogger(__name__)
+
+
+def get_or_create_backup_password(config_manager) -> str:
+    """读取独立备份密码；缺失时生成并立即持久化。"""
+    global_config = config_manager.get_global_config()
+    backup_password = global_config.get("backup_password")
+    if isinstance(backup_password, str) and backup_password:
+        return backup_password
+
+    backup_password = secrets.token_urlsafe(24)
+    config_manager.update_global_config_sync({"backup_password": backup_password})
+    return backup_password
 
 
 class BackupManager:

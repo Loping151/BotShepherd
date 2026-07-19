@@ -167,7 +167,7 @@
                 </div>
                 <div class="mb-3">
                     <label for="webPassword" class="form-label">密码</label>
-                    <input type="password" class="form-control" id="webPassword" value="admin">
+                    <input type="password" class="form-control" id="webPassword" placeholder="留空则不修改密码">
                 </div>
                 <div class="alert alert-warning">
                     <i class="bi bi-exclamation-triangle"></i>
@@ -178,7 +178,11 @@
             <div class="col-md-6">
                 <h6 class="mb-3"><i class="bi bi-archive"></i> 备份设置</h6>
                 <div class="alert alert-info py-2">
-                    <small><i class="bi bi-info-circle"></i> 系统每天凌晨 3 点自动备份配置文件，备份文件使用 Web 登录密码加密</small>
+                    <small><i class="bi bi-info-circle"></i> 系统每天凌晨 3 点自动备份配置文件，备份文件使用独立的备份密码加密（下方设置，留空则自动生成并保存）</small>
+                </div>
+                <div class="mb-3">
+                    <label for="backupPassword" class="form-label">备份密码</label>
+                    <input type="password" class="form-control" id="backupPassword" placeholder="留空自动生成/保留当前">
                 </div>
                 <div class="mb-3">
                     <div class="form-check">
@@ -276,10 +280,11 @@ function updateSettingsForm() {
     // Web认证设置
     const webAuth = globalConfig.web_auth || {};
     document.getElementById('webUsername').value = webAuth.username || 'admin';
-    document.getElementById('webPassword').value = webAuth.password || 'admin';
+    document.getElementById('webPassword').value = '';
 
     // 备份设置
     const backup = globalConfig.backup || {};
+    document.getElementById('backupPassword').value = globalConfig.backup_password || '';
     document.getElementById('backupEnabled').checked = backup.enabled !== false;  // 默认启用
     document.getElementById('backupKeepDays').value = backup.keep_days || 7;
 
@@ -414,6 +419,12 @@ async function saveAllSettings() {
                 keep_days: parseInt(document.getElementById('backupKeepDays').value) || 7
             }
         };
+
+        // 备份密码留空时由后端保留现有值；仅提交明确输入的新密码。
+        const backupPassword = document.getElementById('backupPassword').value;
+        if (backupPassword) {
+            updates.backup_password = backupPassword;
+        }
         
         await apiRequest('/api/global-config', {
             method: 'PUT',

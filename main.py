@@ -27,7 +27,7 @@ def import_app_modules():
     from app.server.proxy_server import ProxyServer
     from app.web_api.web_server import WebServer
     from app.utils.logger import BSLogger
-    from app.utils.backup_manager import BackupManager
+    from app.utils.backup_manager import BackupManager, get_or_create_backup_password
     from app.commands import initialize_builtin_commands, load_plugins
     from app import __version__, __github__, __description__
     globals().update(locals())
@@ -66,6 +66,9 @@ class BotShepherd:
             # 初始化配置管理器
             self.config_manager = ConfigManager()
             await self.config_manager.initialize()
+
+            # 在任何备份或 Web 服务启动前生成并持久化独立备份密码。
+            get_or_create_backup_password(self.config_manager)
 
             # 设置日志系统
             self.logger = BSLogger(self.config_manager.get_global_config())
@@ -153,8 +156,7 @@ class BotShepherd:
 
                 # 执行备份
                 self.logger.info("开始执行每日配置备份...")
-                web_auth = global_config.get("web_auth", {})
-                password = web_auth.get("password", "admin")
+                password = get_or_create_backup_password(self.config_manager)
 
                 backup_path = self.backup_manager.create_backup(password)
                 if backup_path:
@@ -184,9 +186,7 @@ class BotShepherd:
 
             # 启动时立即创建一次固定命名备份（覆盖旧文件）
             if self.backup_manager:
-                global_config = self.config_manager.get_global_config()
-                web_auth = global_config.get("web_auth", {})
-                password = web_auth.get("password", "admin")
+                password = get_or_create_backup_password(self.config_manager)
                 startup_backup_path = self.backup_manager.create_startup_backup(password)
                 if startup_backup_path:
                     self.logger.info(f"启动备份成功: {startup_backup_path}")
