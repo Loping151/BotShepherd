@@ -6,6 +6,7 @@
 import asyncio
 import websockets
 import json
+import re
 from datetime import datetime
 from typing import Dict, Any, Optional, Tuple
 
@@ -18,6 +19,30 @@ from ..utils.reboot import construct_reboot_message
 
 # 向 target 发送的单次超时：防止某个卡住/假死的 target 阻塞整条 client→targets 转发循环
 TARGET_SEND_TIMEOUT = 10
+
+# API 请求转发给客户端前，把目标序号编进 echo；客户端按 OneBot 规定原样回传，
+# 回程即可精确定位是哪个框架发的请求。
+# 背景：各框架的 echo 自成命名空间（nonebot 是进程内自增序号，都从 1 开始），
+# 一条连接挂多个 target 时必然撞号。只把序号放进 echo_cache 的键是不够的——
+# 响应里只有裸 echo，反查只能从 idx=1 扫到 N 取首个命中，撞号时就把 A 的响应
+# 投给了 B（两个框架的 API 结果整个对调）。
+ECHO_ROUTE_RE = re.compile(r"^bs(\d+):(.*)$", re.S)
+
+
+def build_route_echo(target_index: int, echo: str) -> str:
+    return f"bs{target_index}:{echo}"
+
+
+def split_route_echo(echo_val: str):
+    """'bs{target_index}:{原echo}' -> (target_index, 原echo)。
+
+    不是本格式（旧版在途请求、或客户端没原样回传）返回 (None, 原值)，
+    调用方回落到老的扫描逻辑。
+    """
+    match = ECHO_ROUTE_RE.match(echo_val)
+    if not match:
+        return None, echo_val
+    return int(match.group(1)), match.group(2)
 
 
 class ProxyConnection:
@@ -292,6 +317,19 @@ class ProxyConnection:
                 if self.status_callback:
                     self.status_callback('self_id', self.self_id)
 
+            # 还原 echo：转发请求时编进去的目标序号在这里摘掉，框架只认自己发的原值。
+            # route_target_index 拿到后，下面的路由与 echo_cache 反查都是精确的，
+            # 不必再从 idx=1 扫到 N（撞号时会把响应投给错误的框架）。
+            route_target_index = None
+            if message_data.get("echo"):
+                route_target_index, origin_echo = split_route_echo(str(message_data["echo"]))
+                if route_target_index is not None:
+                    cached = self.echo_cache.get(f"{route_target_index}_{origin_echo}")
+                    # 用缓存里的原始值还原，保住框架发来时的类型（有的框架用数字 echo）
+                    message_data["echo"] = (
+                        cached.get("original_echo") if cached else origin_echo
+                    )
+
             # 检查是否是API响应（有echo字段）
             if message_data.get("echo"):
                 echo_val = str(message_data["echo"])
@@ -311,12 +349,15 @@ class ProxyConnection:
                     if isinstance(data_in_api, dict): # get list api 不可能是发送
                         message_id = message_data.get("data", {}).get("message_id")
                         await self.database_manager.save_message(
-                            await self._construct_msg_from_echo(message_data["echo"], message_id=message_id), "SEND", self.connection_id
+                            await self._construct_msg_from_echo(
+                                message_data["echo"], route_target_index,
+                                message_id=message_id,
+                            ), "SEND", self.connection_id
                         )
                 else:
                     # 记录消息到数据库，注意记录的是处理后的消息，所以统计功能是无视别名的，只需要按key搜索即可
                     # 收到裸消息不会是api response
-                    self._log_api_call_fail(parsed_event)
+                    self._log_api_call_fail(parsed_event, route_target_index)
                     await self.database_manager.save_message(
                         processed_message, "RECV", self.connection_id
                     )
@@ -332,14 +373,20 @@ class ProxyConnection:
 
                 if message_data.get("echo"):
                     # api请求内容，尽可能保证各框架的发送api都使用了echo。
-                    # 尝试从各个 target_index 的缓存中查找
                     echo_val = str(message_data["echo"])
                     matched_target_index = None
-                    for idx in range(1, len(self.target_connections) + 1):
-                        echo_key = f"{idx}_{echo_val}"
-                        if echo_key in self.echo_cache:
-                            matched_target_index = self.echo_cache.pop(echo_key, {}).get("target_index")
-                            break
+                    if route_target_index is not None:
+                        # 常规路径：目标序号是从 echo 里解出来的，精确且不受撞号影响
+                        matched_target_index = route_target_index
+                        self.echo_cache.pop(f"{route_target_index}_{echo_val}", None)
+                    else:
+                        # 回落：客户端没原样回传我们改写的 echo，或是升级前就在途的请求。
+                        # 此时只能扫描，撞号会投错框架 —— 仅作过渡兼容。
+                        for idx in range(1, len(self.target_connections) + 1):
+                            echo_key = f"{idx}_{echo_val}"
+                            if echo_key in self.echo_cache:
+                                matched_target_index = self.echo_cache.pop(echo_key, {}).get("target_index")
+                                break
 
                     if matched_target_index is not None and matched_target_index > 0 and self.target_connections[self.target_index2list_index(matched_target_index)]:
                         self.logger.ws.debug(f"[{self.connection_id}] 发送API请求到目标 {matched_target_index}: {processed_json[:1000]}")
@@ -396,6 +443,13 @@ class ProxyConnection:
                 await self.database_manager.save_message(
                     message_data_as_recv, "SEND", self.connection_id
                 )
+            else:
+                # 把目标序号编进 echo 再发出去，回程凭它精确路由（见 ECHO_ROUTE_RE）。
+                # 只在框架真的带了 echo 时改写：给没有 echo 的请求硬塞一个，
+                # 会让客户端多回一条无人认领的响应。
+                raw_echo = message_data.get("echo")
+                if raw_echo is not None and str(raw_echo) != "":
+                    message_data["echo"] = build_route_echo(target_index, str(raw_echo))
 
             # 消息后处理
             processed_message = await self._postprocess_message(message_data, str(self.self_id))
@@ -437,7 +491,9 @@ class ProxyConnection:
             "data": message_data,
             "create_timestamp": int(datetime.now().timestamp()),
             "target_index": target_index,
-            "original_echo": echo
+            # 存原始值而非字符串：回程还原时要还给框架它自己发的那个类型
+            # （多数框架用字符串，也有用数字的）
+            "original_echo": message_data.get("echo"),
         }
 
         if echo_key in self.echo_cache:
@@ -461,17 +517,21 @@ class ProxyConnection:
             return event.status == "ok" and event.retcode == 0
         return False
 
-    def _log_api_call_fail(self, event: Event):
+    def _lookup_echo_info(self, echo_val: str, target_index: int | None):
+        """按 echo 反查原请求。target_index 已知（从回程 echo 解出）就精确取，
+        否则回落到扫描（撞号时可能取错，仅兼容用）。"""
+        if target_index is not None:
+            return self.echo_cache.get(f"{target_index}_{echo_val}")
+        for idx in range(1, len(self.target_connections) + 1):
+            echo_info = self.echo_cache.get(f"{idx}_{echo_val}")
+            if echo_info is not None:
+                return echo_info
+        return None
+
+    def _log_api_call_fail(self, event: Event, target_index: int | None = None):
         if isinstance(event, ApiResponse):
             if event.status != "ok" or event.retcode != 0:
-                # echo 现在包含 target_index 前缀，需要查找匹配的键
-                echo_val = str(event.echo)
-                echo_info = None
-                for idx in range(1, len(self.target_connections) + 1):
-                    echo_key = f"{idx}_{echo_val}"
-                    if echo_key in self.echo_cache:
-                        echo_info = self.echo_cache.get(echo_key, None)
-                        break
+                echo_info = self._lookup_echo_info(str(event.echo), target_index)
 
                 if echo_info:
                     # 截断过长的数据（如base64）避免日志爆炸
@@ -480,16 +540,10 @@ class ProxyConnection:
                         data_str = data_str[:200] + f"...[total length: {len(data_str)}]"
                     self.logger.ws.warning("[{}] API调用失败: {} -> {}".format(self.connection_id, data_str, event))
 
-    async def _construct_msg_from_echo(self, echo, **kwargs):
+    async def _construct_msg_from_echo(self, echo, target_index: int | None = None,
+                                       **kwargs):
         """从api结果中构造模拟收到消息"""
-        # echo 现在包含 target_index 前缀，需要查找匹配的键
-        echo_val = str(echo)
-        echo_info = None
-        for idx in range(1, len(self.target_connections) + 1):
-            echo_key = f"{idx}_{echo_val}"
-            if echo_key in self.echo_cache:
-                echo_info = self.echo_cache.get(echo_key, None)
-                break
+        echo_info = self._lookup_echo_info(str(echo), target_index)
 
         if echo_info:
             return await self._construct_data_as_msg(echo_info["data"], **kwargs)
