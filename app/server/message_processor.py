@@ -34,7 +34,11 @@ class MessageProcessor:
             normalized_data = await self._normalize_message(message_data)
             if not normalized_data:
                 return None, None
-            
+
+            # 群通知/请求（戳一戳、表情回应、入群申请等）按原始 group_id 拦截，未建模的通知类型也覆盖
+            if await self._is_group_notice_blocked(normalized_data):
+                return None, None
+
             # 解析事件
             event = self.event_parser.parse_event_data(normalized_data)
             if not event and not normalized_data.get("echo"):
@@ -112,9 +116,9 @@ class MessageProcessor:
     async def _preprocess_message_event(self, event: Event, 
                                       message_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """预处理消息事件"""
+        is_su = hasattr(event, "user_id") and self.config_manager.is_superuser(event.user_id)
         if isinstance(event, MessageEvent):
             # 检查账号是否启用
-            is_su = self.config_manager.is_superuser(event.user_id)
             account_config = await self.config_manager.get_account_config(str(event.self_id))
             if account_config and not account_config.get("enabled", True) and not is_su:
                 self.logger.message.info(f"账号 {event.self_id} 已禁用，跳过消息处理")
@@ -233,6 +237,30 @@ class MessageProcessor:
         
         return message_data
     
+    async def _is_group_notice_blocked(self, data: Dict[str, Any]) -> bool:
+        """群关闭/过期/拉黑时拦截该群的 notice/request 事件，su 触发的除外"""
+        if data.get("post_type") not in ("notice", "request") or not data.get("group_id"):
+            return False
+        user_id = data.get("user_id")
+        if isinstance(user_id, (str, int)) and self.config_manager.is_superuser(user_id):
+            return False
+
+        group_id = str(data["group_id"])
+        reason = None
+        if self.config_manager.is_in_blacklist("groups", group_id):
+            reason = "在黑名单中"
+        else:
+            group_config = await self.config_manager.get_group_config(group_id)
+            if group_config and not group_config.get("enabled", True):
+                reason = "已禁用"
+            elif await self.config_manager.is_group_expired(group_id):
+                reason = "已过期"
+        if reason:
+            self.logger.message.debug("群组 {} {}，跳过 {} 事件: {}".format(
+                group_id, reason, data.get("post_type"), data.get("notice_type") or data.get("request_type")))
+            return True
+        return False
+
     def _is_in_blacklist(self, event: Event) -> bool:
         """检查是否在黑名单中"""
                 
