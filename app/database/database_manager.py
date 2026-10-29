@@ -24,6 +24,7 @@ class DatabaseManager:
     WRITE_QUEUE_MAX = 20000   # 写队列上限,满则丢弃告警
     WRITE_BATCH_MAX = 200     # 单事务最多批量写入条数
     CLEANUP_BATCH = 5000      # 过期清理每批删除行数
+    VACUUM_BATCH = 2000       # 增量回收每批页数(4KB 页约 8MB)
 
     def __init__(self, config_manager):
         self.config_manager = config_manager
@@ -61,6 +62,8 @@ class DatabaseManager:
             cur.close()
 
         async with self.engine.begin() as conn:
+            # 建表前设增量 auto_vacuum,过期清理后能把空闲页还给磁盘;老库要停服 VACUUM 一次才生效
+            await conn.execute(text("PRAGMA auto_vacuum=INCREMENTAL"))
             row = (await conn.execute(text("PRAGMA journal_mode=WAL"))).fetchone()
             if not row or str(row[0]).lower() != "wal":
                 print(f"[DB] 警告: journal_mode 未切到 WAL,当前={row}")
@@ -577,6 +580,7 @@ class DatabaseManager:
 
         if total_deleted > 0:
             print(f"清理了 {total_deleted} 条过期消息记录")
+        if await self._reclaim_free_pages() or total_deleted > 0:
             try:
                 async with self.engine.begin() as conn:
                     row = (await conn.execute(text("PRAGMA wal_checkpoint(TRUNCATE)"))).fetchone()
@@ -584,6 +588,39 @@ class DatabaseManager:
                         print(f"[DB] 清理后 WAL 未完全截断(busy): {tuple(row)}")
             except Exception as e:
                 print(f"清理后 checkpoint 失败: {e}")
+
+    async def _reclaim_free_pages(self) -> bool:
+        """auto_vacuum=INCREMENTAL 时分批回收空闲页(小事务+批间让锁);老库只提示"""
+        try:
+            async with self.engine.connect() as conn:
+                mode = (await conn.execute(text("PRAGMA auto_vacuum"))).scalar()
+                free = (await conn.execute(text("PRAGMA freelist_count"))).scalar() or 0
+                page = (await conn.execute(text("PRAGMA page_size"))).scalar() or 4096
+            if not free:
+                return False
+            if mode != 2:
+                if free * page > 1 << 30:
+                    print(f"[DB] 空闲页 {free * page / 1e9:.1f}GB 未回收(auto_vacuum={mode}),"
+                          f"停服后执行一次 PRAGMA auto_vacuum=INCREMENTAL; VACUUM; 之后自动回收")
+                return False
+            start = free
+            while free > 0:
+                async with self.engine.begin() as conn:
+                    # 每回收一页出一行结果,走 SQLAlchemy 只会执行一步,要用驱动游标取完
+                    raw = (await conn.get_raw_connection()).driver_connection
+                    cur = await raw.execute(f"PRAGMA incremental_vacuum({self.VACUUM_BATCH})")
+                    await cur.fetchall()
+                    await cur.close()
+                    left = (await conn.execute(text("PRAGMA freelist_count"))).scalar() or 0
+                if left >= free:
+                    break
+                free = left
+                await asyncio.sleep(0.2)
+            print(f"[DB] 回收空闲页 {(start - free) * page / 1e6:.0f}MB")
+            return True
+        except Exception as e:
+            print(f"[DB] 回收空闲页失败: {e}")
+            return False
 
 
     async def close(self):
