@@ -20,6 +20,14 @@ from ..utils.reboot import construct_reboot_message
 # 向 target 发送的单次超时：防止某个卡住/假死的 target 阻塞整条 client→targets 转发循环
 TARGET_SEND_TIMEOUT = 10
 
+# target 心跳超时：target 多在本机，进程死了内核立刻断开，不靠心跳发现；
+# 超时太短只会在框架事件循环卡顿时把挂在它上面的所有连接一起断掉(卡 30 多秒就整批断)。
+TARGET_PING_TIMEOUT = 120
+
+# 客户端断开时，转给它还没回响应的 API 请求直接给框架回失败，别让框架干等满 API_TIMEOUT。
+# 只回这么久以内发出的：更早的框架早已超时放弃，且框架重启后 echo 序号会复用。
+PENDING_FAIL_MAX_AGE = 300
+
 # API 请求转发给客户端前，把目标序号编进 echo；客户端按 OneBot 规定原样回传，
 # 回程即可精确定位是哪个框架发的请求。
 # 背景：各框架的 echo 自成命名空间（nonebot 是进程内自增序号，都从 1 开始），
@@ -61,6 +69,7 @@ class ProxyConnection:
 
         self.target_connections = []
         self.echo_cache = {}
+        self._pending_failed = False
         self.running = False
         self.client_headers = None
         self.first_message = None
@@ -166,7 +175,7 @@ class ProxyConnection:
                 'max_size': None,  # 移除消息大小限制
                 'max_queue': None,  # 移除队列大小限制
                 'ping_interval': 20,  # 心跳间隔：20s 发一次 ping
-                'ping_timeout': 20,   # 心跳超时：20s 收不到 pong 判定半死并关闭（最坏 ~40s 探测到死连接）
+                'ping_timeout': TARGET_PING_TIMEOUT,  # 框架卡顿 2 分钟内不断开，消息排队等它恢复
                 'close_timeout': None,   # 关闭超时
                 'compression': 'deflate'
             }
@@ -574,9 +583,58 @@ class ProxyConnection:
     def list_index2target_index(list_index):
         return list_index + 1
 
+    async def _fail_pending_requests(self):
+        """客户端断开：在途 API 请求的响应永远不会来了，给各框架回失败。
+
+        retcode 用 WebSocket 关闭码（1009=消息过大，客户端拒收、没执行；1006=异常断开，可能已执行）。
+        必须在关闭 target 之前调用。
+        """
+        if self._pending_failed:
+            return
+        self._pending_failed = True
+
+        code = getattr(self.client_ws, "close_code", None) or 1006
+        reason = getattr(self.client_ws, "close_reason", "") or ""
+        now_ts = int(datetime.now().timestamp())
+        pending = [
+            info for info in self.echo_cache.values()
+            if info.get("target_index", 0) > 0
+            and info.get("original_echo") not in (None, "")
+            and now_ts - info.get("create_timestamp", 0) <= PENDING_FAIL_MAX_AGE
+        ]
+        self.echo_cache.clear()
+        if not pending:
+            return
+
+        message = f"客户端连接已断开({code}{' ' + reason if reason else ''})"
+
+        async def _reply(info):
+            idx = self.target_index2list_index(info["target_index"])
+            target_ws = self.target_connections[idx] if idx < len(self.target_connections) else None
+            data_str = str(info["data"])
+            if len(data_str) > 200:
+                data_str = data_str[:200] + f"...[total length: {len(data_str)}]"
+            self.logger.ws.warning(f"[{self.connection_id}] API调用失败: {data_str} -> {message}，直接回失败给目标 {info['target_index']}")
+            if not target_ws:
+                return
+            resp = {
+                "status": "failed", "retcode": code, "data": None,
+                "message": message, "wording": message, "echo": info["original_echo"],
+            }
+            await asyncio.wait_for(target_ws.send(json.dumps(resp, ensure_ascii=False)), timeout=5)
+
+        results = await asyncio.gather(*(_reply(info) for info in pending), return_exceptions=True)
+        failed = sum(isinstance(r, BaseException) for r in results)
+        self.logger.ws.info(f"[{self.connection_id}] 客户端断开({code})，{len(pending)} 个在途 API 请求已回失败" + (f"，其中 {failed} 个没送达目标" if failed else ""))
+
     async def stop(self):
         """停止代理连接"""
         self.running = False
+
+        try:
+            await self._fail_pending_requests()
+        except Exception as e:
+            self.logger.ws.error(f"[{self.connection_id}] 在途请求回失败时出错: {e}")
 
         # 关闭目标连接
         close_tasks = []
