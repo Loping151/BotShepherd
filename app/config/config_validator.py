@@ -29,7 +29,6 @@ class ConfigValidator:
             "database": dict,
             "logging": dict,
             "message_normalization": dict,
-            "sendcount_notifications": bool,
             "web_auth": dict,
             "web_port": int
         }
@@ -50,6 +49,21 @@ class ConfigValidator:
                     if not isinstance(user_id, str) or not user_id.isdigit():
                         errors.append(f"superusers[{i}] 必须是数字字符串")
         
+        # 验证发送条数提示（可缺省，缺省即关闭）
+        if "sendcount_notice" in config:
+            notice = config["sendcount_notice"]
+            if not isinstance(notice, dict):
+                errors.append("sendcount_notice 必须是字典")
+            else:
+                if not isinstance(notice.get("enabled", False), bool):
+                    errors.append("sendcount_notice.enabled 必须是布尔值")
+                limit = notice.get("daily_limit", 5000)
+                if not isinstance(limit, int) or isinstance(limit, bool) or limit <= 0:
+                    errors.append("sendcount_notice.daily_limit 必须是正整数")
+                for key in ("group_text", "private_text"):
+                    if not isinstance(notice.get(key, ""), str):
+                        errors.append(f"sendcount_notice.{key} 必须是字符串")
+
         # 验证指令前缀
         if "command_prefix" in config:
             prefix = config["command_prefix"]
@@ -374,7 +388,12 @@ class ConfigTemplate:
                 "enabled": False,
                 "normalize_napcat_sent": True
             },
-            "sendcount_notifications": True,
+            "sendcount_notice": {
+                "enabled": False,  # 发送条数提示，默认关闭
+                "daily_limit": 5000,  # 提示里的每日上限，也决定提示疏密
+                "group_text": "今日发了{total}条咯，本群{group}条，发言过多(~{limit})将遭限制",
+                "private_text": "今日私聊发了{private}条啦"  # 留空则私聊不提示
+            },
             "web_auth": {
                 "username": "admin",
                 "password": "admin",  # 首次启动后自动迁移为 password_hash

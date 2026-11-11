@@ -10,6 +10,7 @@ from ..onebotv11 import EventParser, MessageNormalizer
 from ..onebotv11.models import ApiRequest, Event, MessageEvent, MessageSegmentType, PrivateMessageEvent, GroupMessageEvent, NoticeEvent
 from ..onebotv11.message_segment import MessageSegmentParser
 from .filter_manager import FilterManager
+from ..config.config_validator import ConfigTemplate
 
 class MessageProcessor:
     """消息处理器"""
@@ -199,34 +200,41 @@ class MessageProcessor:
         if not isinstance(event, ApiRequest):
             return message_data
         
-        global_config = self.config_manager.get_global_config()
-        if not global_config.get("sendcount_notifications", True):
+        notice = self.config_manager.get_global_config().get("sendcount_notice")
+        if not isinstance(notice, dict) or not notice.get("enabled", False):
             return message_data
-        
+
+        default_notice = ConfigTemplate.get_default_global_config()["sendcount_notice"]
+        limit = notice.get("daily_limit", default_notice["daily_limit"])
+        if not isinstance(limit, int) or isinstance(limit, bool) or limit <= 0:
+            limit = default_notice["daily_limit"]
+
         account_config = await self.config_manager.get_account_config(str(self_id))
         send_info = account_config.get("send_count", {"date": None, "group": {"total": 0}, "private": 0})
-        
+
         decorate_info = None
         if event.params.get("group_id"):
             total_count = send_info["group"]["total"]
             group_count = send_info["group"].get(str(event.params.get("group_id")), 0)
-            group_deco_template = f"\n今日发了{total_count + 1}条咯，本群{group_count + 1}条，发言过多(~5000)将遭限制"
-            if total_count < 3000:
-                if (total_count + 1) % 100 == 0:
-                    decorate_info = group_deco_template
-            elif total_count < 4500:
-                if (total_count + 1) % 25 == 0 or (group_count + 1) % 15 == 0:
-                    decorate_info = group_deco_template
+            # 越接近上限提示越密：60% 以下每 100 条，60%~90% 每 25 条或本群每 15 条，之后本群每 10 条
+            if total_count < limit * 0.6:
+                hit = (total_count + 1) % 100 == 0
+            elif total_count < limit * 0.9:
+                hit = (total_count + 1) % 25 == 0 or (group_count + 1) % 15 == 0
             else:
-                if (group_count + 1) % 10 == 0:
-                    decorate_info = group_deco_template
+                hit = (group_count + 1) % 10 == 0
+            template = notice.get("group_text", default_notice["group_text"])
+            if hit and isinstance(template, str) and template:
+                decorate_info = "\n" + (template
+                                        .replace("{total}", str(total_count + 1))
+                                        .replace("{group}", str(group_count + 1))
+                                        .replace("{limit}", str(limit)))
         else:
             private_count = send_info["private"]
-            private_deco_template = f"\n今日私聊发了{private_count + 1}条啦"
-            if (private_count + 1) % 10 == 0:
-                decorate_info = private_deco_template
+            template = notice.get("private_text", default_notice["private_text"])
+            if (private_count + 1) % 10 == 0 and isinstance(template, str) and template:
+                decorate_info = "\n" + template.replace("{private}", str(private_count + 1))
 
-        
         if decorate_info and isinstance(message_data.get("params", {}), dict) and "message" in message_data["params"] and isinstance(message_data["params"]["message"], list):
             existing_types = set()
             allowed_types = set([MessageSegmentType.AT, MessageSegmentType.TEXT, MessageSegmentType.IMAGE, MessageSegmentType.REPLY])

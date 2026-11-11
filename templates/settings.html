@@ -91,6 +91,48 @@
     </div>
 </div>
 
+<!-- 发送条数提示 -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="bi bi-chat-left-dots"></i>
+            发送条数提示
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="sendcountEnabled">
+                        <label class="form-check-label" for="sendcountEnabled">
+                            启用发送条数提示
+                        </label>
+                        <div class="form-text">账号当日发送量到一定条数时，在发出的消息末尾附一行提示。默认关闭</div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label for="sendcountLimit" class="form-label">每日上限</label>
+                    <input type="number" class="form-control" id="sendcountLimit" value="5000" min="1">
+                    <div class="form-text">只用于提示，不会真的限制发送。群聊当日总量在上限 60% 以下每 100 条提示一次，60%~90% 每 25 条或本群每 15 条，之后本群每 10 条</div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="mb-3">
+                    <label for="sendcountGroupText" class="form-label">群聊提示文案</label>
+                    <input type="text" class="form-control" id="sendcountGroupText">
+                    <div class="form-text">可用 {total} 当日群聊总条数、{group} 本群条数、{limit} 每日上限；留空则群聊不提示</div>
+                </div>
+                <div class="mb-3">
+                    <label for="sendcountPrivateText" class="form-label">私聊提示文案</label>
+                    <input type="text" class="form-control" id="sendcountPrivateText">
+                    <div class="form-text">每 10 条私聊提示一次，可用 {private} 当日私聊条数；留空则私聊不提示</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- 数据库与日志设置 -->
 <div class="card mb-4">
     <div class="card-header">
@@ -273,6 +315,13 @@ function updateSettingsForm() {
     document.getElementById('normalizationEnabled').checked = normalization.enabled || false;
     document.getElementById('normalizeNapcatSent').checked = normalization.normalize_napcat_sent || false;
 
+    // 发送条数提示
+    const sendcount = globalConfig.sendcount_notice || {};
+    document.getElementById('sendcountEnabled').checked = sendcount.enabled === true;
+    document.getElementById('sendcountLimit').value = sendcount.daily_limit || 5000;
+    document.getElementById('sendcountGroupText').value = sendcount.group_text ?? '今日发了{total}条咯，本群{group}条，发言过多(~{limit})将遭限制';
+    document.getElementById('sendcountPrivateText').value = sendcount.private_text ?? '今日私聊发了{private}条啦';
+
     // 高级设置
     document.getElementById('autoSaveInterval').value = globalConfig.auto_save_interval || 10;
     document.getElementById('proxy').value = globalConfig.proxy || '';
@@ -407,6 +456,12 @@ async function saveAllSettings() {
             message_normalization: {
                 enabled: document.getElementById('normalizationEnabled').checked,
                 normalize_napcat_sent: document.getElementById('normalizeNapcatSent').checked
+            },
+            sendcount_notice: {
+                enabled: document.getElementById('sendcountEnabled').checked,
+                daily_limit: parseInt(document.getElementById('sendcountLimit').value) || 5000,
+                group_text: document.getElementById('sendcountGroupText').value.trim(),
+                private_text: document.getElementById('sendcountPrivateText').value.trim()
             },
             auto_save_interval: parseInt(document.getElementById('autoSaveInterval').value) || 10,
             proxy: document.getElementById('proxy').value.trim(),

@@ -83,6 +83,12 @@
   - 举例：`true`
   - 说明：解决NapCat自身上报与Nonebot的兼容性问题，需要先打开启用标准化
 
+#### 发送条数提示
+- **发送条数提示** (`sendcount_notice`)
+  - 含义：账号当日发送量到一定条数时，在发出的消息末尾附一行提示
+  - 举例：`{"enabled": false, "daily_limit": 5000}` (默认关闭)
+  - 说明：`daily_limit` 只用于提示，不会真的限制发送；文案 `group_text`、`private_text` 可改，留空则对应场景不提示
+
 ### 连接配置 (连接管理页面)
 
 - **连接ID** (`connection_id`)
