@@ -854,7 +854,7 @@ class ConfigManager:
         self._ensure_directories()
 
         # 创建默认全局配置
-        self._global_config = self._get_default_global_config()
+        self._global_config = ConfigTemplate.get_default_global_config()
         await self._save_global_config()
 
         # 创建示例连接配置

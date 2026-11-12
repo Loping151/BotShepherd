@@ -302,6 +302,32 @@ class BotShepherd:
         finally:
             self._shutdown_in_progress = False
 
+def raise_nofile_limit(target: int = 65536):
+    """把 fd 软上限提到 target（不超过硬上限）。
+
+    每个连接配置占 1 个监听，账号在线后再占 1 + 目标数 个 socket，系统默认的 1024 不够用。
+    """
+    try:
+        import resource
+    except ImportError:  # Windows
+        return
+    try:
+        soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+        if soft == resource.RLIM_INFINITY:
+            return
+        if hard != resource.RLIM_INFINITY:
+            target = min(target, hard)
+        for limit in (target, 10240, 4096):  # macOS 等平台另有内核上限，逐级退让
+            if limit <= soft:
+                return
+            try:
+                resource.setrlimit(resource.RLIMIT_NOFILE, (limit, hard))
+                return
+            except (ValueError, OSError):
+                continue
+    except Exception as e:
+        print(f"提高文件描述符上限失败: {e}")
+
 def check_python_version():
     """检查Python版本"""
     if sys.version_info < (3, 11):
@@ -490,6 +516,7 @@ async def main():
         await app_instance.stop()
 
 if __name__ == "__main__":
+    raise_nofile_limit()
     try:
         asyncio.run(main())
     except KeyboardInterrupt:

@@ -1654,7 +1654,8 @@ class WebServer:
         # 在单独线程中运行Flask应用
         def run_server():
             web_host = self.config_manager.get_global_config().get('web_host', '0.0.0.0')
-            serve(self.app, host=web_host, port=self.port, threads=4)
+            # 默认的 select() 认不了编号 1024 以上的 fd；连接多时 Web 的 socket 会排到后面
+            serve(self.app, host=web_host, port=self.port, threads=4, asyncore_use_poll=True)
         
         self.server_thread = threading.Thread(target=run_server, daemon=True)
         self.server_thread.start()

@@ -260,6 +260,7 @@ class UpdateCommand(BaseCommand):
     async def execute(self, event: Event, args: List[str], context: Dict[str, Any]) -> CommandResponse:
         """执行更新指令"""
         try:
+            import asyncio
             import subprocess
             import os
             import requests
@@ -274,7 +275,9 @@ class UpdateCommand(BaseCommand):
                 proxy = global_config.get("proxy", "")
                 proxies = {"http": proxy, "https": proxy} if proxy else None
 
-                response = requests.get(
+                # 联网和 git pull 都放线程里跑，别卡住消息转发
+                response = await asyncio.to_thread(
+                    requests.get,
                     "https://raw.githubusercontent.com/Loping151/BotShepherd/main/app/__init__.py",
                     timeout=5,
                     proxies=proxies
@@ -298,7 +301,8 @@ class UpdateCommand(BaseCommand):
                 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
                 # 执行 git pull
-                result = subprocess.run(
+                result = await asyncio.to_thread(
+                    subprocess.run,
                     ['git', 'pull'],
                     cwd=project_root,
                     capture_output=True,

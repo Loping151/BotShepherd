@@ -4,6 +4,8 @@
 """
 
 import asyncio
+import inspect
+import logging
 import websockets
 import json
 import re
@@ -14,6 +16,7 @@ from ..onebotv11.models import ApiResponse, Event
 from ..onebotv11.message_segment import MessageSegmentParser
 from ..commands import CommandHandler
 from .message_processor import MessageProcessor
+from .ws_compression import client_compression, is_local_endpoint
 from ..utils.reboot import construct_reboot_message
 
 
@@ -23,6 +26,23 @@ TARGET_SEND_TIMEOUT = 10
 # target 心跳超时：target 多在本机，进程死了内核立刻断开，不靠心跳发现；
 # 超时太短只会在框架事件循环卡顿时把挂在它上面的所有连接一起断掉(卡 30 多秒就整批断)。
 TARGET_PING_TIMEOUT = 120
+
+# 关闭握手的等待上限。None 是无限等：对端半死时心跳判死、close()、往正在关闭的连接 send()
+# 都会一直挂着，socket 也不释放，要等 TCP 自己超时。
+WS_CLOSE_TIMEOUT = 5
+
+WS_STATE_CLOSED = 3  # websockets.protocol.State.CLOSED
+
+# 客户端一个字节都不收时，写缓冲排不空，库自带的心跳和关闭握手都卡在等缓冲，发现不了这种半死。
+# 发送时每 CHECK 秒看一次缓冲，连续 TIMEOUT 秒没有任何数据送出就断开（与心跳判死的 20+20 秒一致）。
+CLIENT_STALL_CHECK = 5
+CLIENT_STALL_TIMEOUT = 40
+
+# websockets>=15 的 connect 默认读环境变量里的代理，连本机 target 也会绕过去；旧版没有这个参数
+try:
+    CONNECT_HAS_PROXY = "proxy" in inspect.signature(websockets.connect).parameters
+except (TypeError, ValueError):
+    CONNECT_HAS_PROXY = False
 
 # 客户端断开时，转给它还没回响应的 API 请求直接给框架回失败，别让框架干等满 API_TIMEOUT。
 # 只回这么久以内发出的：更早的框架早已超时放弃，且框架重启后 echo 序号会复用。
@@ -78,6 +98,9 @@ class ProxyConnection:
         self.reconnect_locks = []  # 每个 target_index 一个 Lock
         for _ in self.config.get("target_endpoints", []):
             self.reconnect_locks.append(asyncio.Lock())
+
+        self._bg_tasks = set()  # 初次连接失败的后台重连任务，stop() 时取消
+        self._client_send_lock = asyncio.Lock()  # 发给客户端的消息逐条发，见 send_to_client
 
         # 初始化消息处理器
         self.message_processor = MessageProcessor(config_manager, database_manager, logger)
@@ -156,6 +179,8 @@ class ProxyConnection:
 
 
     async def _connect_to_target(self, endpoint: str, target_index: int):
+         if not self.running:
+            return None
          try:
 
             if target_index > len(self.target_connections) + 1 or target_index == 0:
@@ -176,9 +201,15 @@ class ProxyConnection:
                 'max_queue': None,  # 移除队列大小限制
                 'ping_interval': 20,  # 心跳间隔：20s 发一次 ping
                 'ping_timeout': TARGET_PING_TIMEOUT,  # 框架卡顿 2 分钟内不断开，消息排队等它恢复
-                'close_timeout': None,   # 关闭超时
-                'compression': 'deflate'
+                'close_timeout': WS_CLOSE_TIMEOUT,
             }
+            # 本机 target 不协商压缩，其余只压值得压的消息（见 ws_compression）
+            if is_local_endpoint(endpoint):
+                connection_params['compression'] = None
+                if CONNECT_HAS_PROXY:
+                    connection_params['proxy'] = None  # 本机 target 不走环境变量里的代理
+            else:
+                connection_params.update(client_compression())
 
             connection_attempts = [
                 # 尝试 extra_headers 参数
@@ -200,6 +231,12 @@ class ProxyConnection:
                     # 其他错误，直接抛出
                     raise e
 
+            if not self.running:
+                # 连接途中 stop() 已跑完、列表已清空：这条晚到的连接没人接手，
+                # 留着框架会一直当该账号在线，直接断开
+                self._abort_websocket(target_ws)
+                return None
+
             if target_index == len(self.target_connections) + 1: # next one to append
                 self.target_connections.append(target_ws) # 保证index正确，即使是None也添加
             else:
@@ -211,10 +248,11 @@ class ProxyConnection:
             return target_ws
 
          except Exception as e:
-            if target_index == len(self.target_connections) + 1:
-                self.target_connections.append(None)
-            else:
-                self.target_connections[self.target_index2list_index(target_index)] = None
+            if self.running:
+                if target_index == len(self.target_connections) + 1:
+                    self.target_connections.append(None)
+                elif 0 < target_index <= len(self.target_connections):
+                    self.target_connections[self.target_index2list_index(target_index)] = None
             self.logger.ws.error(f"[{self.connection_id}] 连接目标失败 {endpoint}: {e}")
             return None
 
@@ -233,8 +271,12 @@ class ProxyConnection:
 
         # 在所有连接尝试完成后，启动失败目标的重连任务
         for target_index in failed_targets:
+            if not self.running:
+                break
             self.logger.ws.warning(f"[{self.connection_id}] 目标 {target_index} 初始连接失败，启动后台重连")
-            asyncio.create_task(self._start_reconnect_with_delay(target_index))
+            task = asyncio.create_task(self._start_reconnect_with_delay(target_index))
+            self._bg_tasks.add(task)
+            task.add_done_callback(self._bg_tasks.discard)
 
     async def _forward_client_to_targets(self):
         """转发客户端消息到目标"""
@@ -444,7 +486,8 @@ class ProxyConnection:
             else:
                 message_data = message
 
-            self.logger.ws.debug(f"[{self.connection_id}] 来自连接 {target_index} 的API响应: {str(message_data)[:1000]}")
+            if self.logger.ws.isEnabledFor(logging.DEBUG):  # 大包整个转字符串不便宜
+                self.logger.ws.debug(f"[{self.connection_id}] 来自连接 {target_index} 的API响应: {str(message_data)[:1000]}")
 
             if not self._construct_echo_info(message_data, target_index):
                 # 兼容不使用echo回报的框架，不清楚有没有
@@ -466,7 +509,7 @@ class ProxyConnection:
             if processed_message:
                 # 发送到客户端
                 processed_json = json.dumps(processed_message, ensure_ascii=False)
-                await self.client_ws.send(processed_json)
+                await self.send_to_client(processed_json)
 
         except json.JSONDecodeError:
             self.logger.ws.warning(f"[{self.connection_id}] 目标 {target_index} 发送非JSON消息: {message[:1000]}")
@@ -636,14 +679,14 @@ class ProxyConnection:
         except Exception as e:
             self.logger.ws.error(f"[{self.connection_id}] 在途请求回失败时出错: {e}")
 
-        # 关闭目标连接
-        close_tasks = []
-        for target_ws in self.target_connections:
-            close_tasks.append(asyncio.create_task(self._close_websocket(target_ws)))
+        for task in list(self._bg_tasks):
+            task.cancel()
 
-        # 关闭客户端连接
+        # 关闭目标连接和客户端连接
+        sockets = [ws for ws in self.target_connections if ws]
         if self.client_ws:
-            close_tasks.append(asyncio.create_task(self._close_websocket(self.client_ws)))
+            sockets.append(self.client_ws)
+        close_tasks = [asyncio.create_task(self._close_websocket(ws)) for ws in sockets]
 
         if close_tasks:
             try:
@@ -652,16 +695,66 @@ class ProxyConnection:
                     timeout=3.0  # 3秒超时
                 )
             except asyncio.TimeoutError:
-                self.logger.ws.warning(f"[{self.connection_id}] 关闭连接超时")
+                self.logger.ws.warning(f"[{self.connection_id}] 关闭连接超时，强制断开")
             except Exception as e:
                 self.logger.ws.error(f"[{self.connection_id}] 关闭连接时出错: {e}")
+
+        # 握手没关完的直接断开，否则对端半死时 socket 要挂到 TCP 自己超时
+        for ws in sockets:
+            self._abort_websocket(ws)
 
         self.target_connections.clear()
 
     async def _close_websocket(self, ws):
         """安全关闭WebSocket连接"""
         try:
-            if ws:
+            # 已断开的不再 close：传输层已释放，再关只会报 'NoneType' object has no attribute 'call_soon'
+            if ws and getattr(ws, 'state', None) != WS_STATE_CLOSED:
                 await ws.close()
         except Exception as e:
             self.logger.ws.error(f"[{self.connection_id}] 关闭WebSocket连接时出错: {e}")
+
+    @staticmethod
+    def _abort_websocket(ws):
+        """不走关闭握手，直接断开底层连接"""
+        try:
+            # 不看 state：对端先发了 FIN 而这边还有数据没写完时，state 已是 CLOSED 但连接还占着。
+            # 已经断开的再 abort 没有副作用，个别情况抛的异常在下面吞掉。
+            if ws:
+                ws.transport.abort()
+        except Exception:
+            pass
+
+    def _client_buffer_size(self):
+        try:
+            return self.client_ws.transport.get_write_buffer_size()
+        except Exception:
+            return None
+
+    async def send_to_client(self, payload: str):
+        """发给客户端，同一时刻只发一条，并盯着写缓冲发现半死的客户端。"""
+        async with self._client_send_lock:
+            send = asyncio.ensure_future(self.client_ws.send(payload))
+            try:
+                last_size, stalled = None, 0
+                while True:
+                    done, _ = await asyncio.wait({send}, timeout=CLIENT_STALL_CHECK)
+                    if done:
+                        return send.result()
+                    size = self._client_buffer_size()
+                    if size is not None and last_size is not None and size >= last_size:
+                        stalled += CLIENT_STALL_CHECK
+                        if stalled >= CLIENT_STALL_TIMEOUT:
+                            self.logger.ws.warning(
+                                f"[{self.connection_id}] 客户端 {stalled} 秒没有收下任何数据(积压 {size} 字节)，判定半死，断开"
+                            )
+                            self._abort_websocket(self.client_ws)  # send 随即以 ConnectionClosed 结束
+                            stalled = 0
+                    else:
+                        stalled = 0
+                    last_size = size
+            finally:
+                if not send.done():
+                    send.cancel()
+                elif not send.cancelled():
+                    send.exception()  # 标记为已取走，免得被取消时留下未处理异常的告警

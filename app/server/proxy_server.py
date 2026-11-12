@@ -9,7 +9,8 @@ import json
 from datetime import datetime
 from typing import Dict, Any, Optional
 
-from .proxy_connection import ProxyConnection
+from .proxy_connection import ProxyConnection, WS_CLOSE_TIMEOUT
+from .ws_compression import is_local_host, server_compression
 
 class ProxyServer:
     """WebSocket代理服务器"""
@@ -212,7 +213,7 @@ class ProxyServer:
                             self.logger.ws.warning(
                                 f"[{connection_id}] 已存在活跃连接 (旧:{old_ip} vs 新:{new_ip})，拒绝新连接"
                             )
-                            # close_timeout=None，给关闭加超时，避免异常客户端拖住该 id 的锁
+                            # 给关闭加超时，避免异常客户端拖住该 id 的锁
                             try:
                                 await asyncio.wait_for(ws.close(1008, "Connection already exists"), timeout=5)
                             except Exception as e:
@@ -254,8 +255,9 @@ class ProxyServer:
                     max_queue=None,  # 移除队列大小限制
                     ping_interval=20,  # 心跳间隔：20s 主动 ping 一次客户端(NapCat)
                     ping_timeout=20,   # 心跳超时：20s 收不到 pong 即判定半死并关闭(最坏 ~40s 探测到假死连接)
-                    close_timeout=None,   # 关闭超时
-                    compression='deflate'  # 启用压缩
+                    close_timeout=WS_CLOSE_TIMEOUT,  # 对端不回关闭握手时到点直接断开，不无限等
+                    process_request=self._compression_gate,  # 本机客户端不协商压缩
+                    **server_compression()  # 其余只压值得压的消息
                 ):
                     self.logger.ws.info(f"连接代理 {connection_id} 已启动在 {client_endpoint}")
                     # 更新状态为监听中
@@ -287,6 +289,20 @@ class ProxyServer:
                 self.connection_statuses[connection_id]['client_status'] = 'error'
                 self.connection_statuses[connection_id]['error'] = error_msg
     
+    async def _compression_gate(self, *args):
+        """握手钩子：从本机连进来的客户端不协商压缩（摘掉请求里的扩展头）。"""
+        try:
+            # websockets>=14 的签名是 (connection, request)；旧版 API 是 (path, headers)，
+            # 拿不到对端地址，就照常协商
+            if len(args) == 2 and hasattr(args[1], "headers"):
+                peer = getattr(args[0], "remote_address", None)
+                headers = args[1].headers
+                if peer and is_local_host(str(peer[0])) and "Sec-WebSocket-Extensions" in headers:
+                    del headers["Sec-WebSocket-Extensions"]
+        except Exception as e:
+            self.logger.ws.warning(f"压缩协商判断出错，按默认处理: {e}")
+        return None
+
     def _update_connection_status(self, connection_id: str, key: str, value: Any):
         """更新连接状态的某个字段"""
         if connection_id in self.connection_statuses:
@@ -328,7 +344,7 @@ class ProxyServer:
             }
 
             request_json = json.dumps(get_status_request, ensure_ascii=False)
-            await matched_connection.client_ws.send(request_json)
+            await matched_connection.send_to_client(request_json)
 
             try:
                 response = await asyncio.wait_for(future, timeout=5.0)
