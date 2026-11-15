@@ -174,6 +174,15 @@
                     </select>
                 </div>
                 <div class="mb-3">
+                    <label for="consoleLevel" class="form-label">控制台日志级别</label>
+                    <select class="form-select" id="consoleLevel">
+                        <option value="">同日志级别</option>
+                        <option value="WARNING">WARNING</option>
+                        <option value="ERROR">ERROR</option>
+                    </select>
+                    <div class="form-text">只影响控制台输出，日志文件不变。用 systemd 等运行时控制台会进系统日志，每条消息记录会在磁盘上多存一份，可调成 WARNING</div>
+                </div>
+                <div class="mb-3">
                     <label for="keepDays" class="form-label">保留天数，如消息量过多可改小</label>
                     <input type="number" class="form-control" id="keepDays" value="7" min="1">
                     <div class="form-text">日志文件保留天数</div>
@@ -307,6 +316,7 @@ function updateSettingsForm() {
     // 日志设置
     const logging = globalConfig.logging || {};
     document.getElementById('logLevel').value = logging.level || 'INFO';
+    document.getElementById('consoleLevel').value = logging.console_level || '';
     document.getElementById('keepDays').value = logging.keep_days || 7;
     document.getElementById('fileRotation').checked = logging.file_rotation || false;
     
@@ -450,6 +460,7 @@ async function saveAllSettings() {
             },
             logging: {
                 level: document.getElementById('logLevel').value,
+                console_level: document.getElementById('consoleLevel').value,
                 keep_days: parseInt(document.getElementById('keepDays').value),
                 file_rotation: document.getElementById('fileRotation').checked
             },

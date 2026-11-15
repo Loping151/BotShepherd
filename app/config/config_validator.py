@@ -381,6 +381,7 @@ class ConfigTemplate:
             },
             "logging": {
                 "level": "INFO",
+                "console_level": "",
                 "file_rotation": True,
                 "keep_days": 3
             },

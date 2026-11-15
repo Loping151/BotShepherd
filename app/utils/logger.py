@@ -31,6 +31,7 @@ class BSLogger:
     def _setup_config(self, global_config):
         self.config = {
             "level": "INFO",
+            "console_level": "",   # 控制台单独的下限，空=同 level；实际取两者中较高的
             "file_rotation": True,
             "keep_days": 7,
             "max_file_size": "10MB"
@@ -39,6 +40,8 @@ class BSLogger:
             self.config.update(global_config["logging"])
         
         self.log_level = getattr(logging, self.config["level"].upper())
+        console = getattr(logging, str(self.config.get("console_level") or "").upper(), None)
+        self.console_level = max(self.log_level, console) if isinstance(console, int) else self.log_level
         self.keep_days = int(self.config["keep_days"])
 
     def _setup_main_logger(self):
@@ -49,6 +52,7 @@ class BSLogger:
 
         # 控制台处理器
         self.console_handler = logging.StreamHandler()
+        self.console_handler.setLevel(self.console_level)
         self.console_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
         self.main_logger.addHandler(self.console_handler)
 
@@ -97,6 +101,7 @@ class BSLogger:
         if console_formatter:
             # 复制一份，避免修改共享的 handler
             console_handler_copy = logging.StreamHandler()
+            console_handler_copy.setLevel(self.console_level)
             console_handler_copy.setFormatter(console_formatter)
             logger.addHandler(console_handler_copy)
         else:

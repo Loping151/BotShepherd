@@ -13,7 +13,7 @@ from sqlalchemy import case, select, and_, or_, func, desc, delete, event
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import text
-from .models import Base, Message, MessageRecord
+from .models import Base, Message, MessageRecord, DROPPED_INDEXES
 from sqlalchemy.exc import OperationalError
 
 
@@ -23,6 +23,9 @@ class DatabaseManager:
     RETRY_DELAY = 0.1
     WRITE_QUEUE_MAX = 20000   # 写队列上限,满则丢弃告警
     WRITE_BATCH_MAX = 200     # 单事务最多批量写入条数
+    WRITE_BATCH_WINDOW = 2.0  # 攒批窗口(秒):不满一批时等这么久再提交,崩溃最多丢这段时间的记录
+    WAL_AUTOCHECKPOINT = 4000          # 页(约16MB);默认1000页,调大后同一页在两次 checkpoint 间只回写一次
+    JOURNAL_SIZE_LIMIT = 64 * 1024 * 1024
     CLEANUP_BATCH = 5000      # 过期清理每批删除行数
     VACUUM_BATCH = 2000       # 增量回收每批页数(4KB 页约 8MB)
 
@@ -59,6 +62,8 @@ class DatabaseManager:
             cur = dbapi_conn.cursor()
             cur.execute("PRAGMA busy_timeout=10000")   # 写锁最多等10s,不立即报 database is locked
             cur.execute("PRAGMA synchronous=NORMAL")    # WAL 下安全且少 fsync 卡顿
+            cur.execute(f"PRAGMA wal_autocheckpoint={self.WAL_AUTOCHECKPOINT}")
+            cur.execute(f"PRAGMA journal_size_limit={self.JOURNAL_SIZE_LIMIT}")
             cur.close()
 
         async with self.engine.begin() as conn:
@@ -97,6 +102,8 @@ class DatabaseManager:
         # 使用SQLAlchemy模型创建表
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            for name in DROPPED_INDEXES:
+                await conn.execute(text(f"DROP INDEX IF EXISTS {name}"))
             
     async def get_total_message_count(self) -> int:
         """获取数据库中消息总数"""
@@ -218,11 +225,20 @@ class DatabaseManager:
                 continue
 
             batch = [record]
-            for _ in range(self.WRITE_BATCH_MAX - 1):
+            try:
+                self._drain_queue(batch)
+                # 消息平均每秒两三条,不等的话几乎每条一个事务;攒一会儿,共用的页(表尾、时间索引尾)一次写完
+                if len(batch) < self.WRITE_BATCH_MAX and self.WRITE_BATCH_WINDOW > 0:
+                    await asyncio.sleep(self.WRITE_BATCH_WINDOW)
+                    self._drain_queue(batch)
+            except asyncio.CancelledError:
+                # 关闭时被取消:手上这批照样落库再退出
                 try:
-                    batch.append(self._write_queue.get_nowait())
-                except asyncio.QueueEmpty:
-                    break
+                    await self._persist_batch(batch)
+                finally:
+                    for _ in batch:
+                        self._write_queue.task_done()
+                raise
 
             try:
                 await self._persist_batch(batch)
@@ -232,6 +248,14 @@ class DatabaseManager:
             finally:
                 for _ in batch:
                     self._write_queue.task_done()
+
+    def _drain_queue(self, batch: List[Any]):
+        """不等待地把队列里现有的记录取进 batch,最多凑满 WRITE_BATCH_MAX"""
+        while len(batch) < self.WRITE_BATCH_MAX:
+            try:
+                batch.append(self._write_queue.get_nowait())
+            except asyncio.QueueEmpty:
+                return
 
     async def _persist_batch(self, records: List[Any]):
         """批量提交;锁冲突整批重试,其它错误回退逐条写,避免单条坏记录拖垮整批"""

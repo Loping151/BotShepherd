@@ -18,10 +18,11 @@ class Message(Base):
     __tablename__ = 'messages'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    message_id = Column(String(50), index=True)
-    self_id = Column(String(20), nullable=False, index=True)
-    user_id = Column(String(20), index=True)
-    group_id = Column(String(20), index=True)
+    # self_id/user_id/group_id 的单列索引由下面的 (列, timestamp) 复合索引覆盖，message_id 没有按值查询，均不再单独建索引
+    message_id = Column(String(50))
+    self_id = Column(String(20), nullable=False)
+    user_id = Column(String(20))
+    group_id = Column(String(20))
     message_type = Column(String(20), nullable=False)
     sub_type = Column(String(20))
     post_type = Column(String(20))
@@ -34,13 +35,22 @@ class Message(Base):
     processed = Column(Boolean, default=False)
     created_at = Column(DateTime, default=func.now())
 
-    # 创建复合索引
+    # 创建复合索引（message_content 上的索引对 contains/startswith 查询用不上，已去掉）
     __table_args__ = (
         Index('idx_messages_self_id_timestamp', 'self_id', 'timestamp'),
         Index('idx_messages_group_id_timestamp', 'group_id', 'timestamp'),
         Index('idx_messages_user_id_timestamp', 'user_id', 'timestamp'),
-        Index('idx_messages_content_search', 'message_content'),
     )
+
+# 老库里还留着、新版本不再建的索引，启动时删除。每条消息的插入和过期删除都要多改这 5 棵 B 树，
+# 合计约占库体积的 1/5；删掉后释放的页由每日清理里的增量回收还给磁盘
+DROPPED_INDEXES = (
+    'ix_messages_self_id',
+    'ix_messages_user_id',
+    'ix_messages_group_id',
+    'ix_messages_message_id',
+    'idx_messages_content_search',
+)
 
 
 
